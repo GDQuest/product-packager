@@ -122,9 +122,11 @@ git_try_checkout_to_master() {
 	start_dir=$(pwd)
 	is_short_form=0
 	case $1 in
-		-s|--short) is_short_form=1; shift;;
+	-s | --short)
+		is_short_form=1
+		shift
+		;;
 	esac
-
 
 	# Filter and normalize git dirpaths
 	git_directories=$(mktemp)
@@ -132,7 +134,7 @@ git_try_checkout_to_master() {
 		dir=$(echo $i | sed 's/\/\.git.*$//')
 		cd $dir
 		git status >/dev/null || continue
-		echo $dir >> git_directories
+		echo $dir >>git_directories
 	done
 
 	file_errors=$(mktemp)
@@ -146,14 +148,14 @@ git_try_checkout_to_master() {
 		output=$(git checkout master)
 		test $is_short_form -eq 0 && echo $output
 		if test $? -gt 0; then
-			echo $i >> file_errors
+			echo $i >>file_errors
 		fi
 	done
 
 	test $is_short_form -eq 0 && echo \n"Couldn't checkout to master in the following repositories:"\n
 	cat $file_errors
 	cd $start_dir
- }
+}
 main() {
 	test $(echo $VERSION | cut -d- -f2) = "dev" && echo "Warning: this is a development version of the
 program. It is not suitable for production use."
