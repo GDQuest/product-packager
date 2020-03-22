@@ -30,17 +30,17 @@ DIR_DIST=dist
 DIR_CONTENT=content
 
 # CONSTANTS
-$VERBOSITY_INFO=1
-$VERBOSITY_WARNING=2
-$VERBOSITY_DEBUG=3
+VERBOSITY_INFO=1
+VERBOSITY_WARNING=2
+VERBOSITY_DEBUG=3
 
 # UTILITY FUNCTIONS
 
 # Prints a message only if the $VERBOSITY level is high enough
 echo_debug() {
-	test $VERBOSITY -ge $1 || exit
+	test $VERBOSITY -ge "$1" || exit
 
-	case $1 in
+	case "$1" in
 	$VERBOSITY_INFO) prefix="INFO:" ;;
 	$VERBOSITY_WARNING) prefix="WARNING:" ;;
 	$VERBOSITY_DEBUG) prefix="DEBUG:" ;;
@@ -59,8 +59,8 @@ find_chapter_directories() {
 # Arguments:
 # $@ - a list of strings to process
 strings_to_filename() {
-	for string in $@; do
-		echo $string | tr [:upper:] [:lower:] | tr --squeeze-repeats [" "] "-"
+	for string in "$@"; do
+		echo "$string " | tr "[:upper:]" "[:lower:]" | tr --squeeze-repeats " " "-"
 	done
 }
 
@@ -71,51 +71,52 @@ strings_to_filename() {
 # Arguments:
 # -- optional list of file extensions like "pdf html mp4" to filter the files to move.
 move_output_files() {
-	for path_chapter in find_chapter_directories; do
-		dist_directory=$DIR_DIST/$(basename $path_chapter)
+	for path_chapter in $(find_chapter_directories); do
+		dist_directory=$DIR_DIST/$(basename "$path_chapter")
 
-		find_patterns=$(test $@ && echo $@ | sed -E 's/(\w+)/-iname "*.\1" -o/g' | sed 's/\ -o$//')
-		find_command=$(echo find $path_chapter -maxdepth 1 -mindepth 1)
-		test $find_patterns && $find_command=$find_command$(echo " -type f \( $find_patterns \)")
-		files=$(eval $find_command)
-		files_string=$(printf "- %s\n" "${files}")
+		find_patterns=$(test "$@" && echo "$@" | sed -E 's/(\w+)/-iname "*.\1" -o/g' | sed 's/\ -o$//')
+		find_command="find $path_chapter -maxdepth 1 -mindepth 1"
+		# TODO: Check that this notation works
+		test "$find_patterns" && find_command=$find_command" -type f \( $find_patterns \)"
+		files=$(eval "$find_command")
+		files_string=$(printf "\- %s\n" "${files}")
 
-		echo_debug 1 "Found " $(echo $files_string | wc -l) " files to copy:\n" $files_string
-		test $DRY_RUN -ne 0 && test -d $dist_directory || mkdir -p $dist_directory
-		test $DRY_RUN -ne 0 && mv -v --backup --force $files $dist_directory
+		echo_debug 1 "Found" "$(echo "$files_string" | wc -l)" "files to copy:\n" "$files_string"
+		test $DRY_RUN -ne 0 -a -d "$dist_directory" || mkdir -p "$dist_directory"
+		test $DRY_RUN -ne 0 && mv -v --backup --force "$files" "$dist_directory"
 	done
 }
 
-render_videos_with_bpsrender() {
+videos_render_with_bpsrender() {
 	bpsrender --help >/dev/null
 	test $? -ne 0 && echo "There was an error running 'bpsrender'.
-The program 'bpsrender' must be available on the system '\$PATH' variable for this program to work.
+The program 'bpsrender' must be available on the system PATH variable for this program to work.
 For more information, see https://en.wikipedia.org/wiki/PATH_(variable).
 Cancelling video rendering." && exit 1
 
-	blend_files=$(find $DIR_CONTENT -mindepth 1 -maxdepth 3 -type f -iname "*.blend")
+	blend_files=$(find "$DIR_CONTENT" -mindepth 1 -maxdepth 3 -type f -iname "*.blend")
 
 	count=$(printf "%s\n" "${blend_files}" | wc -l)
-	echo "\nRendering $count video projects with 'bpsrender'\n"
+	printf "\nRendering %s video projects with 'bpsrender'\n" "$count"
 
-	content_path_length=$(echo $DIR_CONTENT | wc --chars)
+	content_path_length=$(echo "$DIR_CONTENT" | wc --chars)
 	for blend_file in; do
-		chapter_directory=$(echo $blend_file | cut --characters $content_path_length-)
+		chapter_directory=$(echo "$blend_file" | cut --characters "$content_path_length"-)
 		echo_debug 1 "Rendering file $blend_file"
-		test $DRY_RUN -ne 0 && bpsrender --output $chapter_directory -- $blend_file
+		test "$DRY_RUN" -ne 0 && bpsrender --output "$chapter_directory" -- "$blend_file"
 	done
 }
 
 # Arguments:
 # $@: list of paths to video files
 videos_compress_ffmpeg() {
-	for path in $@; do
-		directory=$(dirname $path)
-		file=$(basename $path)
-		name=$(echo $file | rev | cut -d. -f2- | rev)
-		out_path=$directory/$name'-compressed.mp4'
-		ffmpeg -i $path -c:a copy -c:v h264_nvenc -preset slow -qp 20 $out_path
-		echo $out_path
+	for path in "$@"; do
+		directory=$(dirname "$path")
+		file=$(basename "$path")
+		name=$(echo "$file" | rev | cut -d. -f2- | rev)
+		out_path="$directory"/"$name"'-compressed.mp4'
+		ffmpeg -i "$path" -c:a copy -c:v h264_nvenc -preset slow -qp 20 "$out_path"
+		echo "$out_path"
 	done
 
 }
@@ -143,72 +144,73 @@ git_try_checkout_to_master() {
 
 	# Filter and normalize git dirpaths
 	git_directories=$(mktemp)
-	for i in $@; do
-		dir=$(echo $i | sed 's/\/\.git.*$//')
-		cd $dir
+	for i in "$@"; do
+		dir=$(echo "$i" | sed 's/\/\.git.*$//')
+		cd "$dir" || continue
 		git status >/dev/null || continue
-		echo $dir >>git_directories
+		echo "$dir" >>git_directories
 	done
 
 	file_errors=$(mktemp)
-	for i in $(cat $git_directories); do
-		cd $i
+	for i in $(cat "$git_directories"); do
+		cd "$i" || continue
 
 		status_output=$(git status --porcelain)
 
-		test $is_short_form -eq 0 && test $(status_output) = "" || echo "The repository $i is dirty."
+		test "$is_short_form" -eq 0 && test "$status_output" = "" || echo "The repository $i is dirty."
 
 		output=$(git checkout master)
-		test $is_short_form -eq 0 && echo $output
+		test "$is_short_form" -eq 0 && echo "$output"
 		if test $? -gt 0; then
-			echo $i >>file_errors
+			echo "$i" >>file_errors
 		fi
 	done
 
-	test $is_short_form -eq 0 && echo \n"Couldn't checkout to master in the following repositories:"\n
-	cat $file_errors
-	cd $start_dir
+	test "$is_short_form" -eq 0 && printf "\nCouldn't checkout to master in the following repositories:\n"
+	cat "$file_errors"
+	cd "$start_dir" || exit 1
 }
 
 package_godot_projects() {
-	directory_godot=$DIR_CONTENT/godot
-	test -d $directory_godot || exit 1
+	directory_godot="$DIR_CONTENT"/godot
+	test -d "$directory_godot" || exit 1
 
 	directory_start=$(pwd)
-	directory_export=$directory_godot/export
+	directory_export="$directory_godot"/export
 
-	test $DRY_RUN -ne 0 && cd $directory_godot
-
-	test $DRY_RUN -ne 0 && test -d $DIR_DIST || mkdir $DIR_DIST
-	test $DRY_RUN -ne 0 && test -d $directory_export || mkdir $directory_export
+	if test "$DRY_RUN" -ne 0; then
+		cd "$directory_godot" || exit 1
+		test -d "$DIR_DIST" || mkdir "$DIR_DIST"
+		test -d "$directory_export" || mkdir "$directory_export"
+	fi
 
 	echo "Copying Godot projects to a temporary directory..."
-	to_copy=$(find -mindepth 1 -maxdepth 1 -not -path "./tutorial" -not -path "./dist" -type d)
-	if ! test $DRY_RUN -ne 0; then
+	to_copy=$(find . -mindepth 1 -maxdepth 1 -not -path "./tutorial" -not -path "./dist" -type d)
+	if ! test "$DRY_RUN" -ne 0; then
 		for i in $to_copy; do
-			cp -r $i dist
+			cp -r "$i" dist
 		done
 	fi
 	echo "Done."
 
 	echo "Removing .import directories..."
-	test $DRY_RUN -ne 0 && rm -rf $(find -path "dist" -type d -name ".import")
+	test "$DRY_RUN" -ne 0 && rm -rf "$(find . -path dist -type d -name .import)"
 	echo "Done."
 
 	# TODO: replace with project name -> to lower, with hyphens, .zip
-	archive_name=$(strings_to_filename $PROJECT_TITLE)".zip"
-	test $DRY_RUN -ne 0 && zip -r $archive_name dist/*
-	test $DRY_RUN -ne 0 && mv -v --backup --force $archive_name $DIR_DIST
+	archive_name=$(strings_to_filename "$PROJECT_TITLE")".zip"
+	test "$DRY_RUN" -ne 0 && zip -r "$archive_name" dist/*
+	test "$DRY_RUN" -ne 0 && mv -v --backup --force "$archive_name" "$DIR_DIST"
 
 	echo "Removing the $directory_export directory..."
-	test $DRY_RUN -ne 0 && rm -rf $directory_export
+	test "$DRY_RUN" -ne 0 && rm -rf "$directory_export"
 	echo "Done."
 
-	test $DRY_RUN -ne 0 && cd $directory_start
+	test "$DRY_RUN" -ne 0 && cd "$directory_start" || exit 1
 }
 
 main() {
-	test $(echo $VERSION | cut -d- -f2) = "dev" && echo "Warning: this is a development version of the
+	test "$(echo $VERSION | cut -d- -f2)" = "dev" && echo "Warning: this is a development version of the
 program. It is not suitable for production use."
 
 	test -d content || echo "Missing content/ directory, the program doesn't seem to be in a valid project, exiting." && exit 1
