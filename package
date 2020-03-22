@@ -68,7 +68,7 @@ move_output_files() {
 		files_string=$(printf "- %s\n" "${files}")
 
 		echo_debug 1 "Found " $(echo $files_string | wc -l) " files to copy:\n" $files_string
-		test $DRY_RUN -ne k && test -d $dist_directory || mkdir -p $dist_directory
+		test $DRY_RUN -ne 0 && test -d $dist_directory || mkdir -p $dist_directory
 		test $DRY_RUN -ne 0 && mv -v --backup --force $files $dist_directory
 	done
 }
