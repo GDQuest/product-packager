@@ -18,6 +18,9 @@
 # Use semantic versioning with an optional hyphen-separated suffix, e.g. 0.3.2 or 1.0.0-dev
 VERSION="0.1.0-dev"
 
+# USER CONFIGURATION
+PROJECT_TITLE="My Project Title"
+
 # Debug
 DRY_RUN=1
 VERBOSITY=0
@@ -49,6 +52,16 @@ echo_debug() {
 
 find_chapter_directories() {
 	find $DIR_CONTENT -maxdepth 1 -mindepth 1 -type d
+}
+
+# Outputs the strings converted to lowercase filenames, with spaces replaced by hyphens.
+#
+# Arguments:
+# $@ - a list of strings to process
+strings_to_filename() {
+	for string in $@; do
+		echo $string | tr [:upper:] [:lower:] | tr --squeeze-repeats [" "] "-"
+	done
 }
 
 # Finds output files in the $DIR_CONTENT directory and outputs it to the $DIR_DIST directory,
@@ -156,11 +169,53 @@ git_try_checkout_to_master() {
 	cat $file_errors
 	cd $start_dir
 }
+
+package_godot_projects() {
+	directory_godot=$DIR_CONTENT/godot
+	test -d $directory_godot || exit 1
+
+	directory_start=$(pwd)
+	directory_export=$directory_godot/export
+
+	test $DRY_RUN -ne 0 && cd $directory_godot
+
+	test $DRY_RUN -ne 0 && test -d $DIR_DIST || mkdir $DIR_DIST
+	test $DRY_RUN -ne 0 && test -d $directory_export || mkdir $directory_export
+
+	echo "Copying Godot projects to a temporary directory..."
+	to_copy=$(find -mindepth 1 -maxdepth 1 -not -path "./tutorial" -not -path "./dist" -type d)
+	if ! test $DRY_RUN -ne 0; then
+		for i in $to_copy; do
+			cp -r $i dist
+		done
+	fi
+	echo "Done."
+
+	echo "Removing .import directories..."
+	test $DRY_RUN -ne 0 && rm -rf $(find -path "dist" -type d -name ".import")
+	echo "Done."
+
+	# TODO: replace with project name -> to lower, with hyphens, .zip
+	archive_name=$(strings_to_filename $PROJECT_TITLE)".zip"
+	test $DRY_RUN -ne 0 && zip -r $archive_name dist/*
+	test $DRY_RUN -ne 0 && mv -v --backup --force $archive_name $DIR_DIST
+
+	echo "Removing the $directory_export directory..."
+	test $DRY_RUN -ne 0 && rm -rf $directory_export
+	echo "Done."
+
+	test $DRY_RUN -ne 0 && cd $directory_start
+}
+
 main() {
 	test $(echo $VERSION | cut -d- -f2) = "dev" && echo "Warning: this is a development version of the
 program. It is not suitable for production use."
 
 	test -d content || echo "Missing content/ directory, the program doesn't seem to be in a valid project, exiting." && exit 1
+
+	# set git_repos $(find -mindepth 2 -maxdepth 2 -iname .git | cat | sort)
+	# git_checkout_to_master $git_repos
+
 	exit 0
 }
 
