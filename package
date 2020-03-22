@@ -18,15 +18,33 @@
 # Use semantic versioning with an optional hyphen-separated suffix, e.g. 0.3.2 or 1.0.0-dev
 VERSION="0.1.0-dev"
 
+# Debug
 DRY_RUN=1
 VERBOSITY=0
+test $DRY_RUN -ne 0 && VERBOSITY=99
 
 DIR_DIST=dist
 DIR_CONTENT=content
 
+# CONSTANTS
+$VERBOSITY_INFO=1
+$VERBOSITY_WARNING=2
+$VERBOSITY_DEBUG=3
+
+# UTILITY FUNCTIONS
+
+# Prints a message only if the $VERBOSITY level is high enough
 echo_debug() {
-	test $VERBOSITY -ge $1 && shift && echo $@
-	exit
+	test $VERBOSITY -ge $1 || exit
+
+	case $1 in
+	$VERBOSITY_INFO) prefix="INFO:" ;;
+	$VERBOSITY_WARNING) prefix="WARNING:" ;;
+	$VERBOSITY_DEBUG) prefix="DEBUG:" ;;
+	*) exit ;;
+	esac
+	shift
+	echo $prefix "$@"
 }
 
 find_chapter_directories() {
