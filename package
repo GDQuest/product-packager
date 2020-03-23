@@ -29,39 +29,11 @@ test $DRY_RUN -ne 0 && VERBOSITY=99
 DIR_DIST=dist
 DIR_CONTENT=content
 
-# CONSTANTS
-VERBOSITY_INFO=1
-VERBOSITY_WARNING=2
-VERBOSITY_DEBUG=3
-
-# UTILITY FUNCTIONS
-
-# Prints a message only if the $VERBOSITY level is high enough
-echo_debug() {
-	test $VERBOSITY -ge "$1" || exit
-
-	case "$1" in
-	$VERBOSITY_INFO) prefix="INFO:" ;;
-	$VERBOSITY_WARNING) prefix="WARNING:" ;;
-	$VERBOSITY_DEBUG) prefix="DEBUG:" ;;
-	*) exit ;;
-	esac
-	shift
-	echo $prefix "$@"
-}
+# SOURCING FILES
+. ./utils
 
 find_chapter_directories() {
 	find $DIR_CONTENT -maxdepth 1 -mindepth 1 -type d
-}
-
-# Outputs the strings converted to lowercase filenames, with spaces replaced by hyphens.
-#
-# Arguments:
-# $@ - a list of strings to process
-strings_to_filename() {
-	for string in "$@"; do
-		echo "$string " | tr "[:upper:]" "[:lower:]" | tr --squeeze-repeats " " "-"
-	done
 }
 
 # Finds output files in the $DIR_CONTENT directory and outputs it to the $DIR_DIST directory,
