@@ -20,23 +20,22 @@ VERSION="0.1.0-dev"
 
 # USER CONFIGURATION
 PROJECT_TITLE="My Project Title"
+dir_dist=dist
+dir_content=content
 
 # Debug
-DRY_RUN=1
-VERBOSITY=0
-test $DRY_RUN -ne 0 && VERBOSITY=99
-
-DIR_DIST=dist
-DIR_CONTENT=content
+is_dry_run=1
+verbosity=0
+test $is_dry_run -ne 0 && verbosity=99
 
 # SOURCING FILES
 . ./utils
 
 find_chapter_directories() {
-	find $DIR_CONTENT -maxdepth 1 -mindepth 1 -type d
+	find $dir_content -maxdepth 1 -mindepth 1 -type d
 }
 
-# Finds output files in the $DIR_CONTENT directory and outputs it to the $DIR_DIST directory,
+# Finds output files in the $dir_content directory and outputs it to the $dir_dist directory,
 # replicating the chapters' structure.
 # Warning: use locally, as the function uses 'eval' with 'find' to find files by extensions.
 #
@@ -44,7 +43,7 @@ find_chapter_directories() {
 # -- optional list of file extensions like "pdf html mp4" to filter the files to move.
 move_output_files() {
 	for path_chapter in $(find_chapter_directories); do
-		dist_directory=$DIR_DIST/$(basename "$path_chapter")
+		dist_directory=$dir_dist/$(basename "$path_chapter")
 
 		find_patterns=$(test "$@" && echo "$@" | sed -E 's/(\w+)/-iname "*.\1" -o/g' | sed 's/\ -o$//')
 		find_command="find $path_chapter -maxdepth 1 -mindepth 1"
@@ -54,8 +53,8 @@ move_output_files() {
 		files_string=$(printf "\- %s\n" "${files}")
 
 		echo_debug 1 "Found" "$(echo "$files_string" | wc -l)" "files to copy:\n" "$files_string"
-		test $DRY_RUN -ne 0 -a -d "$dist_directory" || mkdir -p "$dist_directory"
-		test $DRY_RUN -ne 0 && mv -v --backup --force "$files" "$dist_directory"
+		test $is_dry_run -ne 0 -a -d "$dist_directory" || mkdir -p "$dist_directory"
+		test $is_dry_run -ne 0 && mv -v --backup --force "$files" "$dist_directory"
 	done
 }
 
@@ -66,16 +65,16 @@ The program 'bpsrender' must be available on the system PATH variable for this p
 For more information, see https://en.wikipedia.org/wiki/PATH_(variable).
 Cancelling video rendering." && exit 1
 
-	blend_files=$(find "$DIR_CONTENT" -mindepth 1 -maxdepth 3 -type f -iname "*.blend")
+	blend_files=$(find "$dir_content" -mindepth 1 -maxdepth 3 -type f -iname "*.blend")
 
 	count=$(printf "%s\n" "${blend_files}" | wc -l)
 	printf "\nRendering %s video projects with 'bpsrender'\n" "$count"
 
-	content_path_length=$(echo "$DIR_CONTENT" | wc --chars)
+	content_path_length=$(echo "$dir_content" | wc --chars)
 	for blend_file in; do
 		chapter_directory=$(echo "$blend_file" | cut --characters "$content_path_length"-)
 		echo_debug 1 "Rendering file $blend_file"
-		test "$DRY_RUN" -ne 0 && bpsrender --output "$chapter_directory" -- "$blend_file"
+		test "$is_dry_run" -ne 0 && bpsrender --output "$chapter_directory" -- "$blend_file"
 	done
 }
 
@@ -144,21 +143,21 @@ git_try_checkout_to_master() {
 }
 
 package_godot_projects() {
-	directory_godot="$DIR_CONTENT"/godot
+	directory_godot="$dir_content"/godot
 	test -d "$directory_godot" || exit 1
 
 	directory_start=$(pwd)
 	directory_export="$directory_godot"/export
 
-	if test "$DRY_RUN" -ne 0; then
+	if test "$is_dry_run" -ne 0; then
 		cd "$directory_godot" || exit 1
-		test -d "$DIR_DIST" || mkdir "$DIR_DIST"
+		test -d "$dir_dist" || mkdir "$dir_dist"
 		test -d "$directory_export" || mkdir "$directory_export"
 	fi
 
 	echo "Copying Godot projects to a temporary directory..."
 	to_copy=$(find . -mindepth 1 -maxdepth 1 -not -path "./tutorial" -not -path "./dist" -type d)
-	if ! test "$DRY_RUN" -ne 0; then
+	if ! test "$is_dry_run" -ne 0; then
 		for i in $to_copy; do
 			cp -r "$i" dist
 		done
@@ -166,19 +165,19 @@ package_godot_projects() {
 	echo "Done."
 
 	echo "Removing .import directories..."
-	test "$DRY_RUN" -ne 0 && rm -rf "$(find . -path dist -type d -name .import)"
+	test "$is_dry_run" -ne 0 && rm -rf "$(find . -path dist -type d -name .import)"
 	echo "Done."
 
 	# TODO: replace with project name -> to lower, with hyphens, .zip
 	archive_name=$(strings_to_filename "$PROJECT_TITLE")".zip"
-	test "$DRY_RUN" -ne 0 && zip -r "$archive_name" dist/*
-	test "$DRY_RUN" -ne 0 && mv -v --backup --force "$archive_name" "$DIR_DIST"
+	test "$is_dry_run" -ne 0 && zip -r "$archive_name" dist/*
+	test "$is_dry_run" -ne 0 && mv -v --backup --force "$archive_name" "$dir_dist"
 
 	echo "Removing the $directory_export directory..."
-	test "$DRY_RUN" -ne 0 && rm -rf "$directory_export"
+	test "$is_dry_run" -ne 0 && rm -rf "$directory_export"
 	echo "Done."
 
-	test "$DRY_RUN" -ne 0 && cd "$directory_start" || exit 1
+	test "$is_dry_run" -ne 0 && cd "$directory_start" || exit 1
 }
 
 main() {
