@@ -245,7 +245,10 @@ main() {
 	test "$(echo $VERSION | cut -d- -f2)" = "dev" && echo "Warning: this is a development version of the
 program. It is not suitable for production use."
 
-	test -d content || echo "Missing content/ directory, the program doesn't seem to be in a valid project, exiting." && exit 1
+	test -d $dir_content || echo "Missing content/ directory, the program doesn't seem to be in a valid project, exiting." && exit 1
+
+	parse_cli_arguments "$@"
+	test $? -ne 0 && exit $?
 
 	# set git_repos $(find -mindepth 2 -maxdepth 2 -iname .git | cat | sort)
 	# git_checkout_to_master $git_repos
@@ -253,5 +256,5 @@ program. It is not suitable for production use."
 	exit 0
 }
 
-main
+main "$@"
 exit $?
