@@ -20,8 +20,11 @@ VERSION="0.1.0-dev"
 
 # USER CONFIGURATION
 PROJECT_TITLE="My Project Title"
+NAME="product-packager"
+
 dir_dist=dist
 dir_content=content
+dir_project=
 
 # Debug
 is_dry_run=1
@@ -178,6 +181,29 @@ package_godot_projects() {
 	echo "Done."
 
 	test "$is_dry_run" -ne 0 && cd "$directory_start" || exit 1
+}
+
+echo_help() {
+	echo '
+	Package products for e-commerce platforms.
+
+	Usage:
+	'"$NAME"' $path_to_project [Options]
+
+	Positional arguments, like $path_to_project, must come before option flags.
+
+	Required arguments:
+
+	$path_to_project -- path to your project directory. It must contain $dir_content for the program
+	to run. Default: current working directory.
+
+	Options:
+
+	-h/--help             -- Display this help message.
+	-o/--output-directory -- Directory path to put the output. Default: '"$dir_dist"'
+	-i/--input-directory  -- Directory path into which to search the content. Default: '"$dir_content"'
+	'
+	exit 0
 }
 
 main() {
