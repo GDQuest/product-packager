@@ -12,16 +12,20 @@ The tool can already:
 
 - Process and package Godot projects to distribute their source code.
 - Auto checkout git repositories to master.
-- Find, organize, and move rendered content files to the output directory..
+- Find, organize, and move rendered content files to the output directory.
 - Render Blender video project with our [Blender multi-threaded video rendered](https://github.com/GDQuest/blender-sequencer-multithreaded-render).
 - Compress videos with ffmpeg.
 
-More is coming quickly and soon. As it's early in development, the tool is still a single program with all functions in one place.
+More is coming quickly and soon. As it's early in development, you need to know about shell code to use it right now. 
 
-To make it flexible and convenient to use, I plan to:
+Also, the tool is still a single program with all functions in one place. To make it flexible and convenient to use, I plan to:
 
 1. Have each main feature as a separate shell program, so you can use them however you want depending on your needs.
 2. Have a `product-packager` program that offers a single command and optional presets to quickly package projects.
+
+## How to use
+
+Run `product_packager --help` to get usage information.
 
 ## Contributing
 
