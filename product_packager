@@ -20,7 +20,7 @@ VERSION="0.1.0-dev"
 
 # USER CONFIGURATION
 PROJECT_TITLE="My Project Title"
-NAME="product-packager"
+NAME="product_packager"
 
 dir_dist=dist
 dir_content=content
