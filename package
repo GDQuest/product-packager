@@ -206,6 +206,41 @@ echo_help() {
 	exit 0
 }
 
+# Parses command line arguments
+parse_cli_arguments() {
+
+	dir_project=$1
+	shift
+	test -d $dir_project || echo "$dir_project does not exist. The program needs a valid project directory path to run. Exiting." && exit 1
+
+	arguments=$(getopt --name "$NAME" -o "h,o:,i:" -l "help,output-directory:,input-directory:" -- "$@")
+	eval set -- "$arguments"
+	while true; do
+		case "$1" in
+		-h | --help)
+			help
+			shift
+			;;
+		-o | --output-directory)
+			dir_dist=$2
+			shift 2
+			;;
+		-i | --input-directory)
+			dir_content=$2
+			shift 2
+			;;
+		--)
+			shift
+			break
+			;;
+		*)
+			echo "Missing arguments. Try '$NAME --help' for more information"
+			exit 1
+			;;
+		esac
+	done
+}
+
 main() {
 	test "$(echo $VERSION | cut -d- -f2)" = "dev" && echo "Warning: this is a development version of the
 program. It is not suitable for production use."
