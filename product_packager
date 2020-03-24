@@ -22,8 +22,9 @@ VERSION="0.1.0-dev"
 PROJECT_TITLE="My Project Title"
 NAME="product_packager"
 
-dir_dist=dist
-dir_content=content
+dir_dist="dist"
+dir_content="content"
+dir_godot="godot"
 dir_project=
 
 # Debug
@@ -146,7 +147,7 @@ git_try_checkout_to_master() {
 }
 
 package_godot_projects() {
-	directory_godot="$dir_content"/godot
+	directory_godot="$dir_content"/"$dir_godot"
 	test -d "$directory_godot" || exit 1
 
 	directory_start=$(pwd)
