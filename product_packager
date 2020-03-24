@@ -57,8 +57,10 @@ move_output_files() {
 		files_string=$(printf "\- %s\n" "${files}")
 
 		echo_debug 1 "Found" "$(echo "$files_string" | wc -l)" "files to copy:\n" "$files_string"
-		test $is_dry_run -ne 0 -a -d "$dist_directory" || mkdir -p "$dist_directory"
-		test $is_dry_run -ne 0 && mv -v --backup --force "$files" "$dist_directory"
+		if test $is_dry_run -eq 0; then
+			test -d "$dist_directory" || mkdir -p "$dist_directory"
+			mv -v --backup --force "$files" "$dist_directory"
+		fi
 	done
 }
 
@@ -78,7 +80,7 @@ Cancelling video rendering." && exit 1
 	for blend_file in; do
 		chapter_directory=$(echo "$blend_file" | cut --characters "$content_path_length"-)
 		echo_debug 1 "Rendering file $blend_file"
-		test "$is_dry_run" -ne 0 && bpsrender --output "$chapter_directory" -- "$blend_file"
+		test "$is_dry_run" -eq 0 && bpsrender --output "$chapter_directory" -- "$blend_file"
 	done
 }
 
@@ -89,9 +91,9 @@ videos_compress_ffmpeg() {
 		directory=$(dirname "$path")
 		file=$(basename "$path")
 		name=$(echo "$file" | rev | cut -d. -f2- | rev)
-		out_path="$directory"/"$name"'-compressed.mp4'
-		ffmpeg -i "$path" -c:a copy -c:v h264_nvenc -preset slow -qp 20 "$out_path"
-		echo "$out_path"
+		path_out="$directory"/"$name"'-compressed.mp4'
+		test $is_dry_run -eq 0 && ffmpeg -i "$path" -c:a copy -c:v h264_nvenc -preset slow -qp 20 "$path_out"
+		echo "$path_out"
 	done
 
 }
@@ -153,7 +155,7 @@ package_godot_projects() {
 	directory_start=$(pwd)
 	directory_export="$directory_godot"/export
 
-	if test "$is_dry_run" -ne 0; then
+	if test "$is_dry_run" -eq 0; then
 		cd "$directory_godot" || exit 1
 		test -d "$dir_dist" || mkdir "$dir_dist"
 		test -d "$directory_export" || mkdir "$directory_export"
@@ -161,27 +163,29 @@ package_godot_projects() {
 
 	echo "Copying Godot projects to a temporary directory..."
 	to_copy=$(find . -mindepth 1 -maxdepth 1 -not -path "./tutorial" -not -path "./dist" -type d)
-	if ! test "$is_dry_run" -ne 0; then
+	if ! test "$is_dry_run" -eq 0; then
 		for i in $to_copy; do
 			cp -r "$i" dist
 		done
 	fi
 	echo "Done."
 
-	echo "Removing .import directories..."
-	test "$is_dry_run" -ne 0 && rm -rf "$(find . -path dist -type d -name .import)"
-	echo "Done."
+	if test "$is_dry_run" -eq 0; then
+		echo "Removing .import directories..."
+		rm -rf "$(find . -path dist -type d -name .import)"
+		echo "Done."
 
-	# TODO: replace with project name -> to lower, with hyphens, .zip
-	archive_name=$(strings_to_filename "$PROJECT_TITLE")".zip"
-	test "$is_dry_run" -ne 0 && zip -r "$archive_name" dist/*
-	test "$is_dry_run" -ne 0 && mv -v --backup --force "$archive_name" "$dir_dist"
+		archive_name=$(strings_to_filename "$PROJECT_TITLE")".zip"
+		zip -r "$archive_name" dist/*
+		mv -v --backup --force "$archive_name" "$dir_dist"
 
-	echo "Removing the $directory_export directory..."
-	test "$is_dry_run" -ne 0 && rm -rf "$directory_export"
-	echo "Done."
+		echo "Removing the $directory_export directory..."
+		rm -rf "$directory_export"
+		echo "Done."
 
-	test "$is_dry_run" -ne 0 && cd "$directory_start" || exit 1
+		cd "$directory_start" || exit 1
+	fi
+
 }
 
 echo_help() {
