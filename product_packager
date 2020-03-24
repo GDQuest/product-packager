@@ -208,7 +208,6 @@ echo_help() {
 
 # Parses command line arguments
 parse_cli_arguments() {
-
 	dir_project=$1
 	shift
 	test -d $dir_project || echo "$dir_project does not exist. The program needs a valid project directory path to run. Exiting." && exit 1
@@ -218,7 +217,7 @@ parse_cli_arguments() {
 	while true; do
 		case "$1" in
 		-h | --help)
-			help
+			echo_help
 			shift
 			;;
 		-o | --output-directory)
