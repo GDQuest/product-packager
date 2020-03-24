@@ -52,7 +52,7 @@ move_output_files() {
 		find_patterns=$(test "$@" && echo "$@" | sed -E 's/(\w+)/-iname "*.\1" -o/g' | sed 's/\ -o$//')
 		find_command="find $path_chapter -maxdepth 1 -mindepth 1"
 		# TODO: Check that this notation works
-		test "$find_patterns" && find_command=$find_command" -type f \( $find_patterns \)"
+		test "$find_patterns" && find_command="$find_command -type f \( $find_patterns \)"
 		files=$(eval "$find_command")
 		files_string=$(printf "\- %s\n" "${files}")
 
