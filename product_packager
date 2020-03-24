@@ -185,33 +185,32 @@ package_godot_projects() {
 }
 
 echo_help() {
-	echo '
-	Package products for e-commerce platforms.
+	test
+	printf 'Package products for e-commerce platforms.
 
-	Usage:
-	'"$NAME"' $path_to_project [Options]
+%s:
+'"$NAME"' $path_to_project [Options]
 
-	Positional arguments, like $path_to_project, must come before option flags.
+Positional arguments, like $path_to_project, must come before option flags.
 
-	Required arguments:
+%s:
+$path_to_project (required) -- path to your project directory. It must contain a sub-directory named '"$dir_content"' for the program
+to run.
 
-	$path_to_project -- path to your project directory. It must contain $dir_content for the program
-	to run. Default: current working directory.
-
-	Options:
-
-	-h/--help             -- Display this help message.
-	-o/--output-directory -- Directory path to put the output. Default: '"$dir_dist"'
-	-i/--input-directory  -- Directory path into which to search the content. Default: '"$dir_content"'
-	'
+%s:
+-h/--help             -- Display this help message.
+-o/--output-directory -- Directory path to put the output. Default: '"$dir_dist"'
+-i/--input-directory  -- Directory path into which to search the content. Default: '"$dir_content"'
+' "$(format_bold Usage)" "$(format_bold Positional arguments)" "$(format_bold Options)"
 	exit 0
 }
 
-# Parses command line arguments
+# Parses command line arguments, setting the $dir_project, then parsing command line options.
 parse_cli_arguments() {
+	test "$1" = "-h" -o "$1" = "--help" && echo_help
 	dir_project=$1
 	shift
-	test -d $dir_project || echo "$dir_project does not exist. The program needs a valid project directory path to run. Exiting." && exit 1
+	test -d "$dir_project" || echo "$dir_project does not exist. The program needs a valid project directory path to run. Exiting." && exit 1
 
 	arguments=$(getopt --name "$NAME" -o "h,o:,i:" -l "help,output-directory:,input-directory:" -- "$@")
 	eval set -- "$arguments"
@@ -242,13 +241,16 @@ parse_cli_arguments() {
 }
 
 main() {
-	test "$(echo $VERSION | cut -d- -f2)" = "dev" && echo "Warning: this is a development version of the
-program. It is not suitable for production use."
+	test "$(echo $VERSION | cut -d- -f2)" = "dev" &&
+		printf "%s: this is a development version of the program. It is not suitable for production use.\n" "$(format_bold Warning)"
 
-	test -d $dir_content || echo "Missing content/ directory, the program doesn't seem to be in a valid project, exiting." && exit 1
+	test "$@" = "" && echo "Missing required arguments.\n" && echo_help
 
 	parse_cli_arguments "$@"
-	test $? -ne 0 && exit $?
+	test $? -ne 0 && echo "There was an error parsing the command line arguments. Exiting." && exit $?
+
+	test -d "$dir_project/$dir_content" ||
+		printf "Missing %s directory. The program needs %s to exist to work. Exiting." "$(format_italic "$dir_content")" "$(format_italic "$dir_project/$dir_content")" && exit 1
 
 	# set git_repos $(find -mindepth 2 -maxdepth 2 -iname .git | cat | sort)
 	# git_checkout_to_master $git_repos
