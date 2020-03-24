@@ -221,11 +221,11 @@ parse_cli_arguments() {
 			shift
 			;;
 		-o | --output-directory)
-			dir_dist=$2
+			test -d "$dir_dist" && dir_dist=$2 || printf "The directory %s does not exist. Exiting." "$dir_dist" && exit 1
 			shift 2
 			;;
 		-i | --input-directory)
-			dir_content=$2
+			test -d "$dir_content" && dir_content=$2 || printf "The directory %s does not exist. Exiting." "$dir_content" && exit 1
 			shift 2
 			;;
 		--)
@@ -233,7 +233,7 @@ parse_cli_arguments() {
 			break
 			;;
 		*)
-			echo "Missing arguments. Try '$NAME --help' for more information"
+			echo "Missing option flag. Try '$NAME --help' for more information"
 			exit 1
 			;;
 		esac
