@@ -84,6 +84,13 @@ Cancelling video rendering." && exit 1
 	done
 }
 
+# Compares the content of the $dir_dist/src and $dir_dist/compressed directories and returns a list
+# of files missing in the compressed directory.
+find_videos_to_compress() {
+	path_dist="$dir_project/$dir_dist"
+	diff "$path_dist/src" "$path_dist/compressed" | grep -E "^Only in" | sed -n 's/^Only in //p' | cut -d" " -f1-2
+}
+
 # Arguments:
 # $@: list of paths to video files
 videos_compress_ffmpeg() {
