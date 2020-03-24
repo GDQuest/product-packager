@@ -25,7 +25,53 @@ Also, the tool is still a single program with all functions in one place. To mak
 
 ## How to use
 
-Run `product_packager --help` to get usage information.
+Run `product_packager --help` to get usage information for the program itself.
+
+Product packager expects some particular directory structure to work. We designed it to support exporting a list of files, but also to produce online courses like the ones we have on [our mavenseed website](https://gdquest.mavenseed.com/).
+
+- The `content/` directory should contain your course's chapters, sections, or parts.
+- The `godot/` directory should contain your godot projects, each one in a sub-directory.
+
+You can [customize](#customizing-the-project-directories) these directory paths.
+
+Here is the source directory structure of our course [Code a Professional 3D Character with Godot](https://gdquest.mavenseed.com/courses/code-a-professional-3d-character-with-godot):
+
+``` sh
+.
+├── content
+│   ├── 00.course-introduction
+│   ├── 01.state-machine
+│   ├── 02.character-movement
+│   ├── 03.camera-rig
+│   └── conclusion
+├── godot
+│   ├── 01.the-state-machine
+│   ├── 02.character-movement
+│   ├── 03.the-camera-rig
+│   ├── final
+│   ├── start
+│   └── tutorial
+```
+
+Each sub-directory in `content/` corresponds to a separate chapter in the final course.
+
+### Customizing the project directories
+
+You can customize the directories you want to use using the `$dir_*` variables in the program:
+
+```sh
+dir_dist="dist"
+dir_content="content"
+dir_godot="godot"
+```
+
+For example, if you want your source content to be in `project/src/`:
+
+```sh
+dir_content="project/src"
+```
+
+Note that the directory path should not end with a "/".
 
 ## Contributing
 
