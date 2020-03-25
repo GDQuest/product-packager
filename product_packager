@@ -82,7 +82,7 @@ Cancelling video rendering." && exit 1
 	echo_message "\nRendering $count video projects with 'bpsrender'\n"
 
 	content_path_length=$(echo "$dir_content" | wc --chars)
-	for blend_file in; do
+	for blend_file in $blend_files; do
 		chapter_directory=$(echo "$blend_file" | cut --characters "$content_path_length"-)
 		echo_debug 1 "Rendering file $blend_file"
 		test "$is_dry_run" -eq 0 && bpsrender --output "$chapter_directory" -- "$blend_file"
