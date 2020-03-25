@@ -121,7 +121,6 @@ videos_compress_ffmpeg() {
 # Flags:
 # -s/--short - Only output the list of repositories that could not be checked out.
 git_try_checkout_to_master() {
-
 	start_dir=$(pwd)
 	is_short_form=0
 	case $1 in
@@ -146,7 +145,7 @@ git_try_checkout_to_master() {
 
 		status_output=$(git status --porcelain)
 
-		test "$is_short_form" -eq 0 && test "$status_output" = "" || echo "The repository $i is dirty."
+		test "$is_short_form" -eq 0 && test "$status_output" = "" || echo_message "The repository $i is dirty."
 
 		output=$(git checkout master)
 		test "$is_short_form" -eq 0 && echo "$output"
