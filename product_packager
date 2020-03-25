@@ -29,6 +29,7 @@ dir_project=
 
 # Debug
 is_dry_run=1
+do_suppress_output=0
 verbosity=0
 test $is_dry_run -ne 0 && verbosity=99
 
@@ -37,6 +38,10 @@ test $is_dry_run -ne 0 && verbosity=99
 
 find_chapter_directories() {
 	find $dir_content -maxdepth 1 -mindepth 1 -type d
+}
+
+echo_message() {
+	test $do_suppress_output -eq 0 && echo "$*"
 }
 
 # Finds output files in the $dir_content directory and outputs it to the $dir_dist directory,
@@ -74,7 +79,7 @@ Cancelling video rendering." && exit 1
 	blend_files=$(find "$dir_content" -mindepth 1 -maxdepth 3 -type f -iname "*.blend")
 
 	count=$(printf "%s\n" "${blend_files}" | wc -l)
-	printf "\nRendering %s video projects with 'bpsrender'\n" "$count"
+	echo_message "\nRendering $count video projects with 'bpsrender'\n"
 
 	content_path_length=$(echo "$dir_content" | wc --chars)
 	for blend_file in; do
@@ -168,27 +173,27 @@ package_godot_projects() {
 		test -d "$directory_export" || mkdir "$directory_export"
 	fi
 
-	echo "Copying Godot projects to a temporary directory..."
+	echo_message "Copying Godot projects to a temporary directory..."
 	to_copy=$(find . -mindepth 1 -maxdepth 1 -not -path "./tutorial" -not -path "./dist" -type d)
 	if ! test "$is_dry_run" -eq 0; then
 		for i in $to_copy; do
 			cp -r "$i" dist
 		done
 	fi
-	echo "Done."
+	echo_message "Done."
 
 	if test "$is_dry_run" -eq 0; then
-		echo "Removing .import directories..."
+		echo_message "Removing .import directories..."
 		rm -rf "$(find . -path dist -type d -name .import)"
-		echo "Done."
+		echo_message "Done."
 
 		archive_name=$(strings_to_filename "$PROJECT_TITLE")".zip"
 		zip -r "$archive_name" dist/*
 		mv -v --backup --force "$archive_name" "$dir_dist"
 
-		echo "Removing the $directory_export directory..."
+		echo_message "Removing the $directory_export directory..."
 		rm -rf "$directory_export"
-		echo "Done."
+		echo_message "Done."
 
 		cd "$directory_start" || exit 1
 	fi
