@@ -21,8 +21,8 @@ COLOR_MAGENTA=$(tput setaf 5)
 COLOR_CYAN=$(tput setaf 6)
 COLOR_WHITE=$(tput setaf 7)
 
-# Prints a message only if the $verbosity level is high enough
-# $verbosity must be defined in the importing program
+# Prints a message only if the $verbosity level is high enough.
+# $verbosity must be defined in the importing program.
 #
 # Arguments:
 # $1 - verbosity level of the message
@@ -37,6 +37,13 @@ echo_debug() {
 	esac
 	shift
 	echo $prefix "$@"
+}
+
+echo_error() {
+	test "$do_suppress_output" -eq 0 || exit
+	function_name=$1
+	shift
+	printf "%s in %s: %s" "$(color_apply red Error)" "$(format_bold "$function_name")" "$*"
 }
 
 # Outputs the strings converted to lowercase filenames, with spaces replaced by hyphens.

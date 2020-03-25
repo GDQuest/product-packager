@@ -225,7 +225,7 @@ parse_cli_arguments() {
 	test "$1" = "-h" -o "$1" = "--help" && echo_help
 	dir_project=$1
 	shift
-	test -d "$dir_project" || echo "$dir_project does not exist. The program needs a valid project directory path to run. Exiting." && exit 1
+	test -d "$dir_project" || echo_error "$dir_project does not exist. The program needs a valid project directory path to run. Exiting." && exit 1
 
 	arguments=$(getopt --name "$NAME" -o "h,o:,i:" -l "help,output-directory:,input-directory:" -- "$@")
 	eval set -- "$arguments"
@@ -248,7 +248,7 @@ parse_cli_arguments() {
 			break
 			;;
 		*)
-			echo "Missing option flag. Try '$NAME --help' for more information"
+			echo_error "parse_cli_arguments" "Missing option flag. Try '$NAME --help' for more information"
 			exit 1
 			;;
 		esac
@@ -259,10 +259,10 @@ main() {
 	test "$(echo $VERSION | cut -d- -f2)" = "dev" &&
 		printf "%s: this is a development version of the program. It is not suitable for production use.\n" "$(format_bold Warning)"
 
-	test "$@" = "" && echo "Missing required arguments.\n" && echo_help
+	test "$@" = "" && echo_error "main" "Missing required arguments.\n" && echo_help
 
 	parse_cli_arguments "$@"
-	test $? -ne 0 && echo "There was an error parsing the command line arguments. Exiting." && exit $?
+	test $? -ne 0 && echo_error "main" "There was an error parsing the command line arguments. Exiting." && exit $?
 
 	test -d "$dir_project/$dir_content" ||
 		printf "Missing %s directory. The program needs %s to exist to work. Exiting." "$(format_italic "$dir_content")" "$(format_italic "$dir_project/$dir_content")" && exit 1
