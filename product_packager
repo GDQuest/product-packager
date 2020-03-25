@@ -199,6 +199,15 @@ package_godot_projects() {
 
 }
 
+# Finds the files modified since the time passed as the first argument.
+# The time
+get_modified_files() {
+	date_last_run=$(date -d "$1" +%s)
+	test $? -ne 0 && echo_error "get_modified_files" "Argument 1, \$date_last_run, is not a valid date." exit 1
+	time_since_update_minutes=$((($(date +%s) - "$date_last_run") / 60))
+	find "$dir_project/$dir_content" -mtime -"$time_since_update_minutes"
+}
+
 echo_help() {
 	test
 	printf 'Package products for e-commerce platforms.
