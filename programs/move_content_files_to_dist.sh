@@ -1,5 +1,9 @@
 #!/usr/bin/env sh
 #
+# Description:
+#
+# Finds and moves rendered content files from the $dir_content directory to the $dir_dist directory.
+#
 # Copyright (C) 2020 by Nathan Lovato and contributors
 #
 # This file is part of GDQuest product packager.
@@ -19,12 +23,10 @@
 VERSION="0.1.0-dev"
 
 # USER CONFIGURATION
-PROJECT_TITLE="My Project Title"
-NAME="product_packager"
+NAME="move_content_files_to_dist"
 
 dir_dist="dist"
 dir_content="content"
-dir_godot="godot"
 dir_project=
 
 # Debug
@@ -34,20 +36,11 @@ verbosity=0
 test $is_dry_run -ne 0 && verbosity=99
 
 # SOURCING FILES
-. ./programs/lib/utils
-
-# Finds the files modified since the time passed as the first argument.
-# The time
-get_modified_files() {
-	date_last_run=$(date -d "$1" +%s)
-	test $? -ne 0 && echo_error "get_modified_files" "Argument 1, \$date_last_run, is not a valid date." exit 1
-	time_since_update_minutes=$((($(date +%s) - "$date_last_run") / 60))
-	find "$dir_project/$dir_content" -mtime -"$time_since_update_minutes"
-}
+. ./lib/utils
 
 echo_help() {
 	test
-	printf 'Package products for e-commerce platforms.
+	printf 'Finds and moves rendered content files from the content directory to the dist or output directory.
 
 %s:
 '"$NAME"' $path_to_project [Options]
@@ -66,7 +59,6 @@ to run.
 	exit 0
 }
 
-# Parses command line arguments, setting the $dir_project, then parsing command line options.
 parse_cli_arguments() {
 	test "$1" = "-h" -o "$1" = "--help" && echo_help
 	dir_project=$1
@@ -101,6 +93,31 @@ parse_cli_arguments() {
 	done
 }
 
+# Finds rendered files or files to output in the $dir_content directory and outputs it to the
+# $dir_dist directory, replicating the chapters' structure.
+# Warning: the function uses 'eval' with 'find' to find files by extensions.
+#
+# Arguments:
+# -- optional list of file extensions like "pdf html mp4" to filter the files to move.
+move_output_files() {
+	for path_chapter in $(find "$dir_content" -maxdepth 1 -mindepth 1 -type d); do
+		dist_directory=$dir_dist/$(basename "$path_chapter")
+
+		find_patterns=$(test "$@" && echo "$@" | sed -E 's/(\w+)/-iname "*.\1" -o/g' | sed 's/\ -o$//')
+		find_command="find $path_chapter -maxdepth 1 -mindepth 1"
+		# TODO: Check that this notation works
+		test "$find_patterns" && find_command="$find_command -type f \( $find_patterns \)"
+		files=$(eval "$find_command")
+		files_string=$(printf "\- %s\n" "${files}")
+
+		echo_debug 1 "Found" "$(echo "$files_string" | wc -l)" "files to copy:\n" "$files_string"
+		if test "$is_dry_run" -eq 0; then
+			test -d "$dist_directory" || mkdir -p "$dist_directory"
+			mv -v --backup --force "$files" "$dist_directory"
+		fi
+	done
+}
+
 main() {
 	test "$(echo $VERSION | cut -d- -f2)" = "dev" &&
 		printf "%s: this is a development version of the program. It is not suitable for production use.\n" "$(format_bold Warning)"
@@ -112,10 +129,6 @@ main() {
 
 	test -d "$dir_project/$dir_content" ||
 		printf "Missing %s directory. The program needs %s to exist to work. Exiting." "$(format_italic "$dir_content")" "$(format_italic "$dir_project/$dir_content")" && exit 1
-
-	# set git_repos $(find -mindepth 2 -maxdepth 2 -iname .git | cat | sort)
-	# git_checkout_to_master $git_repos
-
 	exit 0
 }
 

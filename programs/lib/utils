@@ -46,6 +46,11 @@ echo_error() {
 	printf "%s in %s: %s" "$(color_apply red Error)" "$(format_bold "$function_name")" "$*"
 }
 
+# Outputs a message only if $do_suppress_output is falsy
+echo_message() {
+	test $do_suppress_output -eq 0 && echo "$*"
+}
+
 # Outputs the strings converted to lowercase filenames, with spaces replaced by hyphens.
 #
 # Arguments:
