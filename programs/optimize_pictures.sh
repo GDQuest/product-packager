@@ -31,6 +31,9 @@ ERROR_MAX_SIZE="Incorrect value for --max-size, it must be of the form 1000x1000
 
 max_size="1000000x1000000"
 
+# SOURCING FILES
+. ./lib/utils.sh
+
 compress_lossy() {
 	for file in "$@"; do
 		mogrify "$file" -resize "$max_size"\>

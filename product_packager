@@ -34,7 +34,7 @@ verbosity=0
 test $is_dry_run -ne 0 && verbosity=99
 
 # SOURCING FILES
-. ./programs/lib/utils
+. ./programs/lib/utils.sh
 
 # Finds the files modified since the time passed as the first argument.
 # The time

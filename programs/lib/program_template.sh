@@ -30,7 +30,7 @@ verbosity=0
 test $is_dry_run -ne 0 && verbosity=99
 
 # SOURCING FILES
-. ./lib/utils
+. ./lib/utils.sh
 
 # Prints information about the program and how to use it.
 echo_help() {

@@ -36,7 +36,7 @@ verbosity=0
 test $is_dry_run -ne 0 && verbosity=99
 
 # SOURCING FILES
-. ./lib/utils
+. ./lib/utils.sh
 
 echo_help() {
 	test
