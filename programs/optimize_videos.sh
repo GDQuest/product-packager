@@ -31,7 +31,7 @@ no_audio=0
 FORMAT_NORMAL=$(tput sgr0)
 FORMAT_BOLD=$(tput bold)
 
-is_dry_run=1
+is_dry_run=0
 
 format_bold() {
 	printf "%s%s%s" "$FORMAT_BOLD" "$*" "$FORMAT_NORMAL"
@@ -98,7 +98,7 @@ parse_cli_arguments() {
 compress_videos() {
 	command="ffmpeg -hwaccel auto -y -v quiet -i %s -c:v libx264 -crf 20 -preset slow"
 	test $no_audio -eq 1 && command="$command -an" || command="$command -c:a aac -b:a 320k"
-	test scale != "" && command="$command -filter \"scale=$scale\""
+	test "$scale" != "" && command="$command -filter \"scale=$scale\""
 
 	while read -r filepath; do
 		filename=$(basename "$filepath")
