@@ -96,7 +96,7 @@ parse_cli_arguments() {
 # Arguments:
 # $@: list of paths to video files
 compress_videos() {
-	args="-hwaccel auto -y -v quiet -i %s -c:v libx264 -crf 20 -preset slow"
+	args="-hwaccel auto -y -v quiet -i \"%s\" -c:v libx264 -crf 20 -preset slow"
 	test $no_audio -eq 1 && args="$args -an" || args="$args -c:a aac -b:a 320k"
 	test "$scale" != "" && args="$args -filter \"scale=$scale\""
 
@@ -104,7 +104,7 @@ compress_videos() {
 		filename=$(basename "$filepath")
 		path_temp=$(dirname "$filepath")/temp_$(echo "$filename" | sed 's/\.[A-Za-z0-9]+$/.mp4/')
 		path_out=$(echo "$path_temp" | sed 's/temp_//')
-		ffmpeg_command=$(printf "ffmpeg $args %s" "$filepath" "$path_temp")
+		ffmpeg_command=$(printf "ffmpeg $args \"%s\"" "$filepath" "$path_temp")
 		test $is_dry_run -eq 0 && eval "$ffmpeg_command" || echo "$ffmpeg_command"
 		test $is_dry_run -eq 0 && mv -v "$path_temp" "$path_out" || echo Moving "$path_temp" to "$path_out"
 	done <"$1"
