@@ -23,8 +23,10 @@
 
 NAME="optimize_videos.sh"
 ERROR_RESIZE="Incorrect value for --resize. Turning resize off."
+TUNE_OPTIONS="film, animation, grain, stillimage"
 
 scale=""
+tune=""
 no_audio=0
 
 # Debug tools
@@ -49,6 +51,7 @@ No positional arguments.
 
 %s:
 -h/--help         -- Display this help message.
+-t/--tune         -- Tune option for the ffmpeg output. Should be one of '"$TUNE_OPTIONS"'
 -r/--resize size  -- Resize the video to this size using the scale filter. The size must be of a form
  supported by the ffmpeg scale filter. For example, 1280:720 for a 720p size or iw/2:-1 to divide
  the original video size by two. See https://trac.ffmpeg.org/wiki/Scaling for more information.
@@ -57,7 +60,7 @@ No positional arguments.
 }
 
 parse_cli_arguments() {
-	arguments=$(getopt --name "$NAME" -o "h,d,r:,n" -l "help,dry-run,resize:,no-audio" -- "$@")
+	arguments=$(getopt --name "$NAME" -o "h,d,r:,n,t:" -l "help,dry-run,resize:,no-audio,tune:" -- "$@")
 	eval set -- "$arguments"
 	while true; do
 		case "$1" in
@@ -76,6 +79,13 @@ parse_cli_arguments() {
 		-n | --no-audio)
 			no_audio=1
 			shift
+			;;
+		-t | --tune)
+			case "$2" in
+			film | animation | grain | stillimage) tune="$2" ;;
+			*) echo "Incorrect ffmpeg -tune option. Should be one of: $TUNE_OPTIONS" ;;
+			esac
+			shift 2
 			;;
 		--)
 			shift
@@ -99,6 +109,7 @@ compress_videos() {
 	args="-hwaccel auto -y -v quiet -i \"%s\" -c:v libx264 -crf 20 -preset slow"
 	test $no_audio -eq 1 && args="$args -an" || args="$args -c:a aac -b:a 320k"
 	test "$scale" != "" && args="$args -filter \"scale=$scale\""
+	test "$tune" != "" && args="$args -tune $tune"
 
 	while read -r filepath; do
 		filename=$(basename "$filepath")
