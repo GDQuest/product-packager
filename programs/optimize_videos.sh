@@ -70,7 +70,7 @@ parse_cli_arguments() {
 			shift
 			;;
 		-r | --resize)
-			echo "$2" | grep -E ".+:.+" && scale="$2" || echo "$ERROR_RESIZE"
+			echo "$2" | grep -Eq ".+:.+" && scale="$2" || echo "$ERROR_RESIZE"
 			shift 2
 			;;
 		-n | --no-audio)
