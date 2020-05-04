@@ -117,8 +117,6 @@ compress_videos() {
 	test "$scale" != "" && args="$args -filter \"scale=$scale\""
 	test "$tune" != "" && args="$args -tune $tune"
 
-	cat "$1"
-
 	while read -r filepath; do
 		echo Processing video "$filepath"
 		filename=$(basename "$filepath")
