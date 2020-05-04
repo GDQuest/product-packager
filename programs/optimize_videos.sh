@@ -32,8 +32,6 @@ TUNE_OPTIONS="film, animation, grain, stillimage"
 FORMAT_NORMAL=$(tput sgr0)
 FORMAT_BOLD=$(tput bold)
 
-is_dry_run=0
-
 format_bold() {
 	printf "%s%s%s" "$FORMAT_BOLD" "$*" "$FORMAT_NORMAL"
 }
@@ -84,7 +82,7 @@ parse_cli_arguments() {
 			is_dry_run=1
 			;;
 		r)
-			echo "$OPTARG" | grep -Eq ".+[:x].+" && scale="$OPTARG" || echo "$ERROR_RESIZE"
+			echo "$OPTARG" | grep -Eq ".+[:x].+" && scale="\"$OPTARG\"" || echo "$ERROR_RESIZE"
 			;;
 		n)
 			no_audio=1
@@ -115,42 +113,46 @@ parse_cli_arguments() {
 	done
 	shift $((OPTIND - 1))
 	for path in "$@"; do
-		echo $path
+		echo $path >>$temp_file
 	done
 }
 
 # Compresses and overwrites videos using ffmpeg, using variables from the caller. See `main()`.
 #
 compress_videos() {
-	args="-hwaccel auto -y -v quiet -i %s -c:v libx264 -crf 20 -preset slow"
+	args="-hwaccel auto -y -v quiet -i \"%s\" -c:v libx264 -crf 20 -preset slow"
 	test $no_audio -eq 1 && args="$args -an" || args="$args -c:a aac -b:a 320k"
 	test "$scale" != "" && args="$args -filter \"scale=$scale\""
 	test "$tune" != "" && args="$args -tune $tune"
 
-	for filepath in "$@"; do
+	while read filepath; do
 		echo Processing video "$filepath"
+
 		path_temp=${filepath%%.*}"_temp.mp4"
 		path_out=${path_temp//_temp/}
+		args_current=$(printf -- "$args \"%s\"" "$filepath" "$path_temp")
 
-		args_current=$(printf -- "$args %s" "$filepath" "$path_temp")
-		if [ $is_dry_run -eq 0 ]; then
-			ffmpeg $args_current </dev/null
+		if test $is_dry_run -eq 0; then
+			eval "ffmpeg $args_current </dev/null"
 			mv -v "$path_temp" "$path_out"
 		else
 			echo ffmpeg $args_current
 			echo Moving "$path_temp" to "$path_out"
 		fi
-	done
+	done <"$1"
 }
 
 main() {
 	# These variables are accessible in called functions
+	local is_dry_run=0
+
 	local scale=""
 	local tune=""
 	local no_audio=0
+	local temp_file=$(mktemp)
 
 	filepaths=$(parse_cli_arguments "$@")
-	compress_videos "$filepaths"
+	compress_videos "$temp_file"
 	exit $?
 }
 
