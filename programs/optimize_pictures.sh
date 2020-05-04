@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 #
 # Copyright (C) 2020 by Nathan Lovato and contributors
 #
@@ -26,21 +26,18 @@
 #
 # ⚠ Warning: this tool optimizes the files in-place! Save your images before using this program.
 
+# Exit on error, unset variable, or failed pipe
+set -euo pipefail
+
 NAME="optimize_pictures"
 ERROR_MAX_SIZE="Incorrect value for --max-size, it must be of the form 1000x1000. Turning auto-resize off."
 
-max_size="1000000x1000000"
+# Debug tools
+FORMAT_NORMAL=$(tput sgr0)
+FORMAT_BOLD=$(tput bold)
 
-# SOURCING FILES
-. ./lib/utils.sh
-
-compress_lossy() {
-	for file in "$@"; do
-		mogrify "$file" -resize "$max_size"\>
-		echo "$file" | grep -Ei "jpe?g$" && mogrify "$file" -sampling-factor 4:2:0 -strip -quality
-		85 -interlace JPEG -colorspace sRGB
-		echo "$file" | grep -Ei "png$" && pngquant -f --ext .png --quality 70-95 "$file"
-	done
+format_bold() {
+	printf "%s%s%s" "$FORMAT_BOLD" "$*" "$FORMAT_NORMAL"
 }
 
 echo_help() {
@@ -61,29 +58,78 @@ No positional arguments.
 	exit 0
 }
 
+# Parses command-line options using getopts
+# Outputs positional arguments to a temporary file `$temp_file`, see `main()`.
+#
+# Arguments:
+# $@ -- The arguments passed to the program
 parse_cli_arguments() {
-	arguments=$(getopt --name "$NAME" -o "h,m:" -l "help,max-size:" -- "$@")
-	eval set -- "$arguments"
-	while true; do
-		case "$1" in
-		-h | --help)
+	args=()
+	# Handle long options
+	for arg; do
+		case "$arg" in
+		--help) args+=(-h) ;;
+		--dry-run) args+=(-d) ;;
+		--max-size) args+=(-t) ;;
+		*) args+=("$arg") ;;
+		esac
+	done
+
+	set -- "${args[@]}"
+	while getopts "h,d,m:" OPTION; do
+		case $OPTION in
+		h)
 			echo_help
 			break
 			;;
-		-m | --max-size)
+		d)
+			is_dry_run=1
+			;;
+		m)
 			echo "$2" | grep -E "[0-9]+x[0-9]+" && max_size="$2" || echo "$ERROR_MAX_SIZE"
-			shift 2
 			;;
 		--)
-			shift
 			break
+			;;
+		\?)
+			echo "Invalid option: $OPTION" 1>&2
+			;;
+		:)
+			echo "Invalid option: $OPTION requires an argument" 1>&2
+			;;
+		*)
+			echo "There was an error: option '$OPTION' with value $OPTARG"
+			exit 1
 			;;
 		esac
 	done
+
+	shift $((OPTIND - 1))
+	for path in "$@"; do
+		echo $path >>$temp_file
+	done
+}
+
+# Compresses and overwrites images using imagemagick's `mogrify` program.
+#
+# Gets a list of files to process from the temporary file `$temp_file`, a variable from `main()`.
+# See `main()` for more information.
+compress_lossy() {
+	while read filepath; do
+		mogrify "$filepath" -resize "$max_size"\>
+		echo "$filepath" | grep -Ei "jpe?g$" && mogrify "$filepath" -sampling-factor 4:2:0 -strip -quality
+		85 -interlace JPEG -colorspace sRGB
+		echo "$filepath" | grep -Ei "png$" && pngquant -f --ext .png --quality 70-95 "$filepath"
+	done <"$temp_file"
 }
 
 main() {
-	parse_cli_arguments "$@"
+	local is_dry_run=0
+
+	local max_size="1000000x1000000"
+	local temp_file=$(mktemp)
+
+	filepaths=$(parse_cli_arguments "$@")
 	test $? -eq 0 && compress_lossy "$@"
 	exit $?
 }
