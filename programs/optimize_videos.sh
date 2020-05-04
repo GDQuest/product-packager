@@ -119,6 +119,8 @@ parse_cli_arguments() {
 
 # Compresses and overwrites videos using ffmpeg, using variables from the caller. See `main()`.
 #
+# Arguments:
+# $1 -- Path to a file that contains a list of video files to compress.
 compress_videos() {
 	args="-hwaccel auto -y -v quiet -i \"%s\" -c:v libx264 -crf 20 -preset slow"
 	test $no_audio -eq 1 && args="$args -an" || args="$args -c:a aac -b:a 320k"
@@ -143,7 +145,6 @@ compress_videos() {
 }
 
 main() {
-	# These variables are accessible in called functions
 	local is_dry_run=0
 
 	local scale=""
