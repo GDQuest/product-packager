@@ -86,7 +86,10 @@ parse_cli_arguments() {
 		-t | --tune)
 			case "$2" in
 			film | animation | grain | stillimage) tune="$2" ;;
-			*) echo "Incorrect ffmpeg -tune option. Should be one of: $TUNE_OPTIONS" ;;
+			*)
+				echo "Incorrect ffmpeg -tune option. Should be one of: $TUNE_OPTIONS"
+				exit 1
+				;;
 			esac
 			shift 2
 			;;
@@ -115,6 +118,7 @@ compress_videos() {
 	test "$tune" != "" && args="$args -tune $tune"
 
 	while read -r filepath; do
+		echo Processing video "$filepath"
 		filename=$(basename "$filepath")
 		path_temp=$(dirname "$filepath")/temp_$(echo "$filename" | sed 's/\.[A-Za-z0-9]+$/.mp4/')
 		path_out=$(echo "$path_temp" | sed 's/temp_//')
