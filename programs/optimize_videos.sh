@@ -28,10 +28,6 @@ NAME="optimize_videos.sh"
 ERROR_RESIZE="Incorrect value for --resize. Turning resize off."
 TUNE_OPTIONS="film, animation, grain, stillimage"
 
-scale=""
-tune=""
-no_audio=0
-
 # Debug tools
 FORMAT_NORMAL=$(tput sgr0)
 FORMAT_BOLD=$(tput bold)
@@ -62,83 +58,99 @@ No positional arguments.
 	exit 0
 }
 
+# Parses command-line options using getopts
 parse_cli_arguments() {
-	arguments=$(getopt --name "$NAME" -o "h,d,r:,n,t:" -l "help,dry-run,resize:,no-audio,tune:" -- "$@")
-	eval set -- "$arguments"
-	while true; do
-		case "$1" in
-		-h | --help)
+	args=()
+	# Handle long options
+	for arg; do
+		case "$arg" in
+		--help) args+=(-h) ;;
+		--dry-run) args+=(-d) ;;
+		--tune) args+=(-t) ;;
+		--resize) args+=(-r) ;;
+		--no-audio) args+=(-n) ;;
+		*) args+=("$arg") ;;
+		esac
+	done
+
+	set -- "${args[@]}"
+	while getopts "h,d,r:,n,t:" OPTION; do
+		case $OPTION in
+		h)
 			echo_help
 			break
 			;;
-		-d | --dry-run)
+		d)
 			is_dry_run=1
-			shift
 			;;
-		-r | --resize)
-			echo "$2" | grep -Eq ".+:.+" && scale="$2" || echo "$ERROR_RESIZE"
-			shift 2
+		r)
+			echo "$OPTARG" | grep -Eq ".+[:x].+" && scale="$OPTARG" || echo "$ERROR_RESIZE"
 			;;
-		-n | --no-audio)
+		n)
 			no_audio=1
-			shift
 			;;
-		-t | --tune)
-			case "$2" in
-			film | animation | grain | stillimage) tune="$2" ;;
+		t)
+			case "$OPTARG" in
+			film | animation | grain | stillimage) tune="$OPTARG" ;;
 			*)
 				echo "Incorrect ffmpeg -tune option. Should be one of: $TUNE_OPTIONS"
 				exit 1
 				;;
 			esac
-			shift 2
 			;;
 		--)
-			shift
 			break
 			;;
+		\?)
+			echo "Invalid option: $OPTION" 1>&2
+			;;
+		:)
+			echo "Invalid option: $OPTION requires an argument" 1>&2
+			;;
 		*)
-			echo "There was an error"
+			echo "There was an error: option '$OPTION' with value $OPTARG"
 			exit 1
 			;;
 		esac
 	done
-	for i in "$@"; do
-		echo "$i"
+	shift $((OPTIND - 1))
+	for path in "$@"; do
+		echo $path
 	done
 }
 
-# Compresses and overwrites
-# Arguments:
-# $@: list of paths to video files
+# Compresses and overwrites videos using ffmpeg, using variables from the caller. See `main()`.
+#
 compress_videos() {
 	args="-hwaccel auto -y -v quiet -i %s -c:v libx264 -crf 20 -preset slow"
 	test $no_audio -eq 1 && args="$args -an" || args="$args -c:a aac -b:a 320k"
 	test "$scale" != "" && args="$args -filter \"scale=$scale\""
 	test "$tune" != "" && args="$args -tune $tune"
 
-	path_temp=""
-	path_out=""
-	while read -r filepath; do
+	for filepath in "$@"; do
 		echo Processing video "$filepath"
 		path_temp=${filepath%%.*}"_temp.mp4"
 		path_out=${path_temp//_temp/}
 
-    args_current=$(printf -- "$args %s" "$filepath" "$path_temp")
-    if [ $is_dry_run -eq 0 ]; then
-      ffmpeg $args_current < /dev/null
-      mv -v "$path_temp" "$path_out"
-    else
-      echo ffmpeg $args_current
-      echo Moving "$path_temp" to "$path_out"
-    fi
-	done <"$1"
+		args_current=$(printf -- "$args %s" "$filepath" "$path_temp")
+		if [ $is_dry_run -eq 0 ]; then
+			ffmpeg $args_current </dev/null
+			mv -v "$path_temp" "$path_out"
+		else
+			echo ffmpeg $args_current
+			echo Moving "$path_temp" to "$path_out"
+		fi
+	done
 }
 
 main() {
-	temp_file=$(mktemp)
-	parse_cli_arguments "$@" >"$temp_file"
-	compress_videos "$temp_file"
+	# These variables are accessible in called functions
+	local scale=""
+	local tune=""
+	local no_audio=0
+
+	filepaths=$(parse_cli_arguments "$@")
+	compress_videos "$filepaths"
 	exit $?
 }
 
