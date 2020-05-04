@@ -117,11 +117,13 @@ compress_videos() {
 	test "$scale" != "" && args="$args -filter \"scale=$scale\""
 	test "$tune" != "" && args="$args -tune $tune"
 
+	path_temp=""
+	path_out=""
 	while read -r filepath; do
 		echo Processing video "$filepath"
-		ffmpeg_command=$(printf "ffmpeg $args \"%s\"" "$filepath" "$path_temp")
-		path_temp=${filepath%%.*}_temp.mp4
+		path_temp=${filepath%%.*}"_temp.mp4"
 		path_out=${path_temp//_temp/}
+		ffmpeg_command=$(printf "ffmpeg $args \"%s\"" "$filepath" "$path_temp")
 		test $is_dry_run -eq 0 && eval "$ffmpeg_command" || echo "$ffmpeg_command"
 		test $is_dry_run -eq 0 && mv -v "$path_temp" "$path_out" || echo Moving "$path_temp" to "$path_out"
 	done <"$1"
