@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 #
 # Copyright (C) 2020 by Nathan Lovato and contributors
 #
@@ -21,8 +21,8 @@
 #
 # ⚠ Warning: this tool overwrites the source videos! Backup your videos before using this program.
 
-# Exit if there's any unset variable
-set -eu
+# Exit on error, unset variable, or failed pipe
+set -euo pipefail
 
 NAME="optimize_videos.sh"
 ERROR_RESIZE="Incorrect value for --resize. Turning resize off."
@@ -117,11 +117,13 @@ compress_videos() {
 	test "$scale" != "" && args="$args -filter \"scale=$scale\""
 	test "$tune" != "" && args="$args -tune $tune"
 
+	cat "$1"
+
 	while read -r filepath; do
 		echo Processing video "$filepath"
 		filename=$(basename "$filepath")
-		path_temp=$(dirname "$filepath")/temp_$(echo "$filename" | sed 's/\.[A-Za-z0-9]+$/.mp4/')
-		path_out=$(echo "$path_temp" | sed 's/temp_//')
+		path_temp=$(dirname "$filepath")/temp_${filename%%.*}.mp4
+		path_out=${path_temp//temp_/}
 		ffmpeg_command=$(printf "ffmpeg $args \"%s\"" "$filepath" "$path_temp")
 		test $is_dry_run -eq 0 && eval "$ffmpeg_command" || echo "$ffmpeg_command"
 		test $is_dry_run -eq 0 -a $? -eq 0 && mv -v "$path_temp" "$path_out" || echo Moving "$path_temp" to "$path_out"
