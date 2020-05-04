@@ -57,6 +57,10 @@ No positional arguments.
 }
 
 # Parses command-line options using getopts
+# Outputs positional arguments to a temporary file `$temp_file`, see `main()`.
+#
+# Arguments:
+# $@ -- The arguments passed to the program
 parse_cli_arguments() {
 	args=()
 	# Handle long options
@@ -117,10 +121,10 @@ parse_cli_arguments() {
 	done
 }
 
-# Compresses and overwrites videos using ffmpeg, using variables from the caller. See `main()`.
+# Compresses and overwrites videos using ffmpeg, using variables from `main()`.
 #
-# Arguments:
-# $1 -- Path to a file that contains a list of video files to compress.
+# Gets a list of files to process from the temporary file `$temp_file`, a variable from `main()`.
+# See `main()` for more information.
 compress_videos() {
 	args="-hwaccel auto -y -v quiet -i \"%s\" -c:v libx264 -crf 20 -preset slow"
 	test $no_audio -eq 1 && args="$args -an" || args="$args -c:a aac -b:a 320k"
@@ -141,7 +145,7 @@ compress_videos() {
 			echo ffmpeg $args_current
 			echo Moving "$path_temp" to "$path_out"
 		fi
-	done <"$1"
+	done <"$temp_file"
 }
 
 main() {
