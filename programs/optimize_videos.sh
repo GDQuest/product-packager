@@ -119,8 +119,8 @@ compress_videos() {
 		path_temp=$(dirname "$filepath")/temp_$(echo "$filename" | sed 's/\.[A-Za-z0-9]+$/.mp4/')
 		path_out=$(echo "$path_temp" | sed 's/temp_//')
 		ffmpeg_command=$(printf "ffmpeg $args \"%s\"" "$filepath" "$path_temp")
-		test $is_dry_run -eq 0 && eval "$ffmpeg_command" || echo "$ffmpeg_command" && continue
-		test $is_dry_run -eq 0 && mv -v "$path_temp" "$path_out" || echo Moving "$path_temp" to "$path_out"
+		test $is_dry_run -eq 0 && eval "$ffmpeg_command" || echo "$ffmpeg_command"
+		test $is_dry_run -eq 0 -a $? -eq 0 && mv -v "$path_temp" "$path_out" || echo Moving "$path_temp" to "$path_out"
 	done <"$1"
 }
 
