@@ -128,14 +128,27 @@ parse_cli_arguments() {
 	done
 }
 
+# Outputs the path to save a file to convert.
+# Example: content/chapter-1/intro.md -> $output_path/chapter-1/intro.html
+#
+# Arguments:
+# $1 -- path to a file to convert
+# $2 -- output extension
+get_out_path() {
+	directory_name="$(basename "$(dirname "$1")")"
+	out="$(basename "$1" | sed "s/\.md$/.$2/")"
+	test "$directory_name" != "." && out="$directory_name/$out"
+	test "$output_path" != "" && out="$output_path/$out"
+	echo "$out"
+}
+
 # Converts the file passed as an argument to a self-contained HTML document using pandoc.
 #
 # Arguments:
 # $1 -- path to a file to convert
 convert_markdown_to_html() {
-	directory_name="$(basename "$(dirname "$1")")"
-	file_name="$(basename "$1" | sed 's/md$/html')"
-	pandoc "$1" --self-contained --toc -N --css "$css_file_path" --output "$output_path/$directory_name/$file_name"
+	out=$(get_out_path "$1" "html")
+	pandoc "$1" --self-contained --toc -N --css "$css_file_path" --output "$out"
 }
 
 # Converts the file passed as an argument to a pdf document using pandoc.
@@ -143,10 +156,7 @@ convert_markdown_to_html() {
 # Arguments:
 # $1 -- path to a file to convert
 convert_markdown_to_pdf() {
-	directory_name="$(basename "$(dirname "$1")")"
-	file_name="$(basename "$1" | sed 's/md$/pdf')"
-	out="$directory_name/$file_name"
-	test $output_path != "" && out_path="$output_path/$out"
+	out=$(get_out_path "$1" "pdf")
 	pandoc "$1" --self-contained --toc -N --css "$css_file_path" --pdf-engine "$pdf_engine" --output "$out"
 }
 
@@ -154,7 +164,9 @@ main() {
 	local is_dry_run=0
 	local temp_file=(mktemp)
 
-	local this_directory=$(dirname "$0")
+	local command="convert_markdown_to_html"
+
+	local this_directory=$(dirname $(readlink -f "$0"))
 	local css_file_path="$this_directory/css/pandoc.css"
 	local output_path=""
 	local pdf_engine="wkhtmltopdf"
