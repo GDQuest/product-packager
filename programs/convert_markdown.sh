@@ -24,6 +24,8 @@ set -euo pipefail
 
 NAME="convert_markdown"
 
+ERROR_CSS_INVALID="Invalid CSS file. %s is not a valid file. Using default path %s."
+
 CONTENT_DIRECTORY="content"
 PDF_ENGINES="pdfroff, wkhtmltopdf, weasyprint, prince"
 
@@ -101,6 +103,9 @@ parse_cli_arguments() {
 			*) echo "Invalid PDF engine. Supported engines are: . Using default engine." ;;
 			esac
 			;;
+		c)
+			test -f "$OPTARG" && css_file_path="$OPTARG" || printf "$ERROR_CSS_INVALID" "$OPTARG" "$css_file_path"
+			;;
 		o) output_path="$OPTARG" ;;
 		--)
 			break
@@ -149,7 +154,8 @@ main() {
 	local is_dry_run=0
 	local temp_file=(mktemp)
 
-	local css_file_path="pandoc.css"
+	local this_directory=$(dirname "$0")
+	local css_file_path="$this_directory/css/pandoc.css"
 	local output_path=""
 	local pdf_engine="wkhtmltopdf"
 
