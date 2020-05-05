@@ -46,12 +46,13 @@ echo_help() {
 No positional arguments.
 
 %s:
--h/--help         -- Display this help message.
--t/--tune         -- Tune option for the ffmpeg output. Should be one of '"$TUNE_OPTIONS"'
--r/--resize size  -- Resize the video to this size using the scale filter. The size must be of a form
+-h/--help			 -- Display this help message.
+-d/--dry-run		 -- Run without building any files and output debug information.
+-t/--tune			 -- Tune option for the ffmpeg output. Should be one of '"$TUNE_OPTIONS"'
+-r/--resize size	 -- Resize the video to this size using the scale filter. The size must be of a form
  supported by the ffmpeg scale filter. For example, 1280:720 for a 720p size or iw/2:-1 to divide
  the original video size by two. See https://trac.ffmpeg.org/wiki/Scaling for more information.
--n/--no-audio     -- Remove all audio from the output videos.' "$(format_bold "Usage")" "$(format_bold "Positional arguments")" "$(format_bold "Options")"
+-n/--no-audio		 -- Remove all audio from the output videos.' "$(format_bold "Usage")" "$(format_bold "Positional arguments")" "$(format_bold "Options")"
 	exit 0
 }
 

@@ -51,10 +51,11 @@ mogrify and pngquant.
 No positional arguments.
 
 %s:
--h/--help     -- Display this help message.
--m/--max-size -- Downsize pictures larger than this size in pixels. Should be of the form 1000x1000.
- Preserves the aspect ratio of the original image and fits the image in the maximum size.'
-	"$(format_bold Usage)" "$(format_bold Positional arguments)" "$(format_bold Options)"
+-h/--help		 -- Display this help message.
+-d/--dry-run	 -- Run without building any files and output debug information.
+-m/--max-size	 -- Downsize pictures larger than this size in pixels. Should be of the form 1000x1000.
+Preserves the aspect ratio of the original image and fits the image in the maximum size.
+' "$(format_bold Usage)" "$(format_bold Positional arguments)" "$(format_bold Options)"
 	exit 0
 }
 
