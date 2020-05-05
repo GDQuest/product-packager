@@ -131,7 +131,7 @@ main() {
 	filepaths=$(parse_cli_arguments "$@")
 	test $? -eq 0 && compress_lossy "$@"
 	rm $temp_file
-	exit $?
 }
 
 main "$@"
+exit $?
