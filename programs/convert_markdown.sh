@@ -162,7 +162,7 @@ convert_markdown_to_pdf() {
 
 main() {
 	local is_dry_run=0
-	local temp_file=(mktemp)
+	local temp_file=$(mktemp)
 
 	local command="convert_markdown_to_html"
 
