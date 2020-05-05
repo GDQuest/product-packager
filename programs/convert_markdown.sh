@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 #
 # Copyright (C) 2020 by Nathan Lovato and contributors
 #
@@ -19,53 +19,73 @@
 #
 # Converts markdown documents to self-contained HTML or PDF files using Pandoc.
 
+# Exit on error, unset variable, or failed pipe
+set -euo pipefail
+
 NAME="convert_markdown"
 
 CONTENT_DIRECTORY="content"
+PDF_ENGINES="pdfroff, wkhtmltopdf, weasyprint, prince"
 
-css_file_path="pandoc.css"
-out_dir="dist"
-# Use a supported pdf printing engine, the name of a program like weasyprint, wkhtmltopdf, or other.
-pdf_engine="weasyprint"
+# Debug tools
+FORMAT_NORMAL=$(tput sgr0)
+FORMAT_BOLD=$(tput bold)
 
-convert_markdown_to_html() {
-	directory_name="$(basename "$(dirname "$1")")"
-	file_name="$(basename "$1" | sed 's/md$/html')"
-	pandoc "$1" --self-contained --toc -N --css "$css_file_path" --output "$out_dir/$directory_name/$file_name"
-}
-
-convert_markdown_to_pdf() {
-	directory_name="$(basename "$(dirname "$1")")"
-	file_name="$(basename "$1" | sed 's/md$/pdf')"
-	pandoc "$1" --self-contained --toc -N --css "$css_file_path" --pdf-engine "$pdf_engine" --output "$out_dir/$directory_name/$file_name"
+format_bold() {
+	printf "%s%s%s" "$FORMAT_BOLD" "$*" "$FORMAT_NORMAL"
 }
 
 echo_help() {
-	printf 'Converts markdown documents to self-contained HTML or PDF files using Pandoc.
+	printf "Converts markdown documents to self-contained HTML or PDF files using Pandoc.
 
 %s:
-'"$NAME"' [Options]
+$NAME [Options]
 
 %s:
 No positional arguments.
 
 %s:
--h/--help -- Display this help message.
--t/--type -- Type of file to output, either html or pdf.'
+-h/--help			 -- Display this help message.
+-d/--dry-run		 -- Run without building any files and output debug information.
+-o/--output-path	 -- Path to an existing directory path to output the rendered documents.
+-t/--type			 -- Type of file to output, either html or pdf.
+-p/--pdf-engine		 -- PDF rendering engine to use if --type is pdf.
+Supported engines: $PDF_ENGINES
+-c/--css			 -- path to the css file to use for rendering. Default: $css_file_path"
 	"$(format_bold Usage)" "$(format_bold Positional arguments)" "$(format_bold Options)"
 	exit 0
 }
 
+# Outputs positional arguments to a temporary file `$temp_file`, see `main()`.
+#
+# Arguments:
+# $@ -- The arguments passed to the program
 parse_cli_arguments() {
-	arguments=$(getopt --name "$NAME" -o "h,t:" -l "help,type:" -- "$@")
-	eval set -- "$arguments"
-	while true; do
-		case "$1" in
-		-h | --help)
+	args=()
+	# Convert long options to their short counterpart for getopts.
+	for arg; do
+		case "$arg" in
+		--help) args+=(-h) ;;
+		--dry-run) args+=(-d) ;;
+		--output-path) args+=(-o) ;;
+		--type) args+=(-t) ;;
+		--pdf-engine) args+=(-p) ;;
+		--css) args+=(-c) ;;
+		*) args+=("$arg") ;;
+		esac
+	done
+
+	set -- "${args[@]}"
+	while getopts "h,d,t:,p:" OPTION; do
+		case $OPTION in
+		h)
 			echo_help
 			break
 			;;
-		-t | --type)
+		d)
+			is_dry_run=1
+			;;
+		t)
 			case "$2" in
 			pdf | PDF)
 				command=convert_markdown_to_pdf
@@ -74,20 +94,72 @@ parse_cli_arguments() {
 				command=convert_markdown_to_html
 				;;
 			esac
-			shift 2
 			;;
+		p)
+			case "$OPTARG" in
+			pdfroff | wkhtmltopdf | weasyprint | prince) pdf_engine="$OPTARG" ;;
+			*) echo "Invalid PDF engine. Supported engines are: . Using default engine." ;;
+			esac
+			;;
+		o) output_path="$OPTARG" ;;
 		--)
-			shift
 			break
+			;;
+		\?)
+			echo "Invalid option: $OPTION" 1>&2
+			;;
+		:)
+			echo "Invalid option: $OPTION requires an argument" 1>&2
+			;;
+		*)
+			echo "There was an error: option '$OPTION' with value $OPTARG"
+			exit 1
 			;;
 		esac
 	done
+	shift $((OPTIND - 1))
+	for path in "$@"; do
+		echo $path >>$temp_file
+	done
+}
+
+# Converts the file passed as an argument to a self-contained HTML document using pandoc.
+#
+# Arguments:
+# $1 -- path to a file to convert
+convert_markdown_to_html() {
+	directory_name="$(basename "$(dirname "$1")")"
+	file_name="$(basename "$1" | sed 's/md$/html')"
+	pandoc "$1" --self-contained --toc -N --css "$css_file_path" --output "$output_path/$directory_name/$file_name"
+}
+
+# Converts the file passed as an argument to a pdf document using pandoc.
+#
+# Arguments:
+# $1 -- path to a file to convert
+convert_markdown_to_pdf() {
+	directory_name="$(basename "$(dirname "$1")")"
+	file_name="$(basename "$1" | sed 's/md$/pdf')"
+	out="$directory_name/$file_name"
+	test $output_path != "" && out_path="$output_path/$out"
+	pandoc "$1" --self-contained --toc -N --css "$css_file_path" --pdf-engine "$pdf_engine" --output "$out"
 }
 
 main() {
-	parse_cli_arguments "$@"
+	local is_dry_run=0
+	local temp_file=(mktemp)
 
-	find "$CONTENT_DIRECTORY" -mindepth 1 -maxdepth 2 -iname "*.md" -type f -print0 -exec $command "{}" ";"
+	local css_file_path="pandoc.css"
+	local output_path=""
+	local pdf_engine="wkhtmltopdf"
+
+	parse_cli_arguments "$@"
+	while read filepath; do
+		$command "$filepath"
+	done <"$temp_file"
+
+	rm $temp_file
 }
 
 main "$@"
+exit $?
