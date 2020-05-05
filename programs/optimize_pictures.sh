@@ -29,7 +29,7 @@
 # Exit on error, unset variable, or failed pipe
 set -euo pipefail
 
-NAME="optimize_pictures"
+NAME="$(basename $0)"
 ERROR_MAX_SIZE="Incorrect value for --max-size, it must be of the form 1000x1000. Turning auto-resize off."
 
 # Debug tools

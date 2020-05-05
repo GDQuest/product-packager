@@ -22,7 +22,7 @@
 # Exit on error, unset variable, or failed pipe
 set -euo pipefail
 
-NAME="convert_markdown"
+NAME="$(basename $0)"
 
 ERROR_CSS_INVALID="Invalid CSS file. %s is not a valid file. Using default path %s."
 

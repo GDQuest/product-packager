@@ -23,7 +23,7 @@
 
 set -euo pipefail
 
-NAME="optimize_videos.sh"
+NAME="$(basename $0)"
 ERROR_RESIZE="Incorrect value for --resize. Turning resize off."
 TUNE_OPTIONS="film, animation, grain, stillimage"
 
