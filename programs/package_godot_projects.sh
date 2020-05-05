@@ -54,6 +54,7 @@ $output_directory	 -- Directory to output the clean Godot projects and optional 
 -h/--help			 -- Display this help message.
 -d/--dry-run		 -- Run without building any files and output debug information.
 -n/--no-zip			 -- Do not create a zip archive from the Godot projects, keep the cleaned directories instead.
+-t/--title			 -- Name to use for the output directory or zip archive.
 ' "$(format_bold "Usage")" "$(format_bold "Positional arguments")" "$(format_bold "Options")"
 	exit 0
 }
@@ -71,6 +72,7 @@ parse_cli_arguments() {
 		--help) args+=(-h) ;;
 		--dry-run) args+=(-d) ;;
 		--no-zip) args+=(-n) ;;
+		--title) args+=(-t) ;;
 		*) args+=("$arg") ;;
 		esac
 	done
@@ -87,6 +89,9 @@ parse_cli_arguments() {
 			;;
 		n)
 			do_zip=0
+			;;
+		t)
+			out_file_name="$OPTARG"
 			;;
 		--) break ;;
 		\?)
@@ -107,8 +112,7 @@ parse_cli_arguments() {
 }
 
 package_godot_projects() {
-	dir_out_name=$(strings_to_filename "$project_title")
-	dir_export="$dir_godot/$dir_out_name"
+	dir_export="$dir_godot/$out_file_name"
 
 	if test $is_dry_run -eq 0; then
 		test ! -d "$dir_export" && mkdir "$dir_export"
@@ -128,7 +132,7 @@ package_godot_projects() {
 
 	if test $do_zip -eq 1; then
 		if test $is_dry_run -eq 0; then
-			archive_name="$dir_out_name.zip"
+			archive_name="$out_file_name.zip"
 			zip -r "$archive_name" "$dir_export/*"
 			mv -v --backup --force "$archive_name" "$dir_dist"
 			rm -rf "$dir_export"
@@ -139,12 +143,12 @@ package_godot_projects() {
 		test $is_dry_run -eq 0 && mv -r --backup --force "$dir_export" "$dir_dist"
 	fi
 	echo "Done."
-
 }
 
 main() {
 	local is_dry_run=0
 
+	local out_file_name="godot"
 	local dir_godot=""
 	local dir_dist=""
 	local do_zip=1
