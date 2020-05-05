@@ -59,7 +59,7 @@ No positional arguments.
 }
 
 # Parses command-line options using getopts
-# Outputs positional arguments to a temporary file `$temp_file`, see `main()`.
+# outputs positional arguments to a temporary file `$temp_file`, see `main()`.
 #
 # Arguments:
 # $@ -- The arguments passed to the program
@@ -117,8 +117,7 @@ parse_cli_arguments() {
 compress_lossy() {
 	while read filepath; do
 		mogrify "$filepath" -resize "$max_size"\>
-		echo "$filepath" | grep -Ei "jpe?g$" && mogrify "$filepath" -sampling-factor 4:2:0 -strip -quality
-		85 -interlace JPEG -colorspace sRGB
+		echo "$filepath" | grep -Ei "jpe?g$" && mogrify "$filepath" -sampling-factor 4:2:0 -strip -quality 85 -interlace JPEG -colorspace sRGB
 		echo "$filepath" | grep -Ei "png$" && pngquant -f --ext .png --quality 70-95 "$filepath"
 	done <"$temp_file"
 }
