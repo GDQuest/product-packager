@@ -124,12 +124,13 @@ compress_lossy() {
 
 main() {
 	local is_dry_run=0
+	local temp_file=$(mktemp)
 
 	local max_size="1000000x1000000"
-	local temp_file=$(mktemp)
 
 	filepaths=$(parse_cli_arguments "$@")
 	test $? -eq 0 && compress_lossy "$@"
+	rm $temp_file
 	exit $?
 }
 

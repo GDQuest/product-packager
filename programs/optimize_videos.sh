@@ -150,14 +150,15 @@ compress_videos() {
 
 main() {
 	local is_dry_run=0
+	local temp_file=$(mktemp)
 
 	local scale=""
 	local tune=""
 	local no_audio=0
-	local temp_file=$(mktemp)
 
 	filepaths=$(parse_cli_arguments "$@")
 	compress_videos "$temp_file"
+	rm $temp_file
 	exit $?
 }
 
