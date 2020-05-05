@@ -12,11 +12,11 @@ The tool can already:
 
 - Process and package Godot projects to distribute their source code.
 - Auto checkout git repositories to master.
-- Find, organize, and move rendered content files to the output directory.
 - Render Blender video project with our [Blender multi-threaded video rendered](https://github.com/GDQuest/blender-sequencer-multithreaded-render).
-- Compress videos with ffmpeg.
+- Render source documents to self-contained HTML or PDF with Pandoc.
+- Compress videos with FFMpeg.
 
-More is coming quickly and soon. As it's early in development, you need to know about shell code to use it right now. 
+More is coming quickly and soon. As it's early in development, you need to know about shell code to use it right now.
 
 Also, the tool is still a single program with all functions in one place. To make it flexible and convenient to use, I plan to:
 
@@ -36,7 +36,7 @@ You can [customize](#customizing-the-project-directories) these directory paths.
 
 Here is the source directory structure of our course [Code a Professional 3D Character with Godot](https://gdquest.mavenseed.com/courses/code-a-professional-3d-character-with-godot):
 
-``` sh
+```sh
 .
 ├── content
 │   ├── 00.course-introduction
@@ -79,7 +79,7 @@ If you encounter a bug or you have an idea to improve the tool, please [open an 
 
 If you want to contribute to the project, for instance, by fixing a bug or adding a feature, check out our [Contributor's guidelines](https://www.gdquest.com/docs/guidelines/contributing-to/gdquest-projects/).
 
-Also, please use [ShellCheck](https://www.shellcheck.net/) to lint your code and ensure it's POSIX-compliant. 
+Also, please use [ShellCheck](https://www.shellcheck.net/) to lint your code and ensure it's POSIX-compliant.
 
 Pull requests and code reviews are much welcome. You can share your feedback and POSIX shell programming tips in the issues tab, or by sending me a message (see below).
 
@@ -87,7 +87,7 @@ Pull requests and code reviews are much welcome. You can share your feedback and
 
 Our work on Free Software is sponsored by our [Godot game creation courses](https://gdquest.mavenseed.com/). Consider getting one to support us!
 
-*If you like our work, please star the repository! This helps more people find it.*
+_If you like our work, please star the repository! This helps more people find it._
 
 ## Join the community
 

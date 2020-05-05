@@ -21,7 +21,6 @@
 #
 # ⚠ Warning: this tool overwrites the source videos! Backup your videos before using this program.
 
-# Exit on error, unset variable, or failed pipe
 set -euo pipefail
 
 NAME="optimize_videos.sh"
