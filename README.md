@@ -8,7 +8,7 @@ To get notified when the first stable release is out, click the GitHub Watch but
 
 ## Features
 
-The tool can already:
+The programs in this repository can already:
 
 - Process and package Godot projects to distribute their source code.
 - Auto checkout git repositories to master.
@@ -16,16 +16,33 @@ The tool can already:
 - Render source documents to self-contained HTML or PDF with Pandoc.
 - Compress videos with FFMpeg.
 
-More is coming quickly and soon. As it's early in development, you need to know about shell code to use it right now.
-
-Also, the tool is still a single program with all functions in one place. To make it flexible and convenient to use, I plan to:
-
-1. Have each main feature as a separate shell program, so you can use them however you want depending on your needs.
-2. Have a `product-packager` program that offers a single command and optional presets to quickly package projects.
-
 ## How to use
 
-Run `product_packager --help` to get usage information for the program itself.
+_Last update on May 5th 2020._
+
+Product packager is a modular set of tools to package products. You can find them in the `programs/` directory.
+
+To package a complete product, you can call these tools one after the other. Here is how I currently package one of our [game creation courses](https://gdquest.mavenseed.com/) using the [fish shell](https://fishshell.com/):
+
+```sh
+# After finishing each course chapter, compressing pictures and videos to reduce download size
+optimize_pictures.sh content/chapter-x/**.{jpg,png}
+optimize_videos.sh content/chapter-x/**.mp4
+
+# When preparing a new, clean release
+rm -rf ./dist/
+git_checkout_repositories.sh (find godot -type d -name .git)
+package_godot_projects.sh ./godot/ ./dist/
+convert_markdown.sh **.md ./dist/
+```
+
+I also use the tools above to compress files before uploading them, or to share documents online.
+
+Run any program with the `--help` option to learn to use it. Also, if you find a bug, you can run tools with the `-d` or `--dry-run` option to output debug information. Please copy and paste that output to any bug you report in the [issues tab](issues).
+
+## Using `product_packager`
+
+⚠ The program in the top directory, `product_packager`, is a work-in-progress. It's not ready to use. The goal of this program is to provide a simple command to automatically package products for you.
 
 Product packager expects some particular directory structure to work. We designed it to support exporting a list of files, but also to produce online courses like the ones we have on [our mavenseed website](https://gdquest.mavenseed.com/).
 
@@ -65,13 +82,11 @@ dir_content="content"
 dir_godot="godot"
 ```
 
-For example, if you want your source content to be in `project/src/`:
+Note that the directory path should not end with a "/". For example, if you want your source content to be in `./project/src/`:
 
 ```sh
 dir_content="project/src"
 ```
-
-Note that the directory path should not end with a "/".
 
 ## Contributing
 
