@@ -33,7 +33,7 @@ optimize_videos.sh content/chapter-x/**.mp4
 rm -rf ./dist/
 git_checkout_repositories.sh (find godot -type d -name .git)
 package_godot_projects.sh ./godot/ ./dist/
-convert_markdown.sh **.md ./dist/
+convert_markdown.sh --css pandoc.css --output-path dist content/**.md
 ```
 
 I also use the tools above to compress files before uploading them, or to share documents online.
