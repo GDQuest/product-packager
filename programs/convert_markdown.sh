@@ -47,13 +47,13 @@ $NAME [Options]
 No positional arguments.
 
 %s:
--h/--help			 -- Display this help message.
--d/--dry-run		 -- Run without building any files and output debug information.
--o/--output-path	 -- Path to an existing directory path to output the rendered documents.
--t/--type			 -- Type of file to output, either html or pdf.
--p/--pdf-engine		 -- PDF rendering engine to use if --type is pdf.
+-h/--help            -- Display this help message.
+-d/--dry-run         -- Run without building any files and output debug information.
+-o/--output-path     -- Path to an existing directory path to output the rendered documents.
+-t/--type            -- Type of file to output, either html or pdf.
+-p/--pdf-engine      -- PDF rendering engine to use if --type is pdf.
 Supported engines: $PDF_ENGINES
--c/--css			 -- path to the css file to use for rendering. Default: $css_file_path
+-c/--css             -- path to the css file to use for rendering. Default: $css_file_path
 " "$(format_bold Usage)" "$(format_bold Positional arguments)" "$(format_bold Options)"
 	exit 0
 }
