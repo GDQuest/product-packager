@@ -88,15 +88,15 @@ parse_cli_arguments() {
 			is_dry_run=1
 			;;
 		o)
-			output_path="$OPTARG"
+			output_path="$(realpath $OPTARG)"
 			;;
 		t)
 			case "$2" in
 			pdf | PDF)
-				command=convert_markdown_to_pdf
+				extension=pdf
 				;;
 			html | HTML | *)
-				command=convert_markdown_to_html
+				extension=html
 				;;
 			esac
 			;;
@@ -107,7 +107,7 @@ parse_cli_arguments() {
 			esac
 			;;
 		c)
-			test -f "$OPTARG" && css_file_path="$OPTARG" || printf "$ERROR_CSS_INVALID" "$OPTARG" "$css_file_path"
+			test -f "$OPTARG" && css_file_path=$(realpath "$OPTARG") || printf "$ERROR_CSS_INVALID" "$OPTARG" "$css_file_path"
 			;;
 		--)
 			break
@@ -126,7 +126,7 @@ parse_cli_arguments() {
 	done
 	shift $((OPTIND - 1))
 	for path in "$@"; do
-		echo $path >>$temp_file
+		realpath $path >>$temp_file
 	done
 }
 
@@ -152,51 +152,49 @@ get_title() {
 	name=$(basename "$1")
 	name=${name/.md//}
 	name=$(echo "$name" | sed 's/[0-9]*\.//')
-	echo "${name[@]^}" | sed 's/[-_\/\\]/ /g'
+	echo "${name[@]^}" | sed 's/[-_\/\\]/ /g' | sed 's/ *$//'
 }
 
-# Converts the file passed as an argument to a self-contained HTML document using pandoc.
+# Converts the file passed as an argument to a self-contained html or pdf document using pandoc.
 #
 # Arguments:
 # $1 -- path to a file to convert
-convert_markdown_to_html() {
-	out=$(get_out_path "$1" "html")
+# $2 -- output extension
+convert_markdown() {
+	out=$(get_out_path "$1" "$2")
 	title=$(get_title "$1")
-	if test $is_dry_run -eq 0; then
-		pandoc "$1" --self-contained --toc -N --css "$css_file_path" --metadata pagetitle="$title" --output "$out"
-	else
-		echo "Converting document $1 to $out with title '$title'"
-	fi
-}
 
-# Converts the file passed as an argument to a pdf document using pandoc.
-#
-# Arguments:
-# $1 -- path to a file to convert
-convert_markdown_to_pdf() {
-	out=$(get_out_path "$1" "pdf")
-	title=$(get_title "$1")
+	args="$1 --self-contained --toc --css \"$css_file_path\" --metadata pagetitle=\"$title\" --output \"$out\""
+	test "$2" = "pdf" && args="$args --pdf-engine $pdf_engine"
 	if test $is_dry_run -eq 0; then
-		pandoc "$1" --self-contained --toc -N --css "$css_file_path" --pdf-engine "$pdf_engine" --metadata pagetitle="$title" --output "$out"
+		dir_input_file=$(dirname "$1")
+		dir_output_file=$(dirname "$out")
+		test ! -d "$dir_output_file" && mkdir --parents "$dir_output_file"
+		cd "$dir_input_file"
+		eval pandoc "$args"
+		echo "Rendered document $out."
+		cd $dir_start
 	else
-		echo "Converting document $1 to $out with title '$title'"
+		echo "pandoc $args"
 	fi
+
 }
 
 main() {
 	local is_dry_run=0
 	local temp_file=$(mktemp)
 
-	local command="convert_markdown_to_html"
+	local extension="html"
 
 	local this_directory=$(dirname $(readlink -f "$0"))
 	local css_file_path="$this_directory/css/pandoc.css"
 	local output_path=""
 	local pdf_engine="wkhtmltopdf"
 
+	local dir_start=$(pwd)
 	parse_cli_arguments "$@"
 	while read filepath; do
-		$command "$filepath"
+		convert_markdown "$filepath" "$extension"
 	done <"$temp_file"
 
 	rm $temp_file
