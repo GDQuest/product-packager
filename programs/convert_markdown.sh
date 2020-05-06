@@ -144,13 +144,29 @@ get_out_path() {
 	echo "$out"
 }
 
+# Outputs a document title from a file's path. Uses the file name converted to title case.
+#
+# Arguments:
+# $1 -- path to a file
+get_title() {
+	name=$(basename "$1")
+	name=${name/.md//}
+	name=$(echo "$name" | sed 's/[0-9]*\.//')
+	echo "${name[@]^}" | sed 's/[-_\/\\]/ /g'
+}
+
 # Converts the file passed as an argument to a self-contained HTML document using pandoc.
 #
 # Arguments:
 # $1 -- path to a file to convert
 convert_markdown_to_html() {
 	out=$(get_out_path "$1" "html")
-	pandoc "$1" --self-contained --toc -N --css "$css_file_path" --output "$out"
+	title=$(get_title "$1")
+	if test $is_dry_run -eq 0; then
+		pandoc "$1" --self-contained --toc -N --css "$css_file_path" --metadata pagetitle="$title" --output "$out"
+	else
+		echo "Converting document $1 to $out with title '$title'"
+	fi
 }
 
 # Converts the file passed as an argument to a pdf document using pandoc.
@@ -159,7 +175,12 @@ convert_markdown_to_html() {
 # $1 -- path to a file to convert
 convert_markdown_to_pdf() {
 	out=$(get_out_path "$1" "pdf")
-	pandoc "$1" --self-contained --toc -N --css "$css_file_path" --pdf-engine "$pdf_engine" --output "$out"
+	title=$(get_title "$1")
+	if test $is_dry_run -eq 0; then
+		pandoc "$1" --self-contained --toc -N --css "$css_file_path" --pdf-engine "$pdf_engine" --metadata pagetitle="$title" --output "$out"
+	else
+		echo "Converting document $1 to $out with title '$title'"
+	fi
 }
 
 main() {
