@@ -91,7 +91,7 @@ parse_cli_arguments() {
 			output_path="$(realpath $OPTARG)"
 			;;
 		t)
-			case "$2" in
+			case "$OPTARG" in
 			pdf | PDF)
 				extension=pdf
 				;;
