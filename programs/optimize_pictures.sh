@@ -41,22 +41,23 @@ format_bold() {
 }
 
 echo_help() {
-	printf ' Optimize jpg and png image files in-place with lossy compression using imagemagick
+	set -x
+	printf "Optimize jpg and png image files in-place with lossy compression using imagemagick
 mogrify and pngquant.
 
 %s:
-'"$NAME"' [Options]
+$NAME [Options]
 
 %s:
 No positional arguments.
 
 %s:
--h/--help		 -- Display this help message.
--d/--dry-run	 -- Run without building any files and output debug information.
--m/--max-size	 -- Downsize pictures larger than this size in pixels. Should be of the form 1000x1000.
+-h/--help        -- Display this help message.
+-d/--dry-run     -- Run without building any files and output debug information.
+-m/--max-size    -- Downsize pictures larger than this size in pixels. Should be of the form 1000x1000.
 Preserves the aspect ratio of the original image and fits the image in the maximum size.
-' "$(format_bold Usage)" "$(format_bold Positional arguments)" "$(format_bold Options)"
-	exit 0
+" "$(format_bold Usage)" "$(format_bold Positional arguments)" "$(format_bold Options)"
+	exit
 }
 
 # Parses command-line options using getopts
@@ -81,7 +82,6 @@ parse_cli_arguments() {
 		case $OPTION in
 		h)
 			echo_help
-			break
 			;;
 		d)
 			is_dry_run=1
