@@ -36,24 +36,26 @@ format_bold() {
 }
 
 echo_help() {
-	printf 'Compress videos to h264 MP4 with ffmpeg.
+	printf "Compress videos to h264 MP4 with ffmpeg.
 ⚠ Warning: this program overwrites the source videos! Create a backup of your files before running it.
 
 %s:
-'"$NAME"' [Options]
+$NAME [Options]
 
 %s:
 No positional arguments.
 
 %s:
--h/--help			 -- Display this help message.
--d/--dry-run		 -- Run without building any files and output debug information.
--t/--tune			 -- Tune option for the ffmpeg output. Should be one of '"$TUNE_OPTIONS"'
--r/--resize size	 -- Resize the video to this size using the scale filter. The size must be of a form
- supported by the ffmpeg scale filter. For example, 1280:720 for a 720p size or iw/2:-1 to divide
- the original video size by two. See https://trac.ffmpeg.org/wiki/Scaling for more information.
--n/--no-audio		 -- Remove all audio from the output videos.' "$(format_bold "Usage")" "$(format_bold "Positional arguments")" "$(format_bold "Options")"
-	exit 0
+-h/--help            -- Display this help message.
+-d/--dry-run         -- Run without building any files and output debug information.
+-t/--tune            -- Tune option for the ffmpeg output. Should be one of $TUNE_OPTIONS
+-r/--resize size     -- Resize the video to this size using the scale filter. The size must be of a
+ form supported by the ffmpeg scale filter. For example, 1280:720 for a 720p size or iw/2:-1 to
+ divide the original video size by two. See https://trac.ffmpeg.org/wiki/Scaling for more
+ information.
+-n/--no-audio        -- Remove all audio from the output videos.
+" "$(format_bold "Usage")" "$(format_bold "Positional arguments")" "$(format_bold "Options")"
+	exit
 }
 
 # Parses command-line options using getopts
@@ -80,7 +82,6 @@ parse_cli_arguments() {
 		case $OPTION in
 		h)
 			echo_help
-			break
 			;;
 		d)
 			is_dry_run=1
