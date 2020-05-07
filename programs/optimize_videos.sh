@@ -157,7 +157,8 @@ main() {
 	local tune=""
 	local no_audio=0
 
-	filepaths=$(parse_cli_arguments "$@")
+	set -x
+	parse_cli_arguments "$@"
 	compress_videos "$temp_file"
 	rm $temp_file
 	exit $?

@@ -129,7 +129,7 @@ main() {
 
 	local max_size="1000000x1000000"
 
-	filepaths=$(parse_cli_arguments "$@")
+	parse_cli_arguments "$@"
 	test $? -eq 0 && compress_lossy "$@"
 	rm $temp_file
 }
