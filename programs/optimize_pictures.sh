@@ -23,14 +23,12 @@
 #
 # Optimize jpg and png image files in-place with lossy compression using imagemagick's mogrify and
 # pngquant.
-#
-# ⚠ Warning: this tool optimizes the files in-place! Save your images before using this program.
 
 # Exit on error, unset variable, or failed pipe
 set -euo pipefail
 
 NAME="$(basename $0)"
-ERROR_MAX_SIZE="Incorrect value for --max-size, it must be of the form 1000x1000. Turning auto-resize off."
+ERROR_MAX_SIZE="Incorrect value for --size, it must be of the form 1000x1000. Turning auto-resize off."
 
 # Debug tools
 FORMAT_NORMAL=$(tput sgr0)
@@ -54,8 +52,9 @@ No positional arguments.
 %s:
 -h/--help        -- Display this help message.
 -d/--dry-run     -- Run without building any files and output debug information.
--m/--max-size    -- Downsize pictures larger than this size in pixels. Should be of the form 1000x1000.
-Preserves the aspect ratio of the original image and fits the image in the maximum size.
+-s/--size -- Any imagemagick Geometry that represents the output size of the image. For more
+ information, see https://www.imagemagick.org/script/command-line-processing.php#geometry.
+-i/--in-place    -- Optimize pictures in-place instead of to a new file.
 " "$(format_bold Usage)" "$(format_bold Positional arguments)" "$(format_bold Options)"
 	exit
 }
@@ -72,13 +71,14 @@ parse_cli_arguments() {
 		case "$arg" in
 		--help) args+=(-h) ;;
 		--dry-run) args+=(-d) ;;
-		--max-size) args+=(-t) ;;
+		--size) args+=(-s) ;;
+		--in-place) args+=(-i) ;;
 		*) args+=("$arg") ;;
 		esac
 	done
 
 	set -- "${args[@]}"
-	while getopts "h,d,m:" OPTION; do
+	while getopts "h,d,s:,i" OPTION; do
 		case $OPTION in
 		h)
 			echo_help
@@ -86,8 +86,11 @@ parse_cli_arguments() {
 		d)
 			is_dry_run=1
 			;;
-		m)
-			echo "$2" | grep -E "[0-9]+x[0-9]+" && max_size="$2" || echo "$ERROR_MAX_SIZE"
+		s)
+			size="$2"
+			;;
+		i)
+			is_in_place=1
 			;;
 		--)
 			break
@@ -111,15 +114,43 @@ parse_cli_arguments() {
 	done
 }
 
-# Compresses and overwrites images using imagemagick's `mogrify` program.
+# Resizes one png image with imagemagick and compresses it in-place with pngquant.
+#
+# Arguments:
+# $1 -- the path to the file to convert.
+compress_png() {
+	convert "$1" -resize "$size" "$1"
+	pngquant --quality 70-95 --force --ext .png "$1"
+}
+#
+# Resizes and compresses one jpg image with imagemagick.
+#
+# Arguments:
+# $1 -- the path to the file to convert.
+compress_jpg() {
+	convert "$1" -resize "$size"\> -sampling-factor 4:2:0 -strip -quality 85 -interlace JPEG -colorspace sRGB "$1"
+}
+
+# Compresses images.
 #
 # Gets a list of files to process from the temporary file `$temp_file`, a variable from `main()`.
 # See `main()` for more information.
 compress_lossy() {
+	set -x
 	while read filepath; do
-		mogrify "$filepath" -resize "$max_size"\>
-		echo "$filepath" | grep -Ei "jpe?g$" && mogrify "$filepath" -sampling-factor 4:2:0 -strip -quality 85 -interlace JPEG -colorspace sRGB
-		echo "$filepath" | grep -Ei "png$" && pngquant -f --ext .png --quality 70-95 "$filepath"
+		directory=$(dirname "$filepath")
+		filename=$(basename "$filepath")
+		name="${filename%%.*}"
+		ext="${filename##*.}"
+
+		test "$path_out" = "" && path_out="$directory/$name-compressed.$ext"
+
+		cp "$filepath" "$path_out"
+
+		test "$ext" = jpg -o "$ext" = jpeg && compress_jpg "$path_out"
+		test "$ext" = png && compress_png "$path_out"
+
+		test $is_in_place -eq 1 && mv "$path_out" "$filepath"
 	done <"$temp_file"
 }
 
@@ -127,7 +158,9 @@ main() {
 	local is_dry_run=0
 	local temp_file=$(mktemp)
 
-	local max_size="1000000x1000000"
+	local size="1000000x1000000"
+	local is_in_place=0
+	local path_out=""
 
 	parse_cli_arguments "$@"
 	test $? -eq 0 && compress_lossy "$@"
