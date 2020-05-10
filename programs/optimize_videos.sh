@@ -54,6 +54,7 @@ No positional arguments.
  divide the original video size by two. See https://trac.ffmpeg.org/wiki/Scaling for more
  information.
 -n/--no-audio        -- Remove all audio from the output videos.
+-u/--use-nvenc       -- Use NVidia NVENC for encoding.
 " "$(format_bold "Usage")" "$(format_bold "Positional arguments")" "$(format_bold "Options")"
 	exit
 }
@@ -73,12 +74,13 @@ parse_cli_arguments() {
 		--tune) args+=(-t) ;;
 		--resize) args+=(-r) ;;
 		--no-audio) args+=(-n) ;;
+		--use-nvenc) args+=(-u) ;;
 		*) args+=("$arg") ;;
 		esac
 	done
 
 	set -- "${args[@]}"
-	while getopts "h,d,r:,n,t:" OPTION; do
+	while getopts "h,d,r:,n,t:,u" OPTION; do
 		case $OPTION in
 		h)
 			echo_help
@@ -91,6 +93,9 @@ parse_cli_arguments() {
 			;;
 		n)
 			no_audio=1
+			;;
+		u)
+			use_nvenc=1
 			;;
 		t)
 			case "$OPTARG" in
@@ -127,7 +132,8 @@ parse_cli_arguments() {
 # Gets a list of files to process from the temporary file `$temp_file`, a variable from `main()`.
 # See `main()` for more information.
 compress_videos() {
-	args="-hwaccel auto -y -v quiet -i \"%s\" -c:v libx264 -crf 20 -preset slow"
+	args="-hwaccel auto -y -v quiet -i \"%s\""
+	test $use_nvenc -eq 0 && args="$args -c:v libx264 -crf 20 -preset slow" || args="$args -c:v h264_nvenc -qp 20 -preset slow"
 	test $no_audio -eq 1 && args="$args -an" || args="$args -c:a aac -b:a 320k"
 	test "$scale" != "" && args="$args -filter \"scale=$scale\""
 	test "$tune" != "" && args="$args -tune $tune"
@@ -156,6 +162,7 @@ main() {
 	local scale=""
 	local tune=""
 	local no_audio=0
+	local use_nvenc=0
 
 	parse_cli_arguments "$@"
 	compress_videos "$temp_file"
