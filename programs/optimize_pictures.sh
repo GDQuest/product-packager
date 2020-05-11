@@ -115,6 +115,7 @@ parse_cli_arguments() {
 
 	shift $((OPTIND - 1))
 	for path in "$@"; do
+		test -d "$path" && continue
 		echo $path >>$temp_file
 	done
 }
@@ -146,6 +147,8 @@ compress_lossy() {
 		filename=$(basename "$filepath")
 		name="${filename%%.*}"
 		ext="${filename##*.}"
+
+		echo Processing "$filename"
 
 		path_out="$output_directory"
 		test "$path_out" = "" && path_out="$directory/$name-compressed.$ext" || path_out="$path_out/$filename"
