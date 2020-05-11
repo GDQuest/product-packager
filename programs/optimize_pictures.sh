@@ -115,7 +115,7 @@ parse_cli_arguments() {
 
 	shift $((OPTIND - 1))
 	for path in "$@"; do
-		test -f "$path" && echo $path >>$temp_file
+		test -f "$path" && echo $path >>$temp_file || continue
 	done
 }
 
