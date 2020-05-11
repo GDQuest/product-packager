@@ -1,0 +1,37 @@
+# Processes markdown documents, images, and videos for a text-based course.
+# Compresses all pictures and videos, then converts markdown documents into standalone HTML files.
+include ../config.mk
+
+
+INPUT_IMAGES := $(wildcard $(addprefix $(DIR_IMAGES)/,*.png *.jpg *.jpeg))
+INPUT_VIDEOS := $(wildcard $(addprefix $(DIR_VIDEOS)/,*.mp4))
+INPUT_MD     := $(wildcard *.md)
+
+BUILD_IMAGES := $(addprefix $(DIR_BUILD)/,$(INPUT_IMAGES))
+BUILD_VIDEOS := $(addprefix $(DIR_BUILD)/,$(INPUT_VIDEOS))
+BUILD_MD     := $(addprefix $(DIR_BUILD)/,$(INPUT_MD))
+
+DEPENDENCIES := $(DIR_BUILD)/$(DIR_IMAGES) $(DIR_BUILD)/$(DIR_VIDEOS)
+DEPENDENCIES += $(BUILD_IMAGES) $(BUILD_VIDEOS) $(BUILD_MD)
+DEPENDENCIES += $(addprefix $(DIR_OUT)/,$(subst .md,.html,$(BUILD_MD)))
+
+
+.PHONY: all
+
+all: $(DEPENDENCIES)
+
+$(DIR_BUILD)/%:
+	mkdir -p $@
+
+$(DIR_BUILD)/$(DIR_IMAGES)/%: $(DIR_IMAGES)/%
+	cp $< $@
+	$(EXEC_OPTIMIZE_IMAGES) --in-place $@
+
+$(DIR_BUILD)/$(DIR_VIDEOS)/%: $(DIR_VIDEOS)/%
+	cp $< $@
+	$(EXEC_OPTIMIZE_VIDEOS) --in-place --tune animation --no-audio --use-nvenc --resize "'min(1280\,iw)'":-1 $@
+$(DIR_BUILD)/%.md: %.md
+	cp $< $@
+
+$(DIR_OUT)/$(DIR_BUILD)/%.html: $(DIR_BUILD)/%.md
+	$(EXEC_CONVERT) --css $(DIR_SCRIPTS)/css/pandoc.css --output-path $(DIR_OUT) $<
