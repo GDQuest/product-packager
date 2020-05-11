@@ -14,79 +14,38 @@ The programs in this repository can already:
 - Auto checkout git repositories to master.
 - Render Blender video project with our [Blender multi-threaded video rendered](https://github.com/GDQuest/blender-sequencer-multithreaded-render).
 - Render source documents to self-contained HTML or PDF with Pandoc.
-- Compress videos with FFMpeg.
+- Compress and resize png and jpg images using [imagemagick](https://www.imagemagick.org/).
+- Compress and resize videos with [FFMpeg](https://ffmpeg.org/).
 
 ## How to use
 
-_Last update on May 5th 2020._
+Product packager is a modular set of tools to help process files and package products. You can find them in the `programs/` directory.
 
-Product packager is a modular set of tools to package products. You can find them in the `programs/` directory.
+To package complete products, we use `make`, a program to create incremental builds and process files based on sets of rules. For more information, see [the makefiles directory's README](makefiles/README.md). There, you can also find our example make files.
 
-To package a complete product, you can call these tools one after the other. Here is how I currently package one of our [game creation courses](https://gdquest.mavenseed.com/) using the [fish shell](https://fishshell.com/):
+You can use these tools individually. For example, here are some example commands I would use to compress pictures and videos in a directory using my favorite shell, [fish](https://fishshell.com/):
 
 ```sh
-# After finishing each course chapter, compressing pictures and videos to reduce download size
-optimize_pictures.sh content/chapter-x/**.{jpg,png}
-optimize_videos.sh content/chapter-x/**.mp4
+optimize_pictures.sh --output output_directory --resize 1280:-1\> -- pictures/*.{jpg,png}
+optimize_videos.sh --output output_directory videos/*.mp4
+```
 
-# When preparing a new, clean release
-rm -rf ./dist/
+Other commands help you with git repositories and projects made with the Godot game engine:
+
+```sh
 git_checkout_repositories.sh (find godot -type d -name .git)
 package_godot_projects.sh ./godot/ ./dist/
+```
+
+We also have a program to render markdown documents to PDF or standalone HTML using [pandoc](https://pandoc.org/):
+
+```sh
 convert_markdown.sh --css pandoc.css --output-path dist content/**.md
 ```
 
 I also use the tools above to compress files before uploading them, or to share documents online.
 
 Run any program with the `--help` option to learn to use it. Also, if you find a bug, you can run tools with the `-d` or `--dry-run` option to output debug information. Please copy and paste that output to any bug you report in the [issues tab](issues).
-
-## Using `product_packager`
-
-⚠ The program in the top directory, `product_packager`, is a work-in-progress. It's not ready to use. The goal of this program is to provide a simple command to automatically package products for you.
-
-Product packager expects some particular directory structure to work. We designed it to support exporting a list of files, but also to produce online courses like the ones we have on [our mavenseed website](https://gdquest.mavenseed.com/).
-
-- The `content/` directory should contain your course's chapters, sections, or parts.
-- The `godot/` directory should contain your godot projects, each one in a sub-directory.
-
-You can [customize](#customizing-the-project-directories) these directory paths.
-
-Here is the source directory structure of our course [Code a Professional 3D Character with Godot](https://gdquest.mavenseed.com/courses/code-a-professional-3d-character-with-godot):
-
-```sh
-.
-├── content
-│   ├── 00.course-introduction
-│   ├── 01.state-machine
-│   ├── 02.character-movement
-│   ├── 03.camera-rig
-│   └── conclusion
-├── godot
-│   ├── 01.the-state-machine
-│   ├── 02.character-movement
-│   ├── 03.the-camera-rig
-│   ├── final
-│   ├── start
-│   └── tutorial
-```
-
-Each sub-directory in `content/` corresponds to a separate chapter in the final course.
-
-### Customizing the project directories
-
-You can customize the directories you want to use using the `$dir_*` variables in the program:
-
-```sh
-dir_dist="dist"
-dir_content="content"
-dir_godot="godot"
-```
-
-Note that the directory path should not end with a "/". For example, if you want your source content to be in `./project/src/`:
-
-```sh
-dir_content="project/src"
-```
 
 ## Contributing
 
