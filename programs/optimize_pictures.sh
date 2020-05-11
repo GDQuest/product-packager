@@ -165,7 +165,7 @@ main() {
 	local is_dry_run=0
 	local temp_file=$(mktemp)
 
-	local size="1000000x1000000"
+	local size='1000000x1000000>'
 	local is_in_place=0
 	local output_directory=""
 
