@@ -52,9 +52,10 @@ No positional arguments.
 %s:
 -h/--help        -- Display this help message.
 -d/--dry-run     -- Run without building any files and output debug information.
--s/--size -- Any imagemagick Geometry that represents the output size of the image. For more
+-s/--size		 -- Any imagemagick Geometry that represents the output size of the image. For more
  information, see https://www.imagemagick.org/script/command-line-processing.php#geometry.
 -i/--in-place    -- Optimize pictures in-place instead of to a new file.
+-o/--output		 -- Path to a directory to output the files
 " "$(format_bold Usage)" "$(format_bold Positional arguments)" "$(format_bold Options)"
 	exit
 }
@@ -73,12 +74,13 @@ parse_cli_arguments() {
 		--dry-run) args+=(-d) ;;
 		--size) args+=(-s) ;;
 		--in-place) args+=(-i) ;;
+		--output) args+=(-o) ;;
 		*) args+=("$arg") ;;
 		esac
 	done
 
 	set -- "${args[@]}"
-	while getopts "h,d,s:,i" OPTION; do
+	while getopts "h,d,s:,i,o:" OPTION; do
 		case $OPTION in
 		h)
 			echo_help
@@ -91,6 +93,9 @@ parse_cli_arguments() {
 			;;
 		i)
 			is_in_place=1
+			;;
+		o)
+			output_directory="$OPTARG"
 			;;
 		--)
 			break
@@ -136,14 +141,14 @@ compress_jpg() {
 # Gets a list of files to process from the temporary file `$temp_file`, a variable from `main()`.
 # See `main()` for more information.
 compress_lossy() {
-	set -x
 	while read filepath; do
 		directory=$(dirname "$filepath")
 		filename=$(basename "$filepath")
 		name="${filename%%.*}"
 		ext="${filename##*.}"
 
-		test "$path_out" = "" && path_out="$directory/$name-compressed.$ext"
+		path_out="$output_directory"
+		test "$path_out" = "" && path_out="$directory/$name-compressed.$ext" || path_out="$path_out/$filename"
 
 		cp "$filepath" "$path_out"
 
@@ -160,10 +165,11 @@ main() {
 
 	local size="1000000x1000000"
 	local is_in_place=0
-	local path_out=""
+	local output_directory=""
 
 	parse_cli_arguments "$@"
-	test $? -eq 0 && compress_lossy "$@"
+	test "$output_directory" != "" -a ! -d "$output_directory" && mkdir -p "$output_directory"
+	compress_lossy "$@"
 	rm $temp_file
 }
 
