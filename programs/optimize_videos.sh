@@ -55,6 +55,8 @@ No positional arguments.
  information.
 -n/--no-audio        -- Remove all audio from the output videos.
 -u/--use-nvenc       -- Use NVidia NVENC for encoding.
+-i/--in-place		 -- Optimize pictures in-place instead of to a new file.
+-o/--output			 -- Path to a directory to output the files
 " "$(format_bold "Usage")" "$(format_bold "Positional arguments")" "$(format_bold "Options")"
 	exit
 }
@@ -75,12 +77,14 @@ parse_cli_arguments() {
 		--resize) args+=(-r) ;;
 		--no-audio) args+=(-n) ;;
 		--use-nvenc) args+=(-u) ;;
+		--in-place) args+=(-i) ;;
+		--output) args+=(-o) ;;
 		*) args+=("$arg") ;;
 		esac
 	done
 
 	set -- "${args[@]}"
-	while getopts "h,d,r:,n,t:,u" OPTION; do
+	while getopts "h,d,r:,n,t:,u,i,o:" OPTION; do
 		case $OPTION in
 		h)
 			echo_help
@@ -96,6 +100,12 @@ parse_cli_arguments() {
 			;;
 		u)
 			use_nvenc=1
+			;;
+		i)
+			is_in_place=1
+			;;
+		o)
+			output_directory="$OPTARG"
 			;;
 		t)
 			case "$OPTARG" in
@@ -122,8 +132,9 @@ parse_cli_arguments() {
 		esac
 	done
 	shift $((OPTIND - 1))
+	set -x
 	for path in "$@"; do
-		echo $path >>$temp_file
+		test -f "$path" && echo $path >>$temp_file || continue
 	done
 }
 
@@ -141,13 +152,18 @@ compress_videos() {
 	while read filepath; do
 		echo Processing video "$filepath"
 
-		path_temp=${filepath%%.*}"_temp.mp4"
-		path_out=${path_temp//_temp/}
-		args_current=$(printf -- "$args \"%s\"" "$filepath" "$path_temp")
+		directory=$(dirname "$filepath")
+		filename=$(basename "$filepath")
+		name="${filename%%.*}"
+
+		path_out="$output_directory"
+		test "$path_out" = "" && path_out="$directory/$name-compressed.mp4" || path_out="$path_out/$filename"
+
+		args_current=$(printf -- "$args \"%s\"" "$filepath" "$path_out")
 
 		if test $is_dry_run -eq 0; then
 			eval "ffmpeg $args_current </dev/null"
-			mv -v "$path_temp" "$path_out"
+			test $is_in_place -eq 1 && mv -v "$path_out" "$filepath"
 		else
 			echo ffmpeg $args_current
 			echo Moving "$path_temp" to "$path_out"
@@ -159,12 +175,16 @@ main() {
 	local is_dry_run=0
 	local temp_file=$(mktemp)
 
+	local is_in_place=0
+	local output_directory=""
+
 	local scale=""
 	local tune=""
 	local no_audio=0
 	local use_nvenc=0
 
 	parse_cli_arguments "$@"
+	test "$output_directory" != "" -a ! -d "$output_directory" && mkdir -p "$output_directory"
 	compress_videos "$temp_file"
 	rm $temp_file
 	exit $?
