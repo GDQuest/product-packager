@@ -132,7 +132,6 @@ parse_cli_arguments() {
 		esac
 	done
 	shift $((OPTIND - 1))
-	set -x
 	for path in "$@"; do
 		test -f "$path" && echo $path >>$temp_file || continue
 	done

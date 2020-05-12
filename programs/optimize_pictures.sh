@@ -39,7 +39,6 @@ format_bold() {
 }
 
 echo_help() {
-	set -x
 	printf "Optimize jpg and png image files in-place with lossy compression using imagemagick
 mogrify and pngquant.
 
