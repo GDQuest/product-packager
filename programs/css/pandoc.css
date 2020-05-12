@@ -187,6 +187,10 @@ pre {
   word-wrap: break-word;
 }
 
+code {
+  white-space: pre-wrap;
+}
+
 b,
 strong {
   font-weight: bold;
