@@ -53,7 +53,8 @@ No positional arguments.
 -t/--type            -- Type of file to output, either html or pdf.
 -p/--pdf-engine      -- PDF rendering engine to use if --type is pdf.
 Supported engines: $PDF_ENGINES
--c/--css             -- path to the css file to use for rendering. Default: $css_file_path
+-c/--css             -- Path to the css file to use for rendering. Default: $css_file_path
+-E/--extra-args		 -- Extra options and values passed to pandoc as-is.
 " "$(format_bold Usage)" "$(format_bold Positional arguments)" "$(format_bold Options)"
 	exit 0
 }
@@ -73,6 +74,7 @@ parse_cli_arguments() {
 		--type) args+=(-t) ;;
 		--pdf-engine) args+=(-p) ;;
 		--css) args+=(-c) ;;
+		--extra-args) args+=(-E) ;;
 		*) args+=("$arg") ;;
 		esac
 	done
@@ -108,6 +110,9 @@ parse_cli_arguments() {
 			;;
 		c)
 			test -f "$OPTARG" && css_file_path=$(realpath "$OPTARG") || printf "$ERROR_CSS_INVALID" "$OPTARG" "$css_file_path"
+			;;
+		e)
+			pandoc_args_extra="$OPTARG"
 			;;
 		--)
 			break
@@ -164,7 +169,7 @@ convert_markdown() {
 	out=$(get_out_path "$1" "$2")
 	title=$(get_title "$1")
 
-	args="$1 --self-contained --toc --css \"$css_file_path\" --metadata pagetitle=\"$title\" --output \"$out\""
+	args="$1 --self-contained $pandoc_args_extra --css \"$css_file_path\" --metadata pagetitle=\"$title\" --output \"$out\""
 	test "$2" = "pdf" && args="$args --pdf-engine $pdf_engine"
 	if test $is_dry_run -eq 0; then
 		dir_input_file=$(dirname "$1")
@@ -190,6 +195,7 @@ main() {
 	local css_file_path="$this_directory/css/pandoc.css"
 	local output_path=""
 	local pdf_engine="wkhtmltopdf"
+	local pandoc_args_extra=""
 
 	local dir_start=$(pwd)
 	parse_cli_arguments "$@"
