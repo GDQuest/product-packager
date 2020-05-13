@@ -80,7 +80,7 @@ parse_cli_arguments() {
 	done
 
 	set -- "${args[@]}"
-	while getopts "h,d,o:,t:,p:,c:" OPTION; do
+	while getopts "h,d,o:,t:,p:,c:,E:" OPTION; do
 		case $OPTION in
 		h)
 			echo_help
@@ -111,7 +111,7 @@ parse_cli_arguments() {
 		c)
 			test -f "$OPTARG" && css_file_path=$(realpath "$OPTARG") || printf "$ERROR_CSS_INVALID" "$OPTARG" "$css_file_path"
 			;;
-		e)
+		E)
 			pandoc_args_extra="$OPTARG"
 			;;
 		--)
