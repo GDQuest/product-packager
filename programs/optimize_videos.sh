@@ -168,6 +168,8 @@ compress_videos() {
 			echo Moving "$path_temp" to "$path_out"
 		fi
 	done <"$temp_file"
+
+	return 0
 }
 
 main() {
@@ -185,8 +187,9 @@ main() {
 	parse_cli_arguments "$@"
 	test "$output_directory" != "" -a ! -d "$output_directory" && mkdir -p "$output_directory"
 	compress_videos "$temp_file"
-	rm $temp_file
-	exit $?
+	rm -f $temp_file
+
+	return 0
 }
 
 main "$@"

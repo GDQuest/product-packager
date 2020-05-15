@@ -156,8 +156,10 @@ compress_lossy() {
 		test "$ext" = jpg -o "$ext" = jpeg && compress_jpg "$path_out"
 		test "$ext" = png && compress_png "$path_out"
 
-		test $is_in_place -eq 1 && mv "$path_out" "$filepath"
+		test $is_in_place -eq 1 2> /dev/null && mv "$path_out" "$filepath"
 	done <"$temp_file"
+
+	return 0
 }
 
 main() {
@@ -171,8 +173,9 @@ main() {
 	parse_cli_arguments "$@"
 	test "$output_directory" != "" -a ! -d "$output_directory" && mkdir -p "$output_directory"
 	compress_lossy "$@"
-	rm $temp_file
+	rm -f $temp_file
+
+	return 0
 }
 
 main "$@"
-exit $?
