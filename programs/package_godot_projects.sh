@@ -135,8 +135,13 @@ package_godot_projects() {
 	if test $do_zip -eq 1; then
 		if test $is_dry_run -eq 0; then
 			archive_name="$out_file_name.zip"
-			zip -r "$archive_name" $(find "$dir_export" -maxdepth 1 -type d) >/dev/null
-			mv -v --force "$archive_name" "$dir_dist"
+
+			# cd to the dist directory so the zip file doesn't contain it.
+			dir_start=$(pwd)
+			cd $dir_dist
+			zip -r "$archive_name" *
+			cd $dir_start
+
 			rm -rf "$dir_export"
 		fi
 		echo "Removing the $dir_export directory..."
