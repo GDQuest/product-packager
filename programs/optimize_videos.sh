@@ -153,7 +153,7 @@ compress_videos() {
 
 		directory=$(dirname "$filepath")
 		filename=$(basename "$filepath")
-		name="${filename%%.*}"
+		name="${filename%.*}"
 
 		path_out="$output_directory"
 		test "$path_out" = "" && path_out="$directory/$name-compressed.mp4" || path_out="$path_out/$filename"
