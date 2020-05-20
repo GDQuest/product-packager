@@ -16,6 +16,7 @@ The programs in this repository can already:
 - Render source documents to self-contained HTML or PDF with Pandoc.
 - Compress and resize png and jpg images using [imagemagick](https://www.imagemagick.org/).
 - Compress and resize videos with [FFMpeg](https://ffmpeg.org/).
+- Highlight code blocks in markdown documents with [Chroma](https://github.com/alecthomas/chroma)
 
 ## How to use
 
