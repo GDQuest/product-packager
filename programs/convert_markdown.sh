@@ -41,20 +41,23 @@ echo_help() {
 	printf "Converts markdown documents to self-contained HTML or PDF files using Pandoc.
 
 %s:
-$NAME [Options]
+$NAME [Options] file [file ...]
 
 %s:
-No positional arguments.
+file -- path to a file to convert
+
+If no files are passed to the program, reads from standard input.
 
 %s:
--h/--help            -- Display this help message.
--d/--dry-run         -- Run without building any files and output debug information.
--o/--output-path     -- Path to an existing directory path to output the rendered documents.
--t/--type            -- Type of file to output, either html or pdf.
--p/--pdf-engine      -- PDF rendering engine to use if --type is pdf.
+-h/--help        -- Display this help message.
+-d/--dry-run     -- Run without building any files and output debug information.
+-o/--output-path		 -- Path to an existing directory path to output the rendered documents. Only works
+with file arguments, not when reading from standard input.
+-t/--type        -- Type of file to output, either html or pdf.
+-p/--pdf-engine  -- PDF rendering engine to use if --type is pdf.
 Supported engines: $PDF_ENGINES
--c/--css             -- Path to the css file to use for rendering. Default: $css_file_path
--E/--extra-args		 -- Extra options and values passed to pandoc as-is.
+-c/--css         -- Path to the css file to use for rendering. Default: $css_file_path
+-E/--extra-args	 -- Extra options and values passed to pandoc as-is.
 " "$(format_bold Usage)" "$(format_bold Positional arguments)" "$(format_bold Options)"
 	exit 0
 }
@@ -130,6 +133,15 @@ parse_cli_arguments() {
 		esac
 	done
 	shift $((OPTIND - 1))
+
+	# Input from stdin
+	if test -v "$@"; then
+		is_using_stdin=1
+		stdin_copy=$(mktemp)
+		cat - >$stdin_copy
+		echo $stdin_copy >>$temp_file
+	fi
+
 	for path in "$@"; do
 		realpath $path >>$temp_file
 	done
@@ -166,19 +178,25 @@ get_title() {
 # $1 -- path to a file to convert
 # $2 -- output extension
 convert_markdown() {
-	out=$(get_out_path "$1" "$2")
 	title=$(get_title "$1")
-
-	args="$1 --self-contained $pandoc_args_extra --css \"$css_file_path\" --metadata pagetitle=\"$title\" --output \"$out\""
+	args="$1 --self-contained $pandoc_args_extra --css \"$css_file_path\" --metadata pagetitle=\"$title\" "
 	test "$2" = "pdf" && args="$args --pdf-engine $pdf_engine"
-	if test $is_dry_run -eq 0; then
+
+	if test $is_using_stdin -eq 0; then
+		out=$(get_out_path "$1" "$2")
+		args="$args --output-path \"$out\""
 		dir_input_file=$(dirname "$1")
 		dir_output_file=$(dirname "$out")
-		test ! -d "$dir_output_file" && mkdir --parents "$dir_output_file"
+		test $is_dry_run -eq 0 -a ! -d "$dir_output_file" && mkdir --parents "$dir_output_file"
 		cd "$dir_input_file"
+	fi
+
+	if test $is_dry_run -eq 0; then
 		eval pandoc "$args"
-		echo "Rendered document $out."
-		cd $dir_start
+		if test $is_using_stdin -eq 0; then
+			echo "Rendered document $out."
+			cd $dir_start
+		fi
 	else
 		echo "pandoc $args"
 	fi
@@ -196,6 +214,7 @@ main() {
 	local output_path=""
 	local pdf_engine="wkhtmltopdf"
 	local pandoc_args_extra=""
+	local is_using_stdin=0
 
 	local dir_start=$(pwd)
 	parse_cli_arguments "$@"
