@@ -51,7 +51,7 @@ If no files are passed to the program, reads from standard input.
 %s:
 -h/--help        -- Display this help message.
 -d/--dry-run     -- Run without building any files and output debug information.
--o/--output-path		 -- Path to an existing directory path to output the rendered documents. Only works
+-o/--output		 -- Path to an existing directory path to output the rendered documents. Only works
 with file arguments, not when reading from standard input.
 -t/--type        -- Type of file to output, either html or pdf.
 -p/--pdf-engine  -- PDF rendering engine to use if --type is pdf.
@@ -73,7 +73,7 @@ parse_cli_arguments() {
 		case "$arg" in
 		--help) args+=(-h) ;;
 		--dry-run) args+=(-d) ;;
-		--output-path) args+=(-o) ;;
+		--output) args+=(-o) ;;
 		--type) args+=(-t) ;;
 		--pdf-engine) args+=(-p) ;;
 		--css) args+=(-c) ;;
@@ -184,7 +184,7 @@ convert_markdown() {
 
 	if test $is_using_stdin -eq 0; then
 		out=$(get_out_path "$1" "$2")
-		args="$args --output-path \"$out\""
+		args="$args --output \"$out\""
 		dir_input_file=$(dirname "$1")
 		dir_output_file=$(dirname "$out")
 		test $is_dry_run -eq 0 -a ! -d "$dir_output_file" && mkdir --parents "$dir_output_file"
