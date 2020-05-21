@@ -53,7 +53,7 @@ def is_chroma_installed():
     )
 
 
-def get_args(args=sys.argv) -> argparse.Namespace:
+def get_args(args) -> argparse.Namespace:
     """Parses the command line arguments"""
     parser = argparse.ArgumentParser(description=__doc__,)
     parser.add_argument(
@@ -64,11 +64,7 @@ def get_args(args=sys.argv) -> argparse.Namespace:
         help="A list of paths to markdown files.",
     )
     parser.add_argument(
-        "-o",
-        "--output",
-        type=str,
-        default="export",
-        help="Path to the output directory.",
+        "-o", "--output", type=str, default="", help="Path to the output directory.",
     )
     parser.add_argument(
         "-i", "--in-place", action="store_true", help="Overwrite the source files."
@@ -80,15 +76,20 @@ def main():
     if not is_chroma_installed():
         raise ProcessLookupError(ERROR_CHROMA_NOT_FOUND)
 
-    args: argparse.Namespace = get_args()
+    args: argparse.Namespace = get_args(sys.argv)
     filepaths = [f for f in args.files if f.lower().endswith(".md")]
     for filepath in filepaths:
         content = highlight_code_blocks(filepath)
-        out_path = join(args.output, basename(filepath))
-        if not os.path.isdir(args.output):
-            os.makedirs(args.output)
-        with open(out_path, "w") as document:
-            document.write(content)
+
+        # If no --output option set, output to stdout
+        if args.output == "":
+            print(content)
+        else:
+            out_path = join(args.output, basename(filepath))
+            if not os.path.isdir(args.output):
+                os.makedirs(args.output)
+            with open(out_path, "w") as document:
+                document.write(content)
 
 
 if __name__ == "__main__":
