@@ -17,7 +17,6 @@ COMMAND_HIGHLIGHT = [
     "chroma",
     "--html",
     "--html-only",
-    "--html-lines",
     "--html-inline-styles",
     "--style=monokai",
 ]
