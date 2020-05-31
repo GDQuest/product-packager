@@ -1,5 +1,7 @@
 # GDQuest Product Packager
 
+![Plugin banner image](./img/product-packager.png)
+
 Product Packager is a tool to help creators package and publish their tutorial series, courses, tools, and other products to platforms like [Gumroad](https://gumroad.com/), [Itch.io](https://itch.io/), or [Mavenseed](https://mavenseed.com/).
 
 It is currently **early in development** and **not suitable for production use**.
