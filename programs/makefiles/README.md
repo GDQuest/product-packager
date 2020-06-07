@@ -1,24 +1,16 @@
-# Automate product builds with make
+# Automate product builds with tup and make
 
-To build course releases (render videos, export documents...), we use [GNU make](https://www.gnu.org/software/make/). Make is a program that builds files based on a set of rules and dependencies.
+To build course releases (render videos, export documents...), we use [GNU make](https://www.gnu.org/software/make/) alongside [Tup](http://gittup.org/tup/). They're both programs to build files based on a set of rules and dependencies. You need both programs installed to use these build rules:
 
-For example, we use it to automatically detect and compress new or modified pictures:
-
-```makefile
-build/images/%: images/%
-	cp $< $@
-	optimize_pictures.sh --in-place $@
+```sh
+sudo apt install make tup
 ```
 
-This rule uses some make-specific patterns to process all files in an `images/` directory. For each file in the `images/` directory, make is going to:
+Whenever we update a lesson, modify a video edit, or add a new file, all we have to do is to run `make` and the programs find and rebuild only the files that changed.
 
-1. Copy the file to a directory named `build/images/`: `cp $< $@`
-2. Compress the file in-place using our program `optimize_pictures.sh`: `optimize_pictures.sh --in-place $@`
+Here's a description of the files:
 
-The strength of `make` is that it automatically detects files that were already processed.
-
-## Our makefiles
-
-To use make, you need to install the program `GNU make`, then to call `make` from the shell in a directory containing a file named `Makefile`. The makefile contains the rules make has to follow and dependencies required to build a given file. For example, for us, to export an HTML or PDF document from our source files, we first need to compress pictures and videos.
-
-You can find our example makefiles in this directory. They are here as examples, and you will need to adapt them to your projects.
+- `Makefile` allows you to build the project or clean the build directories with `make` and `make clean`, respectively. It delegates processing on individual files to `tup`.
+- `Tuprules.tup` defines some variables, mostly paths to the programs in product packager and commands to run to build the project. Each member of the team can have the programs in a different folder thanks to that.
+- `Tupfile.ini` is an empty file for us. It's required for tup to run. In it, you can configure `tup` to only use some cores, or to keep running even with errors.
+- `Tupfile.SUBDIR` gets copied to sub-directories in your project by `make` and tells `tup` how to transform files found there.

@@ -1,45 +1,28 @@
-# The config file defines some directories and the path to some programs.
-include config.mk
+include Tuprules.tup
 
-# This program assumes that you're creating a course with the following directory structure:
-#
-# chapter-1/
-# chapter-2/
-# ...
-#
-# For each chapter, make will copy ./Makefile.subdir into the chapter directory and run make there.
 
-SUBDIRS := $(shell ls -d */)
-SUBDIRS := $(filter-out $(DIR_DIST)/,$(SUBDIRS))
+SUBDIRS := $(shell ls -d content/*/)
 
-.PHONY: clean subdirs dist $(SUBDIRS)
 
-dist: subdirs
+dist:
 	for subdir in $(SUBDIRS); do \
-		DIR_CHAPTER=$(DIR_DIST)/$${subdir}; \
-		mkdir -p $${DIR_CHAPTER}; \
-		cp $${subdir}$(DIR_OUT)/$(DIR_BUILD)/* $${DIR_CHAPTER}; \
+		mkdir -p $${subdir}images $${subdir}videos; \
+		ln -sf ../../Tupfile.SUBDIR $${subdir}Tupfile; \
 	done
+	tup
+	sed -Ei 's|<figcaption>.+</figcaption>||' $(DIR_DIST)/**/*.html
 
-subdirs: $(SUBDIRS)
 
-$(SUBDIRS):
-	cp Makefile.subdir $@Makefile
-	$(MAKE) -C $@
+dist-clean: clean
+	rm -rf .tup
+	rm -rf $(DIR_DIST)
 
 clean:
 	for subdir in $(SUBDIRS); do \
-		MAKEFILE=$${subdir}Makefile; \
-		if [ -e $${MAKEFILE} ]; then \
-			rm -rf $${subdir}${DIR_BUILD}; \
-			rm -rf $${MAKEFILE}; \
-		fi; \
+		find $${subdir} -empty -type d -delete; \
+		rm -rf $${subdir}$(DIR_BUILD) $${subdir}$(DIR_OUT); \
+		rm -f $${subdir}/Tupfile; \
 	done
 
-dist-clean: clean
-	for subdir in $(SUBDIRS); do \
-		rm -rf $${subdir}${DIR_OUT}; \
-	done
-	rm -rf $(DIR_DIST)
 
-
+.PHONY: dist dist-clean clean
