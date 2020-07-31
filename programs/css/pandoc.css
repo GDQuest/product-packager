@@ -31,7 +31,7 @@ body {
   line-height: 1.7;
   padding: 1em;
   margin: auto;
-  max-width: 42em;
+  max-width: 800px;
   background: #fefefe;
 }
 
@@ -181,7 +181,7 @@ pre {
   background-color: #f9f9f9;
 
   padding: 1em;
-  font-size: 0.98em;
+  font-size: 14px;
 
   white-space: pre-wrap;
   word-wrap: break-word;
