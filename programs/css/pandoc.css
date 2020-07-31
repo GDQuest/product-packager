@@ -77,9 +77,9 @@ p {
   font-style: italic;
 }
 
-note,
-tips,
-warning {
+.note,
+.tips,
+.warning {
   display: block;
   width: calc(100% - var(--padding) * 2);
   padding: 0 var(--padding);
@@ -87,9 +87,9 @@ warning {
   background-color: var(--c-bg-alt);
 }
 
-note:before,
-tips:before,
-warning:before {
+.note:before,
+.tips:before,
+.warning:before {
   display: block;
   margin: 0 var(--padding-inv) 10px var(--padding-inv);
   padding-left: var(--padding);
@@ -99,17 +99,17 @@ warning:before {
   color: white;
 }
 
-note:before {
+.note:before {
   content: "Note";
   background-color: var(--c-blue);
 }
 
-tips:before {
+.tips:before {
   content: "Tips";
   background-color: var(--c-pink);
 }
 
-warning:before {
+.warning:before {
   content: "Warning";
   background-color: var(--c-orange);
 }
