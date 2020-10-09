@@ -55,7 +55,7 @@ No positional arguments.
  information.
 -n/--no-audio        -- Remove all audio from the output videos.
 -u/--use-nvenc       -- Use NVidia NVENC for encoding.
--i/--in-place		 -- Optimize pictures in-place instead of to a new file.
+-i/--in-place		 -- Optimize videos in-place instead of to a new file.
 -o/--output			 -- Path to a directory to output the files
 " "$(format_bold "Usage")" "$(format_bold "Positional arguments")" "$(format_bold "Options")"
 	exit
