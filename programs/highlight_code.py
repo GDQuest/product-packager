@@ -40,9 +40,6 @@ def highlight_code_blocks(file_path: str) -> str:
         return re.sub(
             "```([a-z]*)\n(.*?)```", highlight_with_chroma, md_file.read(), flags=re.S
         )
-        return re.sub(
-            "```([a-z]*)\n(.*?)```", highlight_with_chroma, md_file.read(), flags=re.S
-        )
 
 
 def is_chroma_installed():
