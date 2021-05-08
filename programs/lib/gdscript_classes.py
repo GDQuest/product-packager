@@ -553,3 +553,4 @@ BUILT_IN_CLASSES = [
     "XMLParser",
     "YSort",
 ]
+BUILT_IN_CLASSES.sort(key=lambda word: len(word), reverse=True)
