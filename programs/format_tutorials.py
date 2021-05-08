@@ -49,8 +49,6 @@ def format_content(text: str) -> str:
     # TODO: add inline code marks around numeric values
     # TODO: add inline code marks around filepaths
     output: str = add_inline_code_to_built_in_classes(text)
-    print(output)
-    sys.exit()
     output = replace_double_inline_code_marks(output)
     return output
 
