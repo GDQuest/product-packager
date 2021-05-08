@@ -35,19 +35,22 @@ class ProcessedDocument:
 def format_content(text: str) -> str:
     """Applies styling rules to content other than a code block."""
 
-    # TODO: fix replace removing the class name
     def add_inline_code_to_built_in_classes(text: str) -> str:
-        return re.sub(RE_BUILT_IN_CLASSES, "`\0`", text)
+        return re.sub(
+            RE_BUILT_IN_CLASSES, lambda match: "`{}`".format(match.group(0)), text
+        )
 
     def replace_double_inline_code_marks(text: str) -> str:
         """Finds and replaces cases where we have `` to `."""
-        return re.sub("(``\b)|(\b``)", "`", text, flags=re.DOTALL)
+        return re.sub("(``\b)|(\b``)", "`", text)
 
     # TODO: Add inline code marks to variable names outside code blocks
     # TODO: Add italics around other names? Node names, etc.
     # TODO: add inline code marks around numeric values
     # TODO: add inline code marks around filepaths
     output: str = add_inline_code_to_built_in_classes(text)
+    print(output)
+    sys.exit()
     output = replace_double_inline_code_marks(output)
     return output
 
@@ -79,8 +82,7 @@ def format_code_block(text: str):
 
         wrapped_text = textwrap.wrap(trimmed_text, wrap_length)
         output = [
-            "\t" * indent_level + "#" * dash_count + " " + line
-            for line in wrapped_text
+            "\t" * indent_level + "#" * dash_count + " " + line for line in wrapped_text
         ]
         return "\n".join(output)
 
