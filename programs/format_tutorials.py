@@ -20,8 +20,20 @@ from typing import List
 from lib.gdscript_classes import BUILT_IN_CLASSES
 
 TAB_WIDTH: int = 4
-RE_SPLIT_CODE_BLOCK = re.compile("(```[a-z]*\n.*?```)", flags=re.DOTALL)
-RE_BUILT_IN_CLASSES = re.compile("({})".format("|".join(BUILT_IN_CLASSES)))
+
+RE_SPLIT_CODE_BLOCK: re.Pattern = re.compile("(```[a-z]*\n.*?```)", flags=re.DOTALL)
+RE_BUILT_IN_CLASSES: re.Pattern = re.compile("({})".format("|".join(BUILT_IN_CLASSES)))
+# Matches paths with a filename at the end.
+RE_FILE_PATH: re.Pattern = re.compile(r"\b(res|user)?(://)?/?([\w]+/)*([\w]*\.\w+)\b")
+# Matches directory paths without a filename at the end. Group 1 targets the path.
+#
+# Known limitations:
+# - The path requires a trailing slash followed by a space, or period and space,
+# or the line ends with a period.
+# - Won't capture a leading slash.
+RE_DIRECTORY_PATH: re.Pattern = re.compile(
+    r"\b(((res|user)(://)|/)?([\w]+/)+)(\.? |\.$)"
+)
 
 
 @dataclass
@@ -40,6 +52,12 @@ def format_content(text: str) -> str:
             RE_BUILT_IN_CLASSES, lambda match: "`{}`".format(match.group(0)), text
         )
 
+    def add_inline_code_to_paths(text: str) -> str:
+        text = re.sub(RE_FILE_PATH, lambda match: "`{}`".format(match.group(0)), text)
+        return re.sub(
+            RE_DIRECTORY_PATH, lambda match: "`{}`".format(match.group(0)), text
+        )
+
     def replace_double_inline_code_marks(text: str) -> str:
         """Finds and replaces cases where we have `` to `."""
         return re.sub("(``\b)|(\b``)", "`", text)
@@ -47,8 +65,8 @@ def format_content(text: str) -> str:
     # TODO: Add inline code marks to variable names outside code blocks
     # TODO: Add italics around other names? Node names, etc.
     # TODO: add inline code marks around numeric values
-    # TODO: add inline code marks around filepaths
     output: str = add_inline_code_to_built_in_classes(text)
+    output = add_inline_code_to_paths(output)
     output = replace_double_inline_code_marks(output)
     return output
 
