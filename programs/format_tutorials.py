@@ -55,7 +55,8 @@ RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(r"(\[[\d\., ]+\])|\b(\d+\.
 # Capitalized words and PascalCase that are not at the start of a sentence or a line.
 # To run after adding inline code marks to avoid putting built-ins in italics.
 RE_TO_ITALICIZE: re.Pattern = re.compile(
-    r"(?<!^)(?<!\. )(?<!`)([A-Z][a-zA-Z0-9]+)( [A-Z][a-zA-Z0-9]+)*", flags=re.MULTILINE
+    r"(?<!^)(?<!\. )(?<!`)([A-Z][a-zA-Z0-9]+)( (-> )?[A-Z][a-zA-Z0-9]+)*",
+    flags=re.MULTILINE,
 )
 
 
@@ -105,19 +106,14 @@ def format_content(text: str) -> str:
                 return expression
             return "_{}_".format(match.group(0))
 
-        return re.sub(
-            RE_TO_ITALICIZE, replace_match, text
-        )
+        return re.sub(RE_TO_ITALICIZE, replace_match, text)
 
-    # TODO: Italics around A -> B constructs.
     output: str = inline_code_built_in_classes(text)
     output = inline_code_paths(output)
     output = inline_code_variables_and_functions(output)
     output = inline_code_numeric_values(output)
     output = replace_double_inline_code_marks(output)
     output = italicize_other_words(output)
-    sys.exit()
-    print(output)
     return output
 
 
