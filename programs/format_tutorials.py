@@ -21,6 +21,20 @@ from lib.gdscript_classes import BUILT_IN_CLASSES
 
 TAB_WIDTH: int = 4
 
+WORDS_TO_KEEP_UNFORMATTED: List[str] = [
+    "gdquest",
+    "gdscript",
+    "godot",
+    "stack overflow",
+    "google",
+    "youtube",
+    "twitter",
+    "facebook",
+    "discord",
+    "instagram",
+    "duckduckgo",
+]
+
 RE_SPLIT_CODE_BLOCK: re.Pattern = re.compile("(```[a-z]*\n.*?```)", flags=re.DOTALL)
 RE_BUILT_IN_CLASSES: re.Pattern = re.compile("({})".format("|".join(BUILT_IN_CLASSES)))
 # Matches paths with a filename at the end.
@@ -34,8 +48,15 @@ RE_FILE_PATH: re.Pattern = re.compile(r"\b(res|user)?(://)?/?([\w]+/)*([\w]*\.\w
 RE_DIRECTORY_PATH: re.Pattern = re.compile(
     r"\b(((res|user)(://)|/)?([\w]+/)+)(\.? |\.$)"
 )
-RE_VARIABLE_OR_FUNCTION: re.Pattern = re.compile(r"\b(_?[a-zA-Z]+(_[a-zA-Z()]+)+)|(_[a-zA-Z()]+)")
+RE_VARIABLE_OR_FUNCTION: re.Pattern = re.compile(
+    r"\b(_?[a-zA-Z]+(_[a-zA-Z()]+)+)|(_[a-zA-Z()]+)"
+)
 RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(r"(\[[\d\., ]+\])|\b(\d+\.?\d*)")
+# Capitalized words and PascalCase that are not at the start of a sentence or a line.
+# To run after adding inline code marks to avoid putting built-ins in italics.
+RE_TO_ITALICIZE: re.Pattern = re.compile(
+    r"(?<!^)(?<!\. )(?<!`)([A-Z][a-zA-Z0-9]+)( [A-Z][a-zA-Z0-9]+)*", flags=re.MULTILINE
+)
 
 
 @dataclass
@@ -49,36 +70,54 @@ class ProcessedDocument:
 def format_content(text: str) -> str:
     """Applies styling rules to content other than a code block."""
 
-    def add_inline_code_to_built_in_classes(text: str) -> str:
+    def inline_code_built_in_classes(text: str) -> str:
         return re.sub(
             RE_BUILT_IN_CLASSES, lambda match: "`{}`".format(match.group(0)), text
         )
 
-    def add_inline_code_to_paths(text: str) -> str:
+    def inline_code_paths(text: str) -> str:
         text = re.sub(RE_FILE_PATH, lambda match: "`{}`".format(match.group(0)), text)
         # Group 1 of `RE_DIRECTORY_PATH` is what captures the actual path.
         return re.sub(
             RE_DIRECTORY_PATH, lambda match: "`{}`".format(match.group(1)), text
         )
 
-    def add_inline_code_to_variables_and_functions(text: str) -> str:
-        return re.sub(RE_VARIABLE_OR_FUNCTION, lambda match: "`{}`".format(match.group(0)), text)
+    def inline_code_variables_and_functions(text: str) -> str:
+        return re.sub(
+            RE_VARIABLE_OR_FUNCTION, lambda match: "`{}`".format(match.group(0)), text
+        )
 
-    def add_inline_code_to_numbers(text: str) -> str:
-        return re.sub(RE_NUMERIC_VALUES_AND_RANGES, lambda match: "`{}`".format(match.group(0)), text)
+    def inline_code_numeric_values(text: str) -> str:
+        return re.sub(
+            RE_NUMERIC_VALUES_AND_RANGES,
+            lambda match: "`{}`".format(match.group(0)),
+            text,
+        )
 
     def replace_double_inline_code_marks(text: str) -> str:
         """Finds and replaces cases where we have `` to `."""
         return re.sub("(``\b)|(\b``)", "`", text)
 
-    # TODO: Add italics around other names? Node names, etc.
-    output: str = add_inline_code_to_built_in_classes(text)
-    output = add_inline_code_to_paths(output)
-    output = add_inline_code_to_variables_and_functions(output)
-    output = add_inline_code_to_numbers(output)
+    def italicize_other_words(text: str) -> str:
+        def replace_match(match: re.Match) -> str:
+            expression: str = match.group(0)
+            if expression.lower() in WORDS_TO_KEEP_UNFORMATTED:
+                return expression
+            return "_{}_".format(match.group(0))
+
+        return re.sub(
+            RE_TO_ITALICIZE, replace_match, text
+        )
+
+    # TODO: Italics around A -> B constructs.
+    output: str = inline_code_built_in_classes(text)
+    output = inline_code_paths(output)
+    output = inline_code_variables_and_functions(output)
+    output = inline_code_numeric_values(output)
     output = replace_double_inline_code_marks(output)
-    print(output)
+    output = italicize_other_words(output)
     sys.exit()
+    print(output)
     return output
 
 
