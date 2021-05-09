@@ -35,6 +35,7 @@ RE_DIRECTORY_PATH: re.Pattern = re.compile(
     r"\b(((res|user)(://)|/)?([\w]+/)+)(\.? |\.$)"
 )
 RE_VARIABLE_OR_FUNCTION: re.Pattern = re.compile(r"\b(_?[a-zA-Z]+(_[a-zA-Z()]+)+)|(_[a-zA-Z()]+)")
+RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(r"(\[[\d\., ]+\])|\b(\d+\.?\d*)")
 
 
 @dataclass
@@ -63,16 +64,21 @@ def format_content(text: str) -> str:
     def add_inline_code_to_variables_and_functions(text: str) -> str:
         return re.sub(RE_VARIABLE_OR_FUNCTION, lambda match: "`{}`".format(match.group(0)), text)
 
+    def add_inline_code_to_numbers(text: str) -> str:
+        return re.sub(RE_NUMERIC_VALUES_AND_RANGES, lambda match: "`{}`".format(match.group(0)), text)
+
     def replace_double_inline_code_marks(text: str) -> str:
         """Finds and replaces cases where we have `` to `."""
         return re.sub("(``\b)|(\b``)", "`", text)
 
     # TODO: Add italics around other names? Node names, etc.
-    # TODO: add inline code marks around numeric values
     output: str = add_inline_code_to_built_in_classes(text)
     output = add_inline_code_to_paths(output)
     output = add_inline_code_to_variables_and_functions(output)
+    output = add_inline_code_to_numbers(output)
     output = replace_double_inline_code_marks(output)
+    print(output)
+    sys.exit()
     return output
 
 
