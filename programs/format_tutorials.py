@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Auto-formats our tutorials, saving a bit of work:
+Auto-formats our tutorials, saving manual formatting work:
 
 - Converts space-based indentations to tabs in code blocks.
-- Fills comments as paragraphs.
-- Wraps symbols and numeric values in code and italics.
-- Wraps other PascalCase values into italics (we assume they're node names).
+- Fills GDScript code comments as paragraphs.
+- Wraps symbols and numeric values in code.
+- Wraps other capitalized names, pascal case values into italics (we assume they're node names).
 - Marks code blocks without a language as using `gdscript`.
 """
 import argparse
@@ -14,12 +14,18 @@ import os
 import re
 import sys
 import textwrap
+import logging
 from dataclasses import dataclass
 from typing import List
 
 from lib.gdscript_classes import BUILT_IN_CLASSES
 
 TAB_WIDTH: int = 4
+
+LOGGER = logging.getLogger("format_tutorial.py")
+
+ERROR_PYTHON_VERSION_TOO_OLD: int = 1
+ERROR_INCORRECT_FILE_PATHS: int = 2
 
 WORDS_TO_KEEP_UNFORMATTED: List[str] = [
     "gdquest",
@@ -228,8 +234,41 @@ def output_result(args: argparse.Namespace, document: ProcessedDocument) -> None
 
 
 def main():
+    def is_python_version_compatible() -> bool:
+        return sys.version_info.major == 3 and sys.version_info.minor >= 8
+
     args: argparse.Namespace = parse_command_line_arguments(sys.argv)
-    filepaths: List[str] = [f for f in args.files if f.lower().endswith(".md")]
+    logging.basicConfig(level=logging.ERROR)
+    if not is_python_version_compatible():
+        LOGGER.error(
+            "\n".join(
+                [
+                    "Your Python version ({}.{}.{}) is too old.",
+                    "Minimum required version: 3.8.",
+                    "Please install a more recent Python version.",
+                    "Aborting operation."
+                ]
+            ).format(
+                sys.version_info.major, sys.version_info.minor, sys.version_info.micro
+            )
+        )
+        sys.exit(ERROR_PYTHON_VERSION_TOO_OLD)
+
+    filepaths: List[str] = [
+        f for f in args.files if f.lower().endswith(".md") and os.path.exists(f)
+    ]
+    if len(filepaths) != len(args.files):
+        LOGGER.error(
+            "\n".join(
+                [
+                    "Some files are missing or their path is incorrect.",
+                    "Please ensure there's no typo in the path.",
+                    "Aborting operation.",
+                ]
+            )
+        )
+        sys.exit(ERROR_INCORRECT_FILE_PATHS)
+
     documents: List[ProcessedDocument] = list(map(process_file, filepaths))
     list(map(output_result, itertools.repeat(args), documents))
 
