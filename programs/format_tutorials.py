@@ -49,7 +49,7 @@ RE_DIRECTORY_PATH: re.Pattern = re.compile(
     r"\b(((res|user)(://)|/)?([\w]+/)+)(\.? |\.$)"
 )
 RE_VARIABLE_OR_FUNCTION: re.Pattern = re.compile(
-    r"\b(_?[a-zA-Z]+(_[a-zA-Z()]+)+)|(_[a-zA-Z()]+)"
+    r"\b(_?[a-zA-Z]+(_[a-zA-Z()]+)+)|(_[a-zA-Z()]+)|_?[a-zA-Z]+\(\)"
 )
 RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(r"(\[[\d\., ]+\])|\b(\d+\.?\d*)")
 # Capitalized words and PascalCase that are not at the start of a sentence or a line.
