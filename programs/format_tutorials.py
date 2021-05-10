@@ -58,6 +58,7 @@ RE_TO_ITALICIZE: re.Pattern = re.compile(
     r"(?<!# )(?<!- )(?<!^)(?<!\. )(?<!`)([A-Z][a-zA-Z0-9]+)( (-> )?[A-Z][a-zA-Z0-9]+)*",
     flags=re.MULTILINE,
 )
+RE_TO_IGNORE: re.Pattern = re.compile(r"(!?\[.*\]\(.+\)|^#+ .+$)", flags=re.MULTILINE)
 
 
 @dataclass
@@ -68,7 +69,7 @@ class ProcessedDocument:
     content: str
 
 
-def format_content(text: str) -> str:
+def format_content(content: str) -> str:
     """Applies styling rules to content other than a code block."""
 
     def inline_code_built_in_classes(text: str) -> str:
@@ -104,11 +105,11 @@ def format_content(text: str) -> str:
             expression: str = match.group(0)
             if expression.lower() in WORDS_TO_KEEP_UNFORMATTED:
                 return expression
-            return "_{}_".format(match.group(0))
+            return "*{}*".format(match.group(0))
 
         return re.sub(RE_TO_ITALICIZE, replace_match, text)
 
-    output: str = inline_code_built_in_classes(text)
+    output: str = inline_code_built_in_classes(content)
     output = inline_code_paths(output)
     output = inline_code_variables_and_functions(output)
     output = inline_code_numeric_values(output)
@@ -192,8 +193,14 @@ def process_file(file_path: List[str]) -> ProcessedDocument:
             if block.startswith("```"):
                 formatted_sections.append(format_code_block(block))
             else:
-                formatted_sections.append(format_content(block))
-
+                chunks: List[str] = re.split(RE_TO_IGNORE, block)
+                formatted_chunks: List[str] = []
+                for chunk in chunks:
+                    if re.match(RE_TO_IGNORE, chunk):
+                        formatted_chunks.append(chunk)
+                    else:
+                        formatted_chunks.append(format_content(chunk))
+                formatted_sections.append("".join(formatted_chunks))
         output = ProcessedDocument(file_path, "\n".join(formatted_sections))
 
     return output
