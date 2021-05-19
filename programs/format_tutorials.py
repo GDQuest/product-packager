@@ -7,6 +7,7 @@ Auto-formats our tutorials, saving manual formatting work:
 - Wraps symbols and numeric values in code.
 - Wraps other capitalized names, pascal case values into italics (we assume they're node names).
 - Marks code blocks without a language as using `gdscript`.
+- Add <kbd> tags around keyboard shortcuts (the form needs to be Ctrl+F1).
 """
 import argparse
 import itertools
@@ -42,7 +43,9 @@ WORDS_TO_KEEP_UNFORMATTED: List[str] = [
 ]
 
 RE_SPLIT_CODE_BLOCK: re.Pattern = re.compile("(```[a-z]*\n.*?```)", flags=re.DOTALL)
-RE_BUILT_IN_CLASSES: re.Pattern = re.compile("\b({})\b".format("|".join(BUILT_IN_CLASSES)))
+RE_BUILT_IN_CLASSES: re.Pattern = re.compile(
+    "\b({})\b".format("|".join(BUILT_IN_CLASSES))
+)
 # Matches paths with a filename at the end.
 RE_FILE_PATH: re.Pattern = re.compile(r"\b(res|user)?(://)?/?([\w]+/)*([\w]*\.\w+)\b")
 # Matches directory paths without a filename at the end. Group 1 targets the path.
@@ -61,10 +64,14 @@ RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(r"(\[[\d\., ]+\])|\b(\d+\.
 # Capitalized words and PascalCase that are not at the start of a sentence or a line.
 # To run after adding inline code marks to avoid putting built-ins in italics.
 RE_TO_ITALICIZE: re.Pattern = re.compile(
-    r"(?<![a-zA-Z])(?<!\/)(?<!# )(?<!- )(?<!^)(?<!\. )(?<!`)([A-Z][a-zA-Z0-9]+)( (-> )?[A-Z][a-zA-Z0-9]+)*",
+    r"(?<!>)(?<![a-zA-Z])(?<!\/)(?<!# )(?<!- )(?<!^)(?<!\. )(?<!`)([A-Z][a-zA-Z0-9]+)( (-> )?[A-Z][a-zA-Z0-9]+)*",
     flags=re.MULTILINE,
 )
 RE_TO_IGNORE: re.Pattern = re.compile(r"(!?\[.*\]\(.+\)|^#+ .+$)", flags=re.MULTILINE)
+RE_KEYBOARD_SHORTCUTS: re.Pattern = re.compile(
+    r" +(((Ctrl|Alt|Shift|CTRL|ALT|SHIFT) ?\+ ?)*[A-Z0-9]+)"
+)
+RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT: re.Pattern = re.compile(r"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|[A-Z0-9]+")
 
 
 @dataclass
@@ -118,11 +125,21 @@ def format_content(content: str) -> str:
 
         return re.sub(RE_TO_ITALICIZE, replace_match, text)
 
+    def add_keyboard_tags(text: str) -> str:
+        def add_one_keyboard_tag(match: re.Match) -> str:
+            expression = match.group(0)
+            return re.sub(RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT, lambda m: "<kbd>{}</kbd>".format(m.group(0)), expression)
+
+        return re.sub(
+            RE_KEYBOARD_SHORTCUTS, add_one_keyboard_tag, text
+        )
+
     output: str = inline_code_paths(content)
     output = inline_code_built_in_classes(output)
     output = inline_code_variables_and_functions(output)
     output = inline_code_numeric_values(output)
     output = replace_double_inline_code_marks(output)
+    output = add_keyboard_tags(output)
     output = italicize_other_words(output)
     return output
 
