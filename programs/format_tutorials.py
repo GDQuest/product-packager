@@ -42,7 +42,7 @@ WORDS_TO_KEEP_UNFORMATTED: List[str] = [
 ]
 
 RE_SPLIT_CODE_BLOCK: re.Pattern = re.compile("(```[a-z]*\n.*?```)", flags=re.DOTALL)
-RE_BUILT_IN_CLASSES: re.Pattern = re.compile("({})".format("|".join(BUILT_IN_CLASSES)))
+RE_BUILT_IN_CLASSES: re.Pattern = re.compile("\b({})\b".format("|".join(BUILT_IN_CLASSES)))
 # Matches paths with a filename at the end.
 RE_FILE_PATH: re.Pattern = re.compile(r"\b(res|user)?(://)?/?([\w]+/)*([\w]*\.\w+)\b")
 # Matches directory paths without a filename at the end. Group 1 targets the path.
@@ -61,7 +61,7 @@ RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(r"(\[[\d\., ]+\])|\b(\d+\.
 # Capitalized words and PascalCase that are not at the start of a sentence or a line.
 # To run after adding inline code marks to avoid putting built-ins in italics.
 RE_TO_ITALICIZE: re.Pattern = re.compile(
-    r"(?<!# )(?<!- )(?<!^)(?<!\. )(?<!`)([A-Z][a-zA-Z0-9]+)( (-> )?[A-Z][a-zA-Z0-9]+)*",
+    r"(?<![a-zA-Z])(?<!\/)(?<!# )(?<!- )(?<!^)(?<!\. )(?<!`)([A-Z][a-zA-Z0-9]+)( (-> )?[A-Z][a-zA-Z0-9]+)*",
     flags=re.MULTILINE,
 )
 RE_TO_IGNORE: re.Pattern = re.compile(r"(!?\[.*\]\(.+\)|^#+ .+$)", flags=re.MULTILINE)
@@ -118,8 +118,8 @@ def format_content(content: str) -> str:
 
         return re.sub(RE_TO_ITALICIZE, replace_match, text)
 
-    output: str = inline_code_built_in_classes(content)
-    output = inline_code_paths(output)
+    output: str = inline_code_paths(content)
+    output = inline_code_built_in_classes(output)
     output = inline_code_variables_and_functions(output)
     output = inline_code_numeric_values(output)
     output = replace_double_inline_code_marks(output)
