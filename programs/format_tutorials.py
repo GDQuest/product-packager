@@ -109,7 +109,10 @@ def format_content(content: str) -> str:
     def italicize_other_words(text: str) -> str:
         def replace_match(match: re.Match) -> str:
             expression: str = match.group(0)
-            if expression.lower() in WORDS_TO_KEEP_UNFORMATTED:
+            if (
+                expression.lower() in WORDS_TO_KEEP_UNFORMATTED
+                or expression.upper() == expression
+            ):
                 return expression
             return "*{}*".format(match.group(0))
 
@@ -246,7 +249,7 @@ def main():
                     "Your Python version ({}.{}.{}) is too old.",
                     "Minimum required version: 3.8.",
                     "Please install a more recent Python version.",
-                    "Aborting operation."
+                    "Aborting operation.",
                 ]
             ).format(
                 sys.version_info.major, sys.version_info.minor, sys.version_info.micro
