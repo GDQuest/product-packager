@@ -237,7 +237,7 @@ def main():
     def is_python_version_compatible() -> bool:
         return sys.version_info.major == 3 and sys.version_info.minor >= 8
 
-    args: argparse.Namespace = parse_command_line_arguments(sys.argv)
+    args: argparse.Namespace = parse_command_line_arguments(sys.argv[1:])
     logging.basicConfig(level=logging.ERROR)
     if not is_python_version_compatible():
         LOGGER.error(
