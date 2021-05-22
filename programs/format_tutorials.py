@@ -44,7 +44,7 @@ WORDS_TO_KEEP_UNFORMATTED: List[str] = [
 
 RE_SPLIT_CODE_BLOCK: re.Pattern = re.compile("(```[a-z]*\n.*?```)", flags=re.DOTALL)
 RE_BUILT_IN_CLASSES: re.Pattern = re.compile(
-    "\b({})\b".format("|".join(BUILT_IN_CLASSES))
+    r"\b(?<!`)({})\b".format(r"|".join(BUILT_IN_CLASSES))
 )
 # Matches paths with a filename at the end.
 RE_FILE_PATH: re.Pattern = re.compile(r"\b(res|user)?(://)?/?([\w]+/)*([\w]*\.\w+)\b")
@@ -58,18 +58,18 @@ RE_DIRECTORY_PATH: re.Pattern = re.compile(
     r"\b(((res|user)(://)|/)?([\w]+/)+)(\.? |\.$)"
 )
 RE_VARIABLE_OR_FUNCTION: re.Pattern = re.compile(
-    r"\b(_?[a-zA-Z]+(_[a-zA-Z()]+)+)|(_[a-zA-Z()]+)|_?[a-zA-Z]+\(\)"
+    r"\b(_?[a-zA-Z]+(_[\.a-zA-Z()]+)+)|\b(_[a-zA-Z()]+)|\b_?[a-zA-Z]+\(\)"
 )
-RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(r"(\[[\d\., ]+\])|\b(\d+\.?\d*)")
+RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(r"(\[[\d\., ]+\])|\b(-?\d+\.?\d*)")
 # Capitalized words and PascalCase that are not at the start of a sentence or a line.
 # To run after adding inline code marks to avoid putting built-ins in italics.
 RE_TO_ITALICIZE: re.Pattern = re.compile(
-    r"(?<!>)(?<![a-zA-Z])(?<!\/)(?<!# )(?<!- )(?<!^)(?<!\. )(?<!`)([A-Z][a-zA-Z0-9]+)( (-> )?[A-Z][a-zA-Z0-9]+)*",
+    r"(?<!>)(?<![a-zA-Z])(?<![-\.?!#\/] )(?<!^)(?<!`)([A-Z][a-zA-Z0-9]+)( (-> )?[A-Z][a-zA-Z0-9]+)*",
     flags=re.MULTILINE,
 )
 RE_TO_IGNORE: re.Pattern = re.compile(r"(!?\[.*\]\(.+\)|^#+ .+$)", flags=re.MULTILINE)
 RE_KEYBOARD_SHORTCUTS: re.Pattern = re.compile(
-    r" +(((Ctrl|Alt|Shift|CTRL|ALT|SHIFT) ?\+ ?)*[A-Z0-9]+)"
+    r" +(((Ctrl|Alt|Shift|CTRL|ALT|SHIFT) ?\+ ?)*[A-Z0-9]+\b)"
 )
 RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT: re.Pattern = re.compile(r"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|[A-Z0-9]+")
 
@@ -111,7 +111,7 @@ def format_content(content: str) -> str:
 
     def replace_double_inline_code_marks(text: str) -> str:
         """Finds and replaces cases where we have `` to `."""
-        return re.sub("(``\b)|(\b``)", "`", text)
+        return re.sub("(`+\b)|(\b`+)", "`", text)
 
     def italicize_other_words(text: str) -> str:
         def replace_match(match: re.Match) -> str:
@@ -135,12 +135,12 @@ def format_content(content: str) -> str:
         )
 
     output: str = inline_code_paths(content)
-    output = inline_code_built_in_classes(output)
     output = inline_code_variables_and_functions(output)
+    output = inline_code_built_in_classes(output)
     output = inline_code_numeric_values(output)
-    output = replace_double_inline_code_marks(output)
     output = add_keyboard_tags(output)
     output = italicize_other_words(output)
+    output = replace_double_inline_code_marks(output)
     return output
 
 
