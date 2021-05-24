@@ -227,7 +227,7 @@ def process_file(file_path: List[str]) -> ProcessedDocument:
                     else:
                         formatted_chunks.append(format_content(chunk))
                 formatted_sections.append("".join(formatted_chunks))
-        output = ProcessedDocument(file_path, "\n".join(formatted_sections))
+        output = ProcessedDocument(file_path, "".join(formatted_sections))
 
     return output
 
