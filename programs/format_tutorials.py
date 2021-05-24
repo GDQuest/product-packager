@@ -64,7 +64,7 @@ RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(r"(\[[\d\., ]+\])|(-?\d+\.
 # Capitalized words and PascalCase that are not at the start of a sentence or a line.
 # To run after adding inline code marks to avoid putting built-ins in italics.
 RE_TO_ITALICIZE: re.Pattern = re.compile(
-    r"(?<!>)(?<![a-zA-Z])(?<![-\.?!#\/] )(?<!^)(?<!`)([A-Z][a-zA-Z0-9]+)( (-> )?[A-Z][a-zA-Z0-9]+)*",
+    r"(?<!\d\. )(?<!>)(?<![a-zA-Z])(?<![-\.?!#\/] )(?<!^)(?<!`)([A-Z][a-zA-Z0-9]+)( (-> )?[A-Z][a-zA-Z0-9]+)*",
     flags=re.MULTILINE,
 )
 RE_TO_IGNORE: re.Pattern = re.compile(r"(!?\[.*\]\(.+\)|^#+ .+$)", flags=re.MULTILINE)
