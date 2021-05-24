@@ -47,7 +47,8 @@ RE_BUILT_IN_CLASSES: re.Pattern = re.compile(
     r"\b(?<!`)({})\b".format(r"|".join(BUILT_IN_CLASSES))
 )
 # Matches paths with a filename at the end.
-RE_FILE_PATH: re.Pattern = re.compile(r"\b(res|user)?(://)?/?([\w]+/)*([\w]*\.\w+)\b")
+# FIXME: known edge case: if a class has a member of two to four characters, it'll be detected as a filename.
+RE_FILE_PATH: re.Pattern = re.compile(r"\b(?<!`)((res|user)://)?/?([\w]+/)*([\w]*\.\w{2,4})\b")
 # Matches directory paths without a filename at the end. Group 1 targets the path.
 #
 # Known limitations:
@@ -58,7 +59,7 @@ RE_DIRECTORY_PATH: re.Pattern = re.compile(
     r"\b(((res|user)(://)|/)?([\w]+/)+)(\.? |\.$)"
 )
 RE_VARIABLE_OR_FUNCTION: re.Pattern = re.compile(
-    r"\b(_?[a-zA-Z]+(_[\.a-zA-Z()]+)+)|\b(_[a-zA-Z()]+)|\b_?[a-zA-Z]+\(\)"
+    r"\b(_?[a-zA-Z0-9]+((_|\.)_?[a-zA-Z()]+)+)|\b(_[a-zA-Z()]+)|\b_?[a-zA-Z]+\(\)"
 )
 RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(r"(\[[\d\., ]+\])|(-?\d+\.\d+)|(?<!\n)(-?\d+)")
 # Capitalized words and PascalCase that are not at the start of a sentence or a line.
@@ -134,8 +135,9 @@ def format_content(content: str) -> str:
             RE_KEYBOARD_SHORTCUTS, add_one_keyboard_tag, text
         )
 
-    output: str = inline_code_paths(content)
+    output: str = content
     output = inline_code_variables_and_functions(output)
+    output = inline_code_paths(output)
     output = inline_code_built_in_classes(output)
     output = inline_code_numeric_values(output)
     output = add_keyboard_tags(output)
