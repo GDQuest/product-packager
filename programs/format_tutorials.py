@@ -60,7 +60,7 @@ SINGLE_FUNCTION_CALL: str = r"\b_?\w+(\.\w+)*\([\"'_a-zA-Z0-9, ]*\)"
 SINGLE_VARIABLE: str = r"\b_\w+|\b[a-zA-Z0-9]+_\w+"
 VARIABLE_AND_PROPERTY = r"\b_?\w+\.\w+"
 RE_VARIABLE_OR_FUNCTION: re.Pattern = re.compile(
-    "|".join([SINGLE_FUNCTION_CALL, SINGLE_VARIABLE])
+    "|".join([SINGLE_FUNCTION_CALL, SINGLE_VARIABLE, VARIABLE_AND_PROPERTY])
 )
 RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(
     r"(\[[\d\., ]+\])|(-?\d+\.\d+)|(?<![\nA-Za-z])(-?\d+)(?![A-Za-z])(?!\. )"
