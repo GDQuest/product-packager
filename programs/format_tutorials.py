@@ -9,6 +9,7 @@ Auto-formats our tutorials, saving manual formatting work:
 - Marks code blocks without a language as using `gdscript`.
 - Add <kbd> tags around keyboard shortcuts (the form needs to be Ctrl+F1).
 """
+# FIXME: things that should be italicized end up with backticks when there's a built-in class name inside - *Bezier* `Curve` *Track*. or `Animation` -> *Save As*...
 import argparse
 import itertools
 import os
@@ -57,7 +58,7 @@ RE_FILE_PATH: re.Pattern = re.compile(r"\b((res|user)://)?/?([\w]+/)+(\w*\.\w+)?
 RE_VARIABLE_OR_FUNCTION: re.Pattern = re.compile(
     r"\b_?[a-zA-Z0-9]+\([a-zA-Z0-9, ]+\)|\b(_?[a-zA-Z0-9]+((_|\.)_?[a-zA-Z0-9]+)+)|\b(_[a-zA-Z()]+)|\b_?[a-zA-Z]+\(\)"
 )
-RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(r"(\[[\d\., ]+\])|(-?\d+\.\d+)|(?<![\nA-Za-z])(-?\d+)(?![A-Za-z])")
+RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(r"(\[[\d\., ]+\])|(-?\d+\.\d+)|(?<![\nA-Za-z])(-?\d+)(?![A-Za-z])(?!\. )")
 # Capitalized words and PascalCase that are not at the start of a sentence or a line.
 # To run after adding inline code marks to avoid putting built-ins in italics.
 RE_TO_ITALICIZE: re.Pattern = re.compile(
@@ -66,7 +67,7 @@ RE_TO_ITALICIZE: re.Pattern = re.compile(
 )
 RE_TO_IGNORE: re.Pattern = re.compile(r"(!?\[.*\]\(.+\)|^#+ .+$)", flags=re.MULTILINE)
 RE_KEYBOARD_SHORTCUTS: re.Pattern = re.compile(
-    r"(?<!\d\.)(?<!\-) +(((Ctrl|Alt|Shift|CTRL|ALT|SHIFT) ?\+ ?)*([A-Z0-9]|F\d{1,2})\b)"
+    r"(?<!\d\.)(?<!) +(((Ctrl|Alt|Shift|CTRL|ALT|SHIFT) ?\+ ?)*([A-Z0-9]|F\d{1,2})\b)"
 )
 RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT: re.Pattern = re.compile(r"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|[A-Z0-9]+")
 
@@ -78,66 +79,82 @@ class ProcessedDocument:
     file_path: str
     content: str
 
+def inline_code_built_in_classes(text: str) -> str:
+    return re.sub(
+        RE_BUILT_IN_CLASSES, lambda match: "`{}`".format(match.group(0)), text
+    )
+
+def inline_code_paths(text: str) -> str:
+    return re.sub(RE_FILE_PATH, lambda match: "`{}`".format(match.group(0)), text)
+
+def inline_code_variables_and_functions(text: str) -> str:
+    return re.sub(
+        RE_VARIABLE_OR_FUNCTION, lambda match: "`{}`".format(match.group(0)), text
+    )
+
+def inline_code_numeric_values(text: str) -> str:
+    return re.sub(
+        RE_NUMERIC_VALUES_AND_RANGES,
+        lambda match: "`{}`".format(match.group(0)),
+        text,
+    )
+
+def replace_double_inline_code_marks(text: str) -> str:
+    """Finds and replaces cases where we have `` to `."""
+    return re.sub("(`+\b)|(\b`+)", "`", text)
+
+def italicize_other_words(text: str) -> str:
+    def replace_match(match: re.Match) -> str:
+        expression: str = match.group(0)
+        if (
+            expression.lower() in WORDS_TO_KEEP_UNFORMATTED
+            or expression.upper() == expression
+        ):
+            return expression
+        return "*{}*".format(match.group(0))
+
+    return re.sub(RE_TO_ITALICIZE, replace_match, text)
+
+def add_keyboard_tags(text: str) -> str:
+    def add_one_keyboard_tag(match: re.Match) -> str:
+        expression = match.group(0)
+        if expression.strip() == "I":
+            return expression
+        return re.sub(RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT, lambda m: "<kbd>{}</kbd>".format(m.group(0)), expression)
+
+    return re.sub(
+        RE_KEYBOARD_SHORTCUTS, add_one_keyboard_tag, text
+    )
+
+FORMATTERS = [
+    inline_code_paths,
+    inline_code_variables_and_functions,
+    inline_code_built_in_classes,
+    add_keyboard_tags,
+    italicize_other_words,
+    inline_code_numeric_values,
+]
+
+def format_line(line: str) -> str:
+    out: str = line
+    if not re.match("^[`*]", line):
+        for formatter in FORMATTERS:
+            formatted_line: str = formatter(line)
+            if formatted_line == line:
+                continue
+
+            split_line: List[str] = re.split(r"([`*].+?[`*])", formatted_line)
+            if len(split_line) > 1:
+                out = "".join(list(map(format_line, split_line)))
+            else:
+                out = formatted_line
+            break
+    return out
+
 
 def format_content(content: str) -> str:
     """Applies styling rules to content other than a code block."""
-
-    def inline_code_built_in_classes(text: str) -> str:
-        return re.sub(
-            RE_BUILT_IN_CLASSES, lambda match: "`{}`".format(match.group(0)), text
-        )
-
-    def inline_code_paths(text: str) -> str:
-        return re.sub(RE_FILE_PATH, lambda match: "`{}`".format(match.group(0)), text)
-
-    def inline_code_variables_and_functions(text: str) -> str:
-        return re.sub(
-            RE_VARIABLE_OR_FUNCTION, lambda match: "`{}`".format(match.group(0)), text
-        )
-
-    def inline_code_numeric_values(text: str) -> str:
-        return re.sub(
-            RE_NUMERIC_VALUES_AND_RANGES,
-            lambda match: "`{}`".format(match.group(0)),
-            text,
-        )
-
-    def replace_double_inline_code_marks(text: str) -> str:
-        """Finds and replaces cases where we have `` to `."""
-        return re.sub("(`+\b)|(\b`+)", "`", text)
-
-    def italicize_other_words(text: str) -> str:
-        def replace_match(match: re.Match) -> str:
-            expression: str = match.group(0)
-            if (
-                expression.lower() in WORDS_TO_KEEP_UNFORMATTED
-                or expression.upper() == expression
-            ):
-                return expression
-            return "*{}*".format(match.group(0))
-
-        return re.sub(RE_TO_ITALICIZE, replace_match, text)
-
-    def add_keyboard_tags(text: str) -> str:
-        def add_one_keyboard_tag(match: re.Match) -> str:
-            expression = match.group(0)
-            if expression.strip() == "I":
-                return expression
-            return re.sub(RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT, lambda m: "<kbd>{}</kbd>".format(m.group(0)), expression)
-
-        return re.sub(
-            RE_KEYBOARD_SHORTCUTS, add_one_keyboard_tag, text
-        )
-
-    output: str = content
-    output = inline_code_variables_and_functions(output)
-    output = inline_code_paths(output)
-    output = inline_code_built_in_classes(output)
-    output = inline_code_numeric_values(output)
-    output = add_keyboard_tags(output)
-    output = italicize_other_words(output)
-    output = replace_double_inline_code_marks(output)
-    return output
+    return "\n".join(list(map(format_line, content.split("\n"))))
 
 
 def format_code_block(text: str):
