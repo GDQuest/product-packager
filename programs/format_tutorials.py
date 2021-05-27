@@ -54,9 +54,6 @@ RE_FILE_PATH: re.Pattern = re.compile(r"\b((res|user)://)?/?([\w]+/)+(\w*\.\w+)?
 # - The path requires a trailing slash followed by a space, or period and space,
 # or the line ends with a period.
 # - Won't capture a leading slash.
-RE_DIRECTORY_PATH: re.Pattern = re.compile(
-    r"\b(((res|user)(://)|/)?([\w]+/)+)(\.? |\.$)"
-)
 RE_VARIABLE_OR_FUNCTION: re.Pattern = re.compile(
     r"\b(_?[a-zA-Z0-9]+((_|\.)_?[a-zA-Z()]+)+)|\b(_[a-zA-Z()]+)|\b_?[a-zA-Z]+\(\)"
 )
@@ -91,11 +88,7 @@ def format_content(content: str) -> str:
         )
 
     def inline_code_paths(text: str) -> str:
-        text = re.sub(RE_FILE_PATH, lambda match: "`{}`".format(match.group(0)), text)
-        # Group 1 of `RE_DIRECTORY_PATH` is what captures the actual path.
-        return re.sub(
-            RE_DIRECTORY_PATH, lambda match: "`{}`".format(match.group(1)), text
-        )
+        return re.sub(RE_FILE_PATH, lambda match: "`{}`".format(match.group(0)), text)
 
     def inline_code_variables_and_functions(text: str) -> str:
         return re.sub(
