@@ -56,8 +56,11 @@ RE_FILE_PATH: re.Pattern = re.compile(r"\b((res|user)://)?/?([\w]+/)+(\w*\.\w+)?
 # - The path requires a trailing slash followed by a space, or period and space,
 # or the line ends with a period.
 # - Won't capture a leading slash.
+SINGLE_FUNCTION_CALL: str = r"\b_?\w+(\.\w+)*\([\"'_a-zA-Z0-9, ]*\)"
+SINGLE_VARIABLE: str = r"\b_\w+|\b[a-zA-Z0-9]+_\w+"
+VARIABLE_AND_PROPERTY = r"\b_?\w+\.\w+"
 RE_VARIABLE_OR_FUNCTION: re.Pattern = re.compile(
-    r"\b_?[a-zA-Z0-9]+\([a-zA-Z0-9, ]+\)|\b(_?[a-zA-Z0-9]+((_|\.)_?[a-zA-Z0-9]+)+)|\b(_[a-zA-Z()]+)|\b_?[a-zA-Z]+\(\)"
+    "|".join([SINGLE_FUNCTION_CALL, SINGLE_VARIABLE])
 )
 RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(
     r"(\[[\d\., ]+\])|(-?\d+\.\d+)|(?<![\nA-Za-z])(-?\d+)(?![A-Za-z])(?!\. )"
