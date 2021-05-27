@@ -43,7 +43,8 @@ WORDS_TO_KEEP_UNFORMATTED: List[str] = [
     "duckduckgo",
 ]
 
-RE_SPLIT_CODE_BLOCK: re.Pattern = re.compile("(```[a-z]*\n.*?```)", flags=re.DOTALL)
+RE_SPLIT_CODE_BLOCK: re.Pattern = re.compile(r"(```[a-z]*\n.*?```)", flags=re.DOTALL)
+RE_SPLIT_HTML: re.Pattern = re.compile(r"(<.+?>*\n.*?<\/.+?>)", flags=re.DOTALL)
 RE_BUILT_IN_CLASSES: re.Pattern = re.compile(
     r"\b(?<!`)({})\b".format(r"|".join(BUILT_IN_CLASSES))
 )
@@ -58,7 +59,9 @@ RE_FILE_PATH: re.Pattern = re.compile(r"\b((res|user)://)?/?([\w]+/)+(\w*\.\w+)?
 RE_VARIABLE_OR_FUNCTION: re.Pattern = re.compile(
     r"\b_?[a-zA-Z0-9]+\([a-zA-Z0-9, ]+\)|\b(_?[a-zA-Z0-9]+((_|\.)_?[a-zA-Z0-9]+)+)|\b(_[a-zA-Z()]+)|\b_?[a-zA-Z]+\(\)"
 )
-RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(r"(\[[\d\., ]+\])|(-?\d+\.\d+)|(?<![\nA-Za-z])(-?\d+)(?![A-Za-z])(?!\. )")
+RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(
+    r"(\[[\d\., ]+\])|(-?\d+\.\d+)|(?<![\nA-Za-z])(-?\d+)(?![A-Za-z])(?!\. )"
+)
 # Capitalized words and PascalCase that are not at the start of a sentence or a line.
 # To run after adding inline code marks to avoid putting built-ins in italics.
 RE_TO_ITALICIZE: re.Pattern = re.compile(
@@ -69,7 +72,9 @@ RE_TO_IGNORE: re.Pattern = re.compile(r"(!?\[.*\]\(.+\)|^#+ .+$)", flags=re.MULT
 RE_KEYBOARD_SHORTCUTS: re.Pattern = re.compile(
     r"(?<!\d\.)(?<!) +(((Ctrl|Alt|Shift|CTRL|ALT|SHIFT) ?\+ ?)*([A-Z0-9]|F\d{1,2})\b)"
 )
-RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT: re.Pattern = re.compile(r"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|[A-Z0-9]+")
+RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT: re.Pattern = re.compile(
+    r"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|[A-Z0-9]+"
+)
 
 
 @dataclass
@@ -79,29 +84,33 @@ class ProcessedDocument:
     file_path: str
     content: str
 
+
 def inline_code_built_in_classes(text: str) -> str:
     return re.sub(
         RE_BUILT_IN_CLASSES, lambda match: "`{}`".format(match.group(0)), text
     )
 
+
 def inline_code_paths(text: str) -> str:
     return re.sub(RE_FILE_PATH, lambda match: "`{}`".format(match.group(0)), text)
+
 
 def inline_code_variables_and_functions(text: str) -> str:
     return re.sub(
         RE_VARIABLE_OR_FUNCTION, lambda match: "`{}`".format(match.group(0)), text
     )
 
+
 def inline_code_numeric_values(text: str) -> str:
     return re.sub(
-        RE_NUMERIC_VALUES_AND_RANGES,
-        lambda match: "`{}`".format(match.group(0)),
-        text,
+        RE_NUMERIC_VALUES_AND_RANGES, lambda match: "`{}`".format(match.group(0)), text,
     )
+
 
 def replace_double_inline_code_marks(text: str) -> str:
     """Finds and replaces cases where we have `` to `."""
     return re.sub("(`+\b)|(\b`+)", "`", text)
+
 
 def italicize_other_words(text: str) -> str:
     def replace_match(match: re.Match) -> str:
@@ -115,16 +124,20 @@ def italicize_other_words(text: str) -> str:
 
     return re.sub(RE_TO_ITALICIZE, replace_match, text)
 
+
 def add_keyboard_tags(text: str) -> str:
     def add_one_keyboard_tag(match: re.Match) -> str:
         expression = match.group(0)
         if expression.strip() == "I":
             return expression
-        return re.sub(RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT, lambda m: "<kbd>{}</kbd>".format(m.group(0)), expression)
+        return re.sub(
+            RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT,
+            lambda m: "<kbd>{}</kbd>".format(m.group(0)),
+            expression,
+        )
 
-    return re.sub(
-        RE_KEYBOARD_SHORTCUTS, add_one_keyboard_tag, text
-    )
+    return re.sub(RE_KEYBOARD_SHORTCUTS, add_one_keyboard_tag, text)
+
 
 FORMATTERS = [
     inline_code_paths,
@@ -134,6 +147,7 @@ FORMATTERS = [
     italicize_other_words,
     inline_code_numeric_values,
 ]
+
 
 def format_line(line: str) -> str:
     out: str = line
@@ -219,18 +233,38 @@ def parse_command_line_arguments(args) -> argparse.Namespace:
     return parser.parse_args(args)
 
 
+def flatten(items):
+    for item in items:
+        if isinstance(item, list) and not isinstance(item, (str, bytes)):
+            yield from flatten(item)
+        else:
+            yield item
+
+
 def process_file(file_path: List[str]) -> ProcessedDocument:
     """Applies formatting rule to a file's content."""
+
+    def is_code_block(text: str) -> bool:
+        return text.startswith("```")
+
+    def is_html_block(text: str) -> bool:
+        return text.startswith("<")
+
     output: ProcessedDocument
 
     with open(file_path, "r") as markdown_file:
         content: str = markdown_file.read()
-        sections: List[str] = re.split(RE_SPLIT_CODE_BLOCK, content)
+        sections: List[str] = RE_SPLIT_CODE_BLOCK.split(content)
+        sections = map(lambda s: RE_SPLIT_HTML.split(s), sections)
+        sections = list(flatten(sections))
+
         formatted_sections: List[str] = []
 
         for block in sections:
-            if block.startswith("```"):
+            if is_code_block(block):
                 formatted_sections.append(format_code_block(block))
+            elif is_html_block(block):
+                formatted_sections.append(block)
             else:
                 chunks: List[str] = re.split(RE_TO_IGNORE, block)
                 formatted_chunks: List[str] = []
