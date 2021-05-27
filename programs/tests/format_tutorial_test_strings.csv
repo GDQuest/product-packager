@@ -17,3 +17,6 @@
 </video>","<video controls width=""772"">
   <source src=""videos/11.weapon-projectile.mp4"" type=""video/mp4"">
 </video>","HTML shouldn’t get any formatting"
+"Create a Node2D, Tween, Sprite, and RemoteTransform node.","Create a `Node2D`, `Tween`, `Sprite`, and `RemoteTransform` node.","Built-in class names should be surrounded with backticks"
+"Use the Layout -> Full Rect option.","Use the *Layout -> Full Rect* option.","Layout -> Full Rect should be in italics"
+"Click on Animation -> New Animation.","Click on *Animation -> New Animation*.","Animation -> New Animation should be in italics"
