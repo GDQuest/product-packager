@@ -1,4 +1,7 @@
 import pathlib
+from programs import highlight_code as highlighter
+import subprocess
+import colorama
 
 
 def validate_source_dir(source_dir: str) -> bool:
@@ -25,3 +28,46 @@ def capture_folder(root_path: pathlib.Path, folder_name: str, extensions: list) 
     for extension in extensions:
         results.extend(folder.glob(extension))
     return results
+
+def process_markdown_file_in_place(filename: str):
+    # apply highlighting
+    # getting weird issues not seeing copied image files, so added a delay
+    # time.sleep(3.5)
+    content = highlighter.highlight_code_blocks(filename)
+    with open(filename, "w") as document:
+        document.write(content)
+    # convert to html
+    colorama.init(autoreset=True)
+    out = subprocess.run(["./convert_markdown.sh", "-c", "css/pandoc.css", "-o", "../", "../" + filename], cwd="./programs", capture_output=True)
+    if out.returncode != 0:
+        err_log(out.stderr.decode())
+        raise Exception(out.stderr.decode())
+    success_log(out.stdout.decode())
+
+    file_base = pathlib.Path(filename)
+    # strip the suffix from the path
+    file_base = file_base.as_posix().removesuffix(file_base.suffix)
+    html_path = pathlib.Path(file_base + ".html")
+    if html_path.exists():
+        success_log("removing original markdown file")
+        pathlib.Path(filename).unlink()
+    else:
+        err_log("unsuccessful markdown conversion")
+        raise Exception("unsuccessful markdown conversion")
+        # TODO: we should error out now
+
+    remove_figcaption(html_path)
+
+
+def remove_figcaption(html_path: pathlib.Path):
+    out = subprocess.run(["sed -Ei 's|<figcaption>.+</figcaption>||' " + html_path.as_posix()], capture_output=True,
+                         shell=True)
+    success_log(out.stdout.decode())
+    err_log(out.stderr.decode())
+
+def success_log(log_message):
+    print(colorama.Fore.GREEN + log_message)
+
+
+def err_log(log_message):
+    print(colorama.Fore.RED + log_message)

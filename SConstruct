@@ -13,6 +13,7 @@ from SCons.Variables import Variables
 from SCons.Variables import PathVariable
 import scons_helper as helper
 
+
 env = Environment()
 
 if not 'SRC' in ARGUMENTS:
@@ -28,6 +29,8 @@ Execute(Mkdir('results/videos'))
 
 src_contents = helper.content_introspection(src)
 
+
+#copy the image files into an images folder
 images = []
 for folder in src_contents:
     images.extend(
@@ -36,6 +39,7 @@ for folder in src_contents:
 for image_path in images:
     Execute(Copy('results/images/' + image_path.name, image_path.as_posix()))
 
+#copy the video files into a videos folder
 videos = []
 for folder in src_contents:
     videos.extend(
@@ -43,5 +47,20 @@ for folder in src_contents:
     )
 for video_path in videos:
     Execute(Copy('results/videos/' + video_path.name, video_path.as_posix()))
+
+# chroma needs to be installed
+
+
+# Todo:, change env to not copy md files as they are replaced, the html files should be the dependency
+# copy markdown files into the root
+markdown_files = []
+for folder in src_contents:
+    markdown_files.extend(helper.capture_folder(folder, "", ["*.md"]))
+for markdown_path in markdown_files:
+    Execute(Copy('results/' + markdown_path.name, markdown_path.as_posix()))
+
+    #https://scons-cookbook.readthedocs.io/en/latest/#defining-your-own-builder-object
+    # TODO: use this to call the conversion script
+    helper.process_markdown_file_in_place('results/' + markdown_path.name)
 
 env.Zip('archive', ['results'])
