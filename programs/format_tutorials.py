@@ -87,18 +87,17 @@ class ProcessedDocument:
 
 
 def inline_code_built_in_classes(text: str) -> str:
-    return re.sub(
-        RE_BUILT_IN_CLASSES, lambda match: "`{}`".format(match.group(0)), text
+    return RE_BUILT_IN_CLASSES.sub(lambda match: "`{}`".format(match.group(0)), text
     )
 
 
 def inline_code_paths(text: str) -> str:
-    return re.sub(RE_FILE_PATH, lambda match: "`{}`".format(match.group(0)), text)
+    return RE_FILE_PATH.sub(lambda match: "`{}`".format(match.group(0)), text)
 
 
 def inline_code_variables_and_functions(text: str) -> str:
-    return re.sub(
-        RE_VARIABLE_OR_FUNCTION, lambda match: "`{}`".format(match.group(0)), text
+    return RE_VARIABLE_OR_FUNCTION.sub(
+        lambda match: "`{}`".format(match.group(0)), text
     )
 
 
@@ -107,8 +106,8 @@ def inline_code_hex_values(text: str) -> str:
 
 
 def inline_code_numeric_values(text: str) -> str:
-    return re.sub(
-        RE_NUMERIC_VALUES_AND_RANGES, lambda match: "`{}`".format(match.group(0)), text,
+    return RE_NUMERIC_VALUES_AND_RANGES.sub(
+        lambda match: "`{}`".format(match.group(0)), text,
     )
 
 
@@ -127,7 +126,7 @@ def italicize_other_words(text: str) -> str:
             return expression
         return "*{}*".format(match.group(0))
 
-    return re.sub(RE_TO_ITALICIZE, replace_match, text)
+    return RE_TO_ITALICIZE.sub(replace_match, text)
 
 
 def add_keyboard_tags(text: str) -> str:
@@ -135,13 +134,11 @@ def add_keyboard_tags(text: str) -> str:
         expression = match.group(0)
         if expression.strip() == "I":
             return expression
-        return re.sub(
-            RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT,
-            lambda m: "<kbd>{}</kbd>".format(m.group(0)),
-            expression,
+        return RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT.sub(
+            lambda m: "<kbd>{}</kbd>".format(m.group(0)), expression,
         )
 
-    return re.sub(RE_KEYBOARD_SHORTCUTS, add_one_keyboard_tag, text)
+    return RE_KEYBOARD_SHORTCUTS.sub(add_one_keyboard_tag, text)
 
 
 FORMATTERS = [
