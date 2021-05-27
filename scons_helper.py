@@ -31,8 +31,6 @@ def capture_folder(root_path: pathlib.Path, folder_name: str, extensions: list) 
 
 def process_markdown_file_in_place(filename: str):
     # apply highlighting
-    # getting weird issues not seeing copied image files, so added a delay
-    # time.sleep(3.5)
     content = highlighter.highlight_code_blocks(filename)
     with open(filename, "w") as document:
         document.write(content)
