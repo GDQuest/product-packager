@@ -70,7 +70,7 @@ RE_TO_ITALICIZE: re.Pattern = re.compile(
 )
 RE_TO_IGNORE: re.Pattern = re.compile(r"(!?\[.*\]\(.+\)|^#+ .+$)", flags=re.MULTILINE)
 RE_KEYBOARD_SHORTCUTS: re.Pattern = re.compile(
-    r" +(((Ctrl|Alt|Shift|CTRL|ALT|SHIFT) ?\+ ?)*([A-Z0-9]|F\d{1,2})\b)"
+    r"(?<!\d\.)(?<!\-) +(((Ctrl|Alt|Shift|CTRL|ALT|SHIFT) ?\+ ?)*([A-Z0-9]|F\d{1,2})\b)"
 )
 RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT: re.Pattern = re.compile(r"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|[A-Z0-9]+")
 
@@ -129,6 +129,8 @@ def format_content(content: str) -> str:
     def add_keyboard_tags(text: str) -> str:
         def add_one_keyboard_tag(match: re.Match) -> str:
             expression = match.group(0)
+            if expression.strip() == "I":
+                return expression
             return re.sub(RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT, lambda m: "<kbd>{}</kbd>".format(m.group(0)), expression)
 
         return re.sub(
