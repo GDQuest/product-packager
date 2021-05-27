@@ -178,7 +178,7 @@ def format_code_block(text: str):
     """Applies styling rules to one code block"""
 
     def convert_spaces_to_tabs(content: str) -> str:
-        return re.sub(", " * TAB_WIDTH, "\t", content)
+        return content.replace(" " * TAB_WIDTH, "\t")
 
     def fill_comment(match: re.Match, line_length: int = 80) -> str:
         """Takes one line of comment and wraps it at the `line_length` column."""
@@ -211,7 +211,7 @@ def format_code_block(text: str):
 
     content = match.group(2)
     content = convert_spaces_to_tabs(content)
-    content = re.sub("^#.+", fill_comment, content, flags=re.MULTILINE)
+    content = re.sub("\t+#.+", fill_comment, content, flags=re.MULTILINE)
 
     output = "```{}\n{}```".format(language, content)
     return output
