@@ -75,6 +75,7 @@ RE_KEYBOARD_SHORTCUTS: re.Pattern = re.compile(
 RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT: re.Pattern = re.compile(
     r"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|[A-Z0-9]+"
 )
+RE_HEX_VALUES: re.Pattern = re.compile(r"#[a-fA-F0-9]{3,8}")
 
 
 @dataclass
@@ -99,6 +100,10 @@ def inline_code_variables_and_functions(text: str) -> str:
     return re.sub(
         RE_VARIABLE_OR_FUNCTION, lambda match: "`{}`".format(match.group(0)), text
     )
+
+
+def inline_code_hex_values(text: str) -> str:
+    return RE_HEX_VALUES.sub(lambda match: "`{}`".format(match.group(0)), text)
 
 
 def inline_code_numeric_values(text: str) -> str:
@@ -143,6 +148,7 @@ FORMATTERS = [
     inline_code_paths,
     inline_code_variables_and_functions,
     inline_code_built_in_classes,
+    inline_code_hex_values,
     add_keyboard_tags,
     italicize_other_words,
     inline_code_numeric_values,
