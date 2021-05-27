@@ -90,8 +90,7 @@ class ProcessedDocument:
 
 
 def inline_code_built_in_classes(text: str) -> str:
-    return RE_BUILT_IN_CLASSES.sub(lambda match: "`{}`".format(match.group(0)), text
-    )
+    return RE_BUILT_IN_CLASSES.sub(lambda match: "`{}`".format(match.group(0)), text)
 
 
 def inline_code_paths(text: str) -> str:
@@ -247,7 +246,7 @@ def flatten(items):
             yield item
 
 
-def process_file(file_path: List[str]) -> ProcessedDocument:
+def process_content(content: str) -> str:
     """Applies formatting rule to a file's content."""
 
     def is_code_block(text: str) -> bool:
@@ -256,33 +255,28 @@ def process_file(file_path: List[str]) -> ProcessedDocument:
     def is_html_block(text: str) -> bool:
         return text.startswith("<")
 
-    output: ProcessedDocument
+    sections: List[str] = RE_SPLIT_CODE_BLOCK.split(content)
+    sections = map(lambda s: RE_SPLIT_HTML.split(s), sections)
+    sections = list(flatten(sections))
 
-    with open(file_path, "r") as markdown_file:
-        content: str = markdown_file.read()
-        sections: List[str] = RE_SPLIT_CODE_BLOCK.split(content)
-        sections = map(lambda s: RE_SPLIT_HTML.split(s), sections)
-        sections = list(flatten(sections))
+    formatted_sections: List[str] = []
 
-        formatted_sections: List[str] = []
+    for block in sections:
+        if is_code_block(block):
+            formatted_sections.append(format_code_block(block))
+        elif is_html_block(block):
+            formatted_sections.append(block)
+        else:
+            chunks: List[str] = re.split(RE_TO_IGNORE, block)
+            formatted_chunks: List[str] = []
+            for chunk in chunks:
+                if re.match(RE_TO_IGNORE, chunk):
+                    formatted_chunks.append(chunk)
+                else:
+                    formatted_chunks.append(format_content(chunk))
+            formatted_sections.append("".join(formatted_chunks))
 
-        for block in sections:
-            if is_code_block(block):
-                formatted_sections.append(format_code_block(block))
-            elif is_html_block(block):
-                formatted_sections.append(block)
-            else:
-                chunks: List[str] = re.split(RE_TO_IGNORE, block)
-                formatted_chunks: List[str] = []
-                for chunk in chunks:
-                    if re.match(RE_TO_IGNORE, chunk):
-                        formatted_chunks.append(chunk)
-                    else:
-                        formatted_chunks.append(format_content(chunk))
-                formatted_sections.append("".join(formatted_chunks))
-        output = ProcessedDocument(file_path, "".join(formatted_sections))
-
-    return output
+    return "".join(formatted_sections)
 
 
 def output_result(args: argparse.Namespace, document: ProcessedDocument) -> None:
@@ -342,7 +336,11 @@ def main():
         )
         sys.exit(ERROR_INCORRECT_FILE_PATHS)
 
-    documents: List[ProcessedDocument] = list(map(process_file, filepaths))
+    documents: List[ProcessedDocument] = []
+    for file_path in filepaths:
+        with open(file_path, "r") as markdown_file:
+            content: str = markdown_file.read()
+            documents.append(ProcessedDocument(file_path, process_content(content)))
     list(map(output_result, itertools.repeat(args), documents))
 
 

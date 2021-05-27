@@ -1,0 +1,19 @@
+"input","expected_output","error_message"
+"It is because I did this.","It is because I did this.","I shouldn't get treated as a keyboard shortcut"
+"- A cat.
+1. A boy.
+2. A wolf.","- A cat.
+1. A boy.
+2. A wolf.","The first word of lists shouldn't be treated as a keyboard shortcut"
+"res://TacticalSpaceCombat/Ship/Weapons/WeaponProjectile.tscn.","`res://TacticalSpaceCombat/Ship/Weapons/WeaponProjectile.tscn`.","Directory paths should be in inline code"
+"Vector2(750, 0).","`Vector2(750, 0)`.","Calls with arguments should be entirely surrounded with backticks"
+"add_central_force()","`add_central_force()`","Functions with parentheses should be surrounded with backticks"
+"_ready() and _some_variable","`_ready()` and `_some_variable`","Symbols starting with an underscore should be surrounded with backticks"
+"Use the file Atlas.svg.","Use the file `Atlas.svg`.","Filenames should be surrounded with backticks"
+"Vector2.ZERO","`Vector2.ZERO`","Symbols should be surrounded with backticks"
+"Vector2.ONE.length()","`Vector2.ONE.length()`","Symbols should be surrounded with backticks"
+"<video controls width=""772"">
+  <source src=""videos/11.weapon-projectile.mp4"" type=""video/mp4"">
+</video>","<video controls width=""772"">
+  <source src=""videos/11.weapon-projectile.mp4"" type=""video/mp4"">
+</video>","HTML shouldn’t get any formatting"
