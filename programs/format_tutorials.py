@@ -47,8 +47,7 @@ RE_BUILT_IN_CLASSES: re.Pattern = re.compile(
     r"\b(?<!`)({})\b".format(r"|".join(BUILT_IN_CLASSES))
 )
 # Matches paths with a filename at the end.
-# FIXME: known edge case: if a class has a member of two to four characters, it'll be detected as a filename.
-RE_FILE_PATH: re.Pattern = re.compile(r"\b(?<!`)((res|user)://)?/?([\w]+/)*([\w]*\.\w{2,4})\b")
+RE_FILE_PATH: re.Pattern = re.compile(r"\b((res|user)://)?/?([\w]+/)+(\w*\.\w+)?\b")
 # Matches directory paths without a filename at the end. Group 1 targets the path.
 #
 # Known limitations:
