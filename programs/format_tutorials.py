@@ -55,7 +55,7 @@ RE_FILE_PATH: re.Pattern = re.compile(r"\b((res|user)://)?/?([\w]+/)+(\w*\.\w+)?
 # or the line ends with a period.
 # - Won't capture a leading slash.
 RE_VARIABLE_OR_FUNCTION: re.Pattern = re.compile(
-    r"\b(_?[a-zA-Z0-9]+((_|\.)_?[a-zA-Z()]+)+)|\b(_[a-zA-Z()]+)|\b_?[a-zA-Z]+\(\)"
+    r"\b_?[a-zA-Z0-9]+\([a-zA-Z0-9, ]+\)|\b(_?[a-zA-Z0-9]+((_|\.)_?[a-zA-Z0-9]+)+)|\b(_[a-zA-Z()]+)|\b_?[a-zA-Z]+\(\)"
 )
 RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(r"(\[[\d\., ]+\])|(-?\d+\.\d+)|(?<![\nA-Za-z])(-?\d+)(?![A-Za-z])")
 # Capitalized words and PascalCase that are not at the start of a sentence or a line.
