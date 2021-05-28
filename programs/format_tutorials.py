@@ -44,6 +44,7 @@ WORDS_TO_KEEP_UNFORMATTED: List[str] = [
 
 RE_SPLIT_CODE_BLOCK: re.Pattern = re.compile(r"(```[a-z]*\n.*?```)", flags=re.DOTALL)
 RE_SPLIT_HTML: re.Pattern = re.compile(r"(<.+?>*\n.*?<\/.+?>)", flags=re.DOTALL)
+RE_SPLIT_TEMPLATE: re.Pattern = re.compile(r"({%.+?%})")
 RE_BUILT_IN_CLASSES: re.Pattern = re.compile(
     r"\b(?<!`)({})\b".format(r"|".join(BUILT_IN_CLASSES))
 )
@@ -261,11 +262,15 @@ def process_content(content: str) -> str:
     def is_code_block(text: str) -> bool:
         return text.startswith("```")
 
-    def is_html_block(text: str) -> bool:
-        return text.startswith("<")
+    def is_unformatted_block(text: str) -> bool:
+        """Returns true if the text starts like HTML or a template element."""
+        return text.startswith("<") or text.startswith("{%")
+
 
     sections: List[str] = RE_SPLIT_CODE_BLOCK.split(content)
     sections = map(lambda s: RE_SPLIT_HTML.split(s), sections)
+    sections = list(flatten(sections))
+    sections = map(lambda s: RE_SPLIT_TEMPLATE.split(s), sections)
     sections = list(flatten(sections))
 
     formatted_sections: List[str] = []
@@ -273,7 +278,7 @@ def process_content(content: str) -> str:
     for block in sections:
         if is_code_block(block):
             formatted_sections.append(format_code_block(block))
-        elif is_html_block(block):
+        elif is_unformatted_block(block):
             formatted_sections.append(block)
         else:
             chunks: List[str] = re.split(RE_TO_IGNORE, block)

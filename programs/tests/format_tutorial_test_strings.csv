@@ -20,3 +20,4 @@
 "Create a Node2D, Tween, Sprite, and RemoteTransform node.","Create a `Node2D`, `Tween`, `Sprite`, and `RemoteTransform` node.","Built-in class names should be surrounded with backticks"
 "Use the Layout -> Full Rect option.","Use the *Layout -> Full Rect* option.","Layout -> Full Rect should be in italics"
 "Click on Animation -> New Animation.","Click on *Animation -> New Animation*.","Animation -> New Animation should be in italics"
+"{% link Area2D %}","{% link Area2D %}","Template commands should stay unformatted"
