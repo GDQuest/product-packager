@@ -9,7 +9,6 @@ Auto-formats our tutorials, saving manual formatting work:
 - Marks code blocks without a language as using `gdscript`.
 - Add <kbd> tags around keyboard shortcuts (the form needs to be Ctrl+F1).
 """
-# FIXME: things that should be italicized end up with backticks when there's a built-in class name inside - *Bezier* `Curve` *Track*. or `Animation` -> *Save As*...
 import argparse
 import itertools
 import os
@@ -65,10 +64,13 @@ RE_VARIABLE_OR_FUNCTION: re.Pattern = re.compile(
 RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(
     r"(\[[\d\., ]+\])|(-?\d+\.\d+)|(?<![\nA-Za-z])(-?\d+)(?![A-Za-z])(?!\. )"
 )
+# Sequence of multiple words with an optional "->" separator, to italicize.
+RE_TO_ITALICIZE_SEQUENCE: re.Pattern = re.compile(
+    r"[A-Z][a-zA-Z0-9]+( (-> )?[A-Z][a-zA-Z0-9]+(\.\.\.)?)+"
+)
 # Capitalized words and PascalCase that are not at the start of a sentence or a line.
-# To run after adding inline code marks to avoid putting built-ins in italics.
-RE_TO_ITALICIZE: re.Pattern = re.compile(
-    r"(?<!\d\. )(?<!>)(?<![a-zA-Z])(?<![-\.?!#\/] )(?<!^)(?<!`)([A-Z][a-zA-Z0-9]+(\.\.\.)?)( (-> )?[A-Z][a-zA-Z0-9]+(\.\.\.)?)*",
+RE_TO_ITALICIZE_ONE_WORD: re.Pattern = re.compile(
+    r"(?<!\d\. )(?<!>)(?<![a-zA-Z])(?<![-\.?!#\/] )(?<!^)(?<!`)([A-Z][a-zA-Z0-9]+(\.\.\.)?)",
     flags=re.MULTILINE,
 )
 RE_TO_IGNORE: re.Pattern = re.compile(r"(!?\[.*\]\(.+\)|^#+ .+$)", flags=re.MULTILINE)
@@ -118,6 +120,12 @@ def replace_double_inline_code_marks(text: str) -> str:
     return re.sub("(`+\b)|(\b`+)", "`", text)
 
 
+def italicize_word_sequences(text: str) -> str:
+    return RE_TO_ITALICIZE_SEQUENCE.sub(
+        lambda match: "*{}*".format(match.group(0)), text
+    )
+
+
 def italicize_other_words(text: str) -> str:
     def replace_match(match: re.Match) -> str:
         expression: str = match.group(0)
@@ -128,7 +136,7 @@ def italicize_other_words(text: str) -> str:
             return expression
         return "*{}*".format(match.group(0))
 
-    return RE_TO_ITALICIZE.sub(replace_match, text)
+    return RE_TO_ITALICIZE_ONE_WORD.sub(replace_match, text)
 
 
 def add_keyboard_tags(text: str) -> str:
@@ -146,6 +154,7 @@ def add_keyboard_tags(text: str) -> str:
 FORMATTERS = [
     inline_code_paths,
     inline_code_variables_and_functions,
+    italicize_word_sequences,
     inline_code_built_in_classes,
     inline_code_hex_values,
     add_keyboard_tags,
