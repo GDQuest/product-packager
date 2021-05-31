@@ -43,35 +43,30 @@ def extension_to_html(filename: str) -> str:
     return pathlib.Path(file_base + ".html").as_posix()
 
 
+# still undergoing changes to better fit with scons builder style
 def process_markdown_file_in_place(target, source, env):
-    # apply highlighting
-    filename = source
+    s = source[0]
+    filename = s.abspath
     content = highlighter.highlight_code_blocks(filename)
     with open(filename, "w") as document:
         document.write(content)
     # convert to html
     colorama.init(autoreset=True)
-    out = subprocess.run(["./convert_markdown.sh", "-c", "css/pandoc.css", "-o", "../", "../" + filename], cwd="./programs", capture_output=True)
+    out = subprocess.run(["./convert_markdown.sh", "-c", "css/pandoc.css", "-o", "../", filename], cwd="./programs", capture_output=True)
+
     if out.returncode != 0:
         err_log(out.stderr.decode())
         raise Exception(out.stderr.decode())
+
     success_log(out.stdout.decode())
-    #
+
     file_base = pathlib.Path(filename)
     # # strip the suffix from the path
     file_base = file_base.as_posix().removesuffix(file_base.suffix)
-    html_path = pathlib.Path(target)
-    if html_path.exists():
-        success_log("removing original markdown file")
-        # pathlib.Path(filename).unlink()
-        return None
-    else:
-        err_log("unsuccessful markdown conversion")
-        return 1
-        # raise Exception("unsuccessful markdown conversion")
-    #     # TODO: we should error out now
 
-    remove_figcaption(html_path)
+    remove_figcaption(pathlib.Path(target[0].abspath))
+
+    return None
 
 
 def remove_figcaption(html_path: pathlib.Path):
@@ -79,6 +74,7 @@ def remove_figcaption(html_path: pathlib.Path):
                          shell=True)
     success_log(out.stdout.decode())
     err_log(out.stderr.decode())
+
 
 def success_log(log_message):
     print(colorama.Fore.GREEN + log_message)

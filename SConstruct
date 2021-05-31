@@ -1,41 +1,54 @@
 """
+https://scons.org/doc/production/PDF/scons-user.pdf
 https://github.com/SCons/scons/wiki/SconsRecipes
 """
-# for code completion
-import SCons.Script
-from SCons.Environment import Environment
-from SCons.Variables import Variables
-from SCons.Variables import PathVariable
 import scons_helper as helper
+
+# TODO: 7.4.5 pyPackageDir
 
 BUILD_DIR = "build"
 DIST_DIR = "dist"
 
-if "clean" in COMMAND_LINE_TARGETS:
-    remove_directory("build")
-    remove_directory("dist")
-
 env = Environment()
+
+# AddOption(
+#     '--Epub',
+#     dest='epub',
+    # nargs=1,
+    # type='boolean',
+    # action='store',
+    # metavar='DIR',
+    # help='installation prefix',
+# )
+
+# if env.GetOption("clean"):
+#     Execute(Delete("build"))
+#     Execute(Delete("dist"))
 
 HTMLBuilder = Builder(action=helper.process_markdown_file_in_place,
         suffix='.html',
         src_suffix='.md',
-        # single_source=1,
+        single_source=1,
         )
-# helper.remove_figcaption()
-#https://scons-cookbook.readthedocs.io/en/latest/#defining-your-own-builder-object
-# TODO: use this to call the conversion script
+
 env['BUILDERS']["HTMLBuilder"] = HTMLBuilder
 
 if not COMMAND_LINE_TARGETS:
     print("missing targets")
     Exit(1)
+
 src = COMMAND_LINE_TARGETS[0]
+
+VariantDir(BUILD_DIR, src, duplicate=False)
+
 if not helper.validate_source_dir(src):
     print("SRC dir invalid")
     Exit(1)
+
 Execute(Mkdir(BUILD_DIR + '/images'))
 Execute(Mkdir(BUILD_DIR + '/videos'))
+
+class_dir = Dir(BUILD_DIR)
 
 src_contents = helper.content_introspection(src)
 
@@ -58,20 +71,13 @@ for folder in src_contents:
 for video_path in videos:
     Execute(Copy(BUILD_DIR + '/videos/' + video_path.name, video_path.as_posix()))
 
-# chroma needs to be installed
-
-
-# Todo:, change env to not copy md files as they are replaced, the html files should be the dependency
-# copy markdown files into the root
 markdown_files = []
 for folder in src_contents:
     markdown_files.extend(helper.glob_extensions(folder, ["*.md"]))
 for markdown_path in markdown_files:
     targ = BUILD_DIR + '/' + markdown_path.name
     Execute(Copy(targ, markdown_path.as_posix()))
-    # helper.process_markdown_file_in_place(BUILD_DIR + '/' + markdown_path.name)
     htarg = helper.extension_to_html(targ)
-    env.HTMLBuilder(htarg, targ, env)
-    print(env.HTMLBuilder)
-
-# env.Zip('archive', [BUILD_DIR])
+    build_html_file = env.HTMLBuilder(targ)
+    env.AddPostAction(build_html_file, Delete(targ))
+# print(env.Dump())
