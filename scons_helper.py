@@ -20,6 +20,11 @@ def content_introspection(source_dir: str) -> list:
     return content_folders
 
 
+def get_godot_folders(root_dir: str) -> list:
+    projects = [p.parent.as_posix() for p in pathlib.Path(root_dir).parent.glob("**/project.godot")]
+    return projects
+
+
 def capture_folder(root_path: pathlib.Path, folder_name: str, extensions: list) -> list:
     folder = root_path / folder_name
     results = []
@@ -41,6 +46,28 @@ def extension_to_html(filename: str) -> str:
     file_base = pathlib.Path(filename)
     file_base = file_base.as_posix().removesuffix(file_base.suffix)
     return pathlib.Path(file_base + ".html").as_posix()
+
+
+def get_godot_filename(t) -> str:
+    project_settings = pathlib.Path(t) / "project.godot"
+    assert(project_settings.exists())
+    prefix = "config/name="
+    with open(project_settings, 'r') as read_obj:
+        for line in read_obj:
+            if line.startswith(prefix):
+                return line.lstrip(prefix).replace(" ", "_").replace('"', '').replace('\n', '')
+    raise Exception("missing project name")
+
+
+def bundle_godot_project(target, source, env):
+    s = source[0]
+    t = target[0]
+    gdname = get_godot_filename(t)
+    out = subprocess.run(["./package_godot_projects.sh", "-t", gdname,  "../" + t, "../" + s], cwd="./programs", capture_output=True)
+    if out.returncode != 0:
+        err_log(out.stderr.decode())
+        raise Exception(out.stderr.decode())
+    success_log(out.stdout.decode())
 
 
 # still undergoing changes to better fit with scons builder style
@@ -82,3 +109,8 @@ def success_log(log_message):
 
 def err_log(log_message):
     print(colorama.Fore.RED + log_message)
+
+
+if __name__ == "__main__":
+    print(get_godot_folders("../test2"))
+    # bundle_godot_project(["../test2/godot-project"], ["build"], 0)

@@ -33,6 +33,12 @@ HTMLBuilder = Builder(action=helper.process_markdown_file_in_place,
 
 env['BUILDERS']["HTMLBuilder"] = HTMLBuilder
 
+GDBuilder = Builder(action=helper.bundle_godot_project,
+        suffix='.zip',
+        )
+
+env['BUILDERS']["GDBuilder"] = GDBuilder
+
 if not COMMAND_LINE_TARGETS:
     print("missing targets")
     Exit(1)
@@ -80,4 +86,9 @@ for markdown_path in markdown_files:
     htarg = helper.extension_to_html(targ)
     build_html_file = env.HTMLBuilder(targ)
     env.AddPostAction(build_html_file, Delete(targ))
+
+for folder in helper.get_godot_folders(src):
+    gd_name = helper.get_godot_filename(folder)
+    print(gd_name + ".zip", " ", folder + "/project.godot")
+    env.GDBuilder(folder + "/project.godot")
 # print(env.Dump())
