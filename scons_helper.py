@@ -49,8 +49,9 @@ def extension_to_html(filename: str) -> str:
 
 
 def get_godot_filename(t) -> str:
+
     project_settings = pathlib.Path(t) / "project.godot"
-    assert(project_settings.exists())
+    assert(project_settings.exists(), t)
     prefix = "config/name="
     with open(project_settings, 'r') as read_obj:
         for line in read_obj:
@@ -60,14 +61,18 @@ def get_godot_filename(t) -> str:
 
 
 def bundle_godot_project(target, source, env):
-    s = source[0]
-    t = target[0]
-    gdname = get_godot_filename(t)
-    out = subprocess.run(["./package_godot_projects.sh", "-t", gdname,  "../" + t, "../" + s], cwd="./programs", capture_output=True)
+    s = pathlib.Path(target[0].abspath)
+    t = source[0].abspath
+    gdname = s.name
+    success_log("Building project %s" % gdname)
+    out = subprocess.run(["./package_godot_projects.sh", "-t", gdname, t, pathlib.Path(s).parent], cwd="./programs", capture_output=True)
     if out.returncode != 0:
         err_log(out.stderr.decode())
         raise Exception(out.stderr.decode())
-    success_log(out.stdout.decode())
+    for line in out.stdout.decode().split("\n"):
+        if "Done." in line:
+            success_log(line)
+            break
 
 
 # still undergoing changes to better fit with scons builder style
@@ -111,6 +116,6 @@ def err_log(log_message):
     print(colorama.Fore.RED + log_message)
 
 
-if __name__ == "__main__":
-    print(get_godot_folders("../test2"))
+# if __name__ == "__main__":
+#     print(get_godot_folders("../test2"))
     # bundle_godot_project(["../test2/godot-project"], ["build"], 0)

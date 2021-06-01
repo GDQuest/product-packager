@@ -89,6 +89,6 @@ for markdown_path in markdown_files:
 
 for folder in helper.get_godot_folders(src):
     gd_name = helper.get_godot_filename(folder)
-    print(gd_name + ".zip", " ", folder + "/project.godot")
-    env.GDBuilder(folder + "/project.godot")
+    print(BUILD_DIR + '/' + gd_name + ".zip", " ", folder + "/project.godot")
+    env.GDBuilder(BUILD_DIR + '/'+ gd_name + ".zip", folder + "/project.godot")
 # print(env.Dump())
