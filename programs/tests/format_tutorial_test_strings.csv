@@ -28,3 +28,18 @@
 ## This is why we used the generic `Weapon` name for both projectile and laser
 ## specializations.
 ```","Comments at the start of lines should wrap at 80 characters."
+"```
+test
+```","```gdscript
+test
+```","Code blocks without a language should be set to gdscript."
+"```gdscript
+func test():
+	## This is why we used the generic `Weapon` name for both projectile and laser specializations.
+	pass
+```","```gdscript
+func test():
+	## This is why we used the generic `Weapon` name for both projectile and
+	## laser specializations.
+	pass
+```","Comments inside blocks should wrap at 80 characters."
