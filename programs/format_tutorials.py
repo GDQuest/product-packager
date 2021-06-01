@@ -223,7 +223,7 @@ def format_code_block(text: str):
 
     content = match.group(2)
     content = convert_spaces_to_tabs(content)
-    content = re.sub("\t+#.+", fill_comment, content, flags=re.MULTILINE)
+    content = re.sub("\t*#.+", fill_comment, content, flags=re.MULTILINE)
 
     output = "```{}\n{}```".format(language, content)
     return output

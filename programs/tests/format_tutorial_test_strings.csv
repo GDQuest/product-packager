@@ -22,3 +22,9 @@
 "Click on Animation -> New Animation.","Click on *Animation -> New Animation*.","Animation -> New Animation should be in italics"
 "{% link Area2D %}","{% link Area2D %}","Template commands should stay unformatted"
 "The AI controller system operates like this:","The AI controller system operates like this:","The first word in a sentence shouldn't be considered part of a group of capitalized words to italicize."
+"```gdscript
+## This is why we used the generic `Weapon` name for both projectile and laser specializations.
+```","```gdscript
+## This is why we used the generic `Weapon` name for both projectile and laser
+## specializations.
+```","Comments at the start of lines should wrap at 80 characters."
