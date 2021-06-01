@@ -27,7 +27,7 @@ def content_introspection(source_dir: str) -> list:
 
 def get_godot_folders(root_dir: str) -> list:
     """Return a list of all folders containing a project.godot file"""
-    projects = [p.parent.as_posix() for p in pathlib.Path(root_dir).parent.glob("**/project.godot")]
+    projects = [p.parent.as_posix() for p in pathlib.Path(root_dir).glob("./**/project.godot")]
     return projects
 
 
@@ -63,6 +63,7 @@ def bundle_godot_project(target, source, env):
     t = source[0].abspath
     gdname = s.stem
     success_log("Building project %s" % gdname)
+
     out = subprocess.run(["./package_godot_projects.sh", "-t", gdname, t, pathlib.Path(s).parent], cwd="./programs", capture_output=True)
     if out.returncode != 0:
         err_log(out.stderr.decode())
@@ -78,8 +79,9 @@ def process_markdown_file_in_place(target, source, env):
     content = highlighter.highlight_code_blocks(filename)
     with open(filename, "w") as document:
         document.write(content)
-
-    out = subprocess.run(["./convert_markdown.sh", "-c", "css/pandoc.css", "-o", "../", filename], cwd="./programs", capture_output=True)
+    file_parent = pathlib.Path(filename).parent.as_posix()
+    #TODO: "../build" replace this with a dynamic path!
+    out = subprocess.run(["./convert_markdown.sh", "-c", "css/pandoc.css", "-o", "../build", filename], cwd="./programs", capture_output=True)
 
     if out.returncode != 0:
         err_log(out.stderr.decode())

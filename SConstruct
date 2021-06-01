@@ -3,7 +3,6 @@ https://scons.org/doc/production/PDF/scons-user.pdf
 https://github.com/SCons/scons/wiki/SconsRecipes
 """
 import scons_helper as helper
-
 #  7.4.5 pyPackageDir
 
 BUILD_DIR = "build/"
@@ -53,22 +52,24 @@ if not COMMAND_LINE_TARGETS:
 
 src = COMMAND_LINE_TARGETS[0]
 
+
 VariantDir(BUILD_DIR, src, duplicate=False)
 
 if not helper.validate_source_dir(src):
     helper.err_log("SRC dir invalid")
     Exit(1)
 
+src_path = helper.pathlib.Path(src) / "content"
 src_contents = helper.content_introspection(src)
 
 images = []
 for folder in src_contents:
     images.extend(
-        helper.glob_extensions(folder, ["*.png", "*.jpg"])
+        helper.glob_extensions(folder, ["*.png", "*.jpg", "*.svg"])
     )
 ilist = []
 for image_path in images:
-    ilist.append(Install(BUILD_DIR +"images/", image_path.as_posix()))
+    ilist.append(Install(BUILD_DIR + image_path.relative_to(src_path).parent.as_posix(), image_path.as_posix()))
 
 videos = []
 for folder in src_contents:
@@ -77,14 +78,14 @@ for folder in src_contents:
     )
 vlist = []
 for video_path in videos:
-    vlist.append(Install(BUILD_DIR + "videos/", video_path.as_posix()))
+    vlist.append(Install(BUILD_DIR + video_path.relative_to(src_path).parent.as_posix(), video_path.as_posix()))
 
 markdown_files = []
 for folder in src_contents:
     markdown_files.extend(helper.glob_extensions(folder, ["*.md"]))
 for markdown_path in markdown_files:
-    targ = BUILD_DIR + markdown_path.name
-    Install(BUILD_DIR, markdown_path.as_posix())
+    targ = BUILD_DIR + markdown_path.relative_to(src_path).as_posix()
+    Install(BUILD_DIR + markdown_path.relative_to(src_path).parent.as_posix(), markdown_path.as_posix())
     build_html_file = env.HTMLBuilder(targ)
     env.AddPostAction(build_html_file, Delete(targ))
     for image in ilist:
