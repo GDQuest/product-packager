@@ -4,26 +4,34 @@ https://github.com/SCons/scons/wiki/SconsRecipes
 """
 import scons_helper as helper
 
-# TODO: 7.4.5 pyPackageDir
+#  7.4.5 pyPackageDir
 
-BUILD_DIR = "build"
-DIST_DIR = "dist"
+BUILD_DIR = "build/"
+DIST_DIR = "dist/"
 
 env = Environment()
 
-# AddOption(
-#     '--Epub',
-#     dest='epub',
-    # nargs=1,
-    # type='boolean',
-    # action='store',
-    # metavar='DIR',
-    # help='installation prefix',
-# )
+"""
+build targets:
+update - update any git submodules containing project code
+epub - compile all into one location and process as one doc
+this will require custom css
 
-# if env.GetOption("clean"):
-#     Execute(Delete("build"))
-#     Execute(Delete("dist"))
+AddOption(
+    '--Epub',
+    dest='epub',
+)
+    
+functionality:
+compare submodule release tags and current to ensure they match, otherwise error out.
+
+https://github.com/GDQuest/godot-pcg-secrets
+this project uses the subodule and is a good test branch
+"""
+
+if env.GetOption("clean"):
+    Execute(Delete("build"))
+    Execute(Delete("dist"))
 
 HTMLBuilder = Builder(action=helper.process_markdown_file_in_place,
         suffix='.html',
@@ -40,7 +48,7 @@ GDBuilder = Builder(action=helper.bundle_godot_project,
 env['BUILDERS']["GDBuilder"] = GDBuilder
 
 if not COMMAND_LINE_TARGETS:
-    print("missing targets")
+    helper.err_log("missing targets")
     Exit(1)
 
 src = COMMAND_LINE_TARGETS[0]
@@ -48,47 +56,42 @@ src = COMMAND_LINE_TARGETS[0]
 VariantDir(BUILD_DIR, src, duplicate=False)
 
 if not helper.validate_source_dir(src):
-    print("SRC dir invalid")
+    helper.err_log("SRC dir invalid")
     Exit(1)
-
-Execute(Mkdir(BUILD_DIR + '/images'))
-Execute(Mkdir(BUILD_DIR + '/videos'))
-
-class_dir = Dir(BUILD_DIR)
 
 src_contents = helper.content_introspection(src)
 
-
-#copy the image files into an images folder
 images = []
 for folder in src_contents:
     images.extend(
         helper.glob_extensions(folder, ["*.png", "*.jpg"])
     )
+ilist = []
 for image_path in images:
-    Execute(Copy(BUILD_DIR + '/images/' + image_path.name, image_path.as_posix()))
+    ilist.append(Install(BUILD_DIR +"images/", image_path.as_posix()))
 
-#copy the video files into a videos folder
 videos = []
 for folder in src_contents:
     videos.extend(
         helper.glob_extensions(folder, ["*.mp4", "*.jpg"])
     )
+vlist = []
 for video_path in videos:
-    Execute(Copy(BUILD_DIR + '/videos/' + video_path.name, video_path.as_posix()))
+    vlist.append(Install(BUILD_DIR + "videos/", video_path.as_posix()))
 
 markdown_files = []
 for folder in src_contents:
     markdown_files.extend(helper.glob_extensions(folder, ["*.md"]))
 for markdown_path in markdown_files:
-    targ = BUILD_DIR + '/' + markdown_path.name
-    Execute(Copy(targ, markdown_path.as_posix()))
-    htarg = helper.extension_to_html(targ)
+    targ = BUILD_DIR + markdown_path.name
+    Install(BUILD_DIR, markdown_path.as_posix())
     build_html_file = env.HTMLBuilder(targ)
     env.AddPostAction(build_html_file, Delete(targ))
+    for image in ilist:
+        Depends(build_html_file, image)
+    for video in vlist:
+        Depends(build_html_file, video)
 
 for folder in helper.get_godot_folders(src):
     gd_name = helper.get_godot_filename(folder)
-    print(BUILD_DIR + '/' + gd_name + ".zip", " ", folder + "/project.godot")
-    env.GDBuilder(BUILD_DIR + '/'+ gd_name + ".zip", folder + "/project.godot")
-# print(env.Dump())
+    env.GDBuilder(BUILD_DIR + gd_name + ".zip", folder + "/project.godot")
