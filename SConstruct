@@ -31,6 +31,28 @@ if not helper.validate_source_dir(env["src"]):
     helper.err_log("SRC dir invalid")
     Exit(1)
 
+env["content_folder_path"] = helper.pathlib.Path(env["src"]) / "content"
+env["contents_folders"] = helper.content_introspection(env["src"])
+
+# Gather images
+env["images"] = []
+for folder in env["contents_folders"]:
+    env["images"].extend(
+        helper.glob_extensions(folder, ["*.png", "*.jpg", "*.svg"])
+    )
+# Gather videos
+env["videos"] = []
+for folder in env["contents_folders"]:
+    env["videos"].extend(
+        helper.glob_extensions(folder, ["*.mp4", "*.jpg"])
+    )
+# Gather markdown files
+env["markdown_files"] = []
+for folder in env["contents_folders"]:
+    env["markdown_files"].extend(
+        helper.glob_extensions(folder, ["*.md"])
+    )
+
 # Make environment variables available to subscripts
 Export("env")
 

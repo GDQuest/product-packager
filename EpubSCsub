@@ -7,36 +7,53 @@ env["BUILD_DIR"] = "EpubBuild/"
 env["DIST_DIR"] = "EpubDist/"
 VariantDir(env["BUILD_DIR"], env["src"], duplicate=False)
 
-src_path = helper.pathlib.Path(env["src"]) / "content"
-src_contents = helper.content_introspection(env["src"])
+EpubBuilder = Builder(action=helper.convert_to_epub,
+        suffix='.epub',
+        )
 
-images = []
-for folder in src_contents:
-    images.extend(
-        helper.glob_extensions(folder, ["*.png", "*.jpg", "*.svg"])
-    )
+env['BUILDERS']["EpubBuilder"] = EpubBuilder
+
 ilist = []
-for image_path in images:
-    ilist.append(Install(env["BUILD_DIR"] + image_path.relative_to(src_path).parent.as_posix(), image_path.as_posix()))
+for image_path in env["images"]:
+    ilist.append(Install(env["BUILD_DIR"] + "images/", image_path.as_posix()))
 
-videos = []
-for folder in src_contents:
-    videos.extend(
-        helper.glob_extensions(folder, ["*.mp4", "*.jpg"])
-    )
 vlist = []
-for video_path in videos:
-    vlist.append(Install(env["BUILD_DIR"] + video_path.relative_to(src_path).parent.as_posix(), video_path.as_posix()))
+for video_path in env["videos"]:
+    vlist.append(Install(env["BUILD_DIR"] + "videos/", video_path.as_posix()))
+new_list = []
+for markdown_path in env["markdown_files"]:
+    targ = env["BUILD_DIR"] + markdown_path.name
+    print(env["BUILD_DIR"] + markdown_path.parent.stem+ markdown_path.name)
+    # InstallAs allows us to rename the file to avoid collisions. include the dir name for collision avoidance
+    new_md_file = env["BUILD_DIR"] + markdown_path.parent.stem + markdown_path.name
+    InstallAs(new_md_file, markdown_path.as_posix())
+    new_list.append(new_md_file)
+env["installed_md_files"] = new_list
+# TODO:
+"""
+Copy the css file to where everythin is built (INSTALL)
+(EPUB builder)
+for each chapter, combine the contents into one md file
+run pandoc in the build directory, so we get the output inside and image pathing works
+kinda done?
+"""
+meta_file, cover_file = helper.get_epub_metadata(env["src"])
+meta = Install(env["BUILD_DIR"], meta_file)
+cover = Install(env["BUILD_DIR"], cover_file)
+css = Install(env["BUILD_DIR"], helper.get_epub_css())
 
-markdown_files = []
-for folder in src_contents:
-    markdown_files.extend(helper.glob_extensions(folder, ["*.md"]))
-for markdown_path in markdown_files:
-    targ = env["BUILD_DIR"] + markdown_path.relative_to(src_path).as_posix()
-    Install(env["BUILD_DIR"] + markdown_path.relative_to(src_path).parent.as_posix(), markdown_path.as_posix())
-    build_html_file = env.HTMLBuilder(targ)
-    env.AddPostAction(build_html_file, Delete(targ))
-    for image in ilist:
-        Depends(build_html_file, image)
-    for video in vlist:
-        Depends(build_html_file, video)
+build_epub_file = env.EpubBuilder(env["BUILD_DIR"] + "output.epub", meta)
+print(build_epub_file)
+
+Depends(build_epub_file, meta)
+Depends(build_epub_file, cover)
+Depends(build_epub_file, css)
+
+for image in ilist:
+    Depends(build_epub_file, image)
+for video in vlist:
+    Depends(build_epub_file, video)
+for md in env["installed_md_files"]:
+    Depends(build_epub_file, md)
+
+# helper.convert_mass_to_epub(env["src"], new_list)

@@ -39,13 +39,6 @@ def glob_extensions(root_path: pathlib.Path, extensions: list) -> list:
     return results
 
 
-def extension_to_html(filename: str) -> str:
-    """Change the extension of a given filename to .html"""
-    file_base = pathlib.Path(filename)
-    file_base = file_base.as_posix().removesuffix(file_base.suffix)
-    return pathlib.Path(file_base + ".html").as_posix()
-
-
 def get_godot_filename(project_folder: str) -> str:
     """Return the project name from a directory with a project.godot file."""
     project_settings = pathlib.Path(project_folder) / "project.godot"
@@ -91,6 +84,38 @@ def process_markdown_file_in_place(target, source, env):
     remove_figcaption(pathlib.Path(target[0].abspath))
 
     return None
+
+
+def get_epub_metadata(root_path: str) -> tuple[str, str]:
+    root = pathlib.Path(root_path)
+    assert(root / "epub_metadata").exists()
+    assert (root / "epub_metadata" / "metadata.txt").exists()
+    assert (root / "epub_metadata" / "cover.png").exists()
+    return (root / "epub_metadata" / "metadata.txt").as_posix(), (root / "epub_metadata" / "cover.png").as_posix()
+
+
+def get_epub_css():
+    relative_path = pathlib.Path("programs/css/pandoc.css")
+    return relative_path.absolute().as_posix()
+
+
+def convert_to_epub(target, source, env):
+    md_files = []
+    for file in env["installed_md_files"]:
+        md_files.append(pathlib.Path(file).relative_to(pathlib.Path(env["BUILD_DIR"])).as_posix())
+    print(md_files)
+    # for the title you need a metadata.text file
+    # pass in all the files to the book, they need to be ordered
+    # how do chapters and the contenst work
+    # generate a title
+    # css works but isn't being passed in...
+    err_log("BUILD")
+    out = subprocess.run(["pandoc", "-o", "thebook.epub", "metadata.txt"] + md_files + ["--epub-stylesheet", "pandoc.css", "--table-of-contents"], cwd=env["BUILD_DIR"], capture_output=True)
+
+    if out.returncode != 0:
+        err_log(out.stderr.decode())
+        raise Exception(out.stderr.decode())
+    success_log(out.stdout.decode())
 
 
 def remove_figcaption(html_path: pathlib.Path):

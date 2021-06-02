@@ -21,33 +21,17 @@ GDBuilder = Builder(action=helper.bundle_godot_project,
 
 env['BUILDERS']["GDBuilder"] = GDBuilder
 
-src_path = helper.pathlib.Path(env["src"]) / "content"
-src_contents = helper.content_introspection(env["src"])
-
-images = []
-for folder in src_contents:
-    images.extend(
-        helper.glob_extensions(folder, ["*.png", "*.jpg", "*.svg"])
-    )
 ilist = []
-for image_path in images:
-    ilist.append(Install(env["BUILD_DIR"] + image_path.relative_to(src_path).parent.as_posix(), image_path.as_posix()))
+for image_path in env["images"]:
+    ilist.append(Install(env["BUILD_DIR"] + image_path.relative_to(env["content_folder_path"]).parent.as_posix(), image_path.as_posix()))
 
-videos = []
-for folder in src_contents:
-    videos.extend(
-        helper.glob_extensions(folder, ["*.mp4", "*.jpg"])
-    )
 vlist = []
-for video_path in videos:
-    vlist.append(Install(env["BUILD_DIR"] + video_path.relative_to(src_path).parent.as_posix(), video_path.as_posix()))
+for video_path in env["videos"]:
+    vlist.append(Install(env["BUILD_DIR"] + video_path.relative_to(env["content_folder_path"]).parent.as_posix(), video_path.as_posix()))
 
-markdown_files = []
-for folder in src_contents:
-    markdown_files.extend(helper.glob_extensions(folder, ["*.md"]))
-for markdown_path in markdown_files:
-    targ = env["BUILD_DIR"] + markdown_path.relative_to(src_path).as_posix()
-    Install(env["BUILD_DIR"] + markdown_path.relative_to(src_path).parent.as_posix(), markdown_path.as_posix())
+for markdown_path in env["markdown_files"]:
+    targ = env["BUILD_DIR"] + markdown_path.relative_to(env["content_folder_path"]).as_posix()
+    Install(env["BUILD_DIR"] + markdown_path.relative_to(env["content_folder_path"]).parent.as_posix(), markdown_path.as_posix())
     build_html_file = env.HTMLBuilder(targ)
     env.AddPostAction(build_html_file, Delete(targ))
     for image in ilist:
