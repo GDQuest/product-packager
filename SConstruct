@@ -34,6 +34,14 @@ if not helper.validate_source_dir(env["src"]):
 env["content_folder_path"] = helper.pathlib.Path(env["src"]) / "content"
 env["contents_folders"] = helper.content_introspection(env["src"])
 
+HTMLBuilder = Builder(action=helper.process_markdown_file_in_place,
+        suffix='.html',
+        src_suffix='.md',
+        single_source=1,
+        )
+
+env['BUILDERS']["HTMLBuilder"] = HTMLBuilder
+
 # Gather images
 env["images"] = []
 for folder in env["contents_folders"]:

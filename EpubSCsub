@@ -13,6 +13,12 @@ EpubBuilder = Builder(action=helper.convert_to_epub,
 
 env['BUILDERS']["EpubBuilder"] = EpubBuilder
 
+ChapterBuilder = Builder(action=helper.build_chapter_md,
+        suffix='.md',
+        )
+
+env['BUILDERS']["ChapterBuilder"] = ChapterBuilder
+
 ilist = []
 for image_path in env["images"]:
     ilist.append(Install(env["BUILD_DIR"] + "images/", image_path.as_posix()))
@@ -21,39 +27,54 @@ vlist = []
 for video_path in env["videos"]:
     vlist.append(Install(env["BUILD_DIR"] + "videos/", video_path.as_posix()))
 new_list = []
+
+chapter_tiers = {}
 for markdown_path in env["markdown_files"]:
     targ = env["BUILD_DIR"] + markdown_path.name
-    print(env["BUILD_DIR"] + markdown_path.parent.stem+ markdown_path.name)
     # InstallAs allows us to rename the file to avoid collisions. include the dir name for collision avoidance
+    # TODO: for each chapter, combine the contents into one md file
     new_md_file = env["BUILD_DIR"] + markdown_path.parent.stem + markdown_path.name
-    InstallAs(new_md_file, markdown_path.as_posix())
+
+    installed_md = InstallAs(new_md_file, markdown_path.as_posix())
+
+    if markdown_path.parent.name not in chapter_tiers.keys():
+        chapter_tiers[markdown_path.parent.name] = [installed_md]
+    else:
+        chapter_tiers[markdown_path.parent.name].append(installed_md)
     new_list.append(new_md_file)
-env["installed_md_files"] = new_list
-# TODO:
-"""
-Copy the css file to where everythin is built (INSTALL)
-(EPUB builder)
-for each chapter, combine the contents into one md file
-run pandoc in the build directory, so we get the output inside and image pathing works
-kinda done?
-"""
+env["installed_md_files"] = []
+sorted_chapters = list(chapter_tiers.keys())
+sorted_chapters.sort()
+for chapter in sorted_chapters:
+    built_chapter = env.ChapterBuilder(env["BUILD_DIR"] + chapter + ".md", chapter_tiers[chapter])
+    # build_html_file = env.HTMLBuilder(env["BUILD_DIR"] + chapter + ".md")
+    env["installed_md_files"].append(built_chapter)
+    for md in chapter_tiers[chapter]:
+        env.AddPostAction(built_chapter, Delete(md))
+    # build_html_file = env.HTMLBuilder(env["BUILD_DIR"] + chapter + ".md")
+    # for dependency in ilist:
+    #     Depends(build_html_file, dependency)
+    # for dependency in vlist:
+    #     Depends(build_html_file, dependency)
+    # Depends(build_html_file, built_chapter)
+    # env["installed_md_files"].append(build_html_file)
+
+
 meta_file, cover_file = helper.get_epub_metadata(env["src"])
 meta = Install(env["BUILD_DIR"], meta_file)
 cover = Install(env["BUILD_DIR"], cover_file)
 css = Install(env["BUILD_DIR"], helper.get_epub_css())
 
-build_epub_file = env.EpubBuilder(env["BUILD_DIR"] + "output.epub", meta)
-print(build_epub_file)
+dependencies = ilist + vlist + env["installed_md_files"] + [meta, cover, css]
 
-Depends(build_epub_file, meta)
-Depends(build_epub_file, cover)
-Depends(build_epub_file, css)
+build_epub_file = env.EpubBuilder(env["BUILD_DIR"] + "output.epub", dependencies)
 
-for image in ilist:
-    Depends(build_epub_file, image)
-for video in vlist:
-    Depends(build_epub_file, video)
-for md in env["installed_md_files"]:
-    Depends(build_epub_file, md)
+for dependency in dependencies:
+    Depends(build_epub_file, dependency)
 
-# helper.convert_mass_to_epub(env["src"], new_list)
+#TODO:
+"""
+cleanup all the files
+add syntax highlighting
+work on title formatting
+"""

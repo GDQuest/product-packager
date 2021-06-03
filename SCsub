@@ -7,14 +7,6 @@ env["BUILD_DIR"] = "build/"
 env["DIST_DIR"] = "dist/"
 VariantDir(env["BUILD_DIR"], env["src"], duplicate=False)
 
-HTMLBuilder = Builder(action=helper.process_markdown_file_in_place,
-        suffix='.html',
-        src_suffix='.md',
-        single_source=1,
-        )
-
-env['BUILDERS']["HTMLBuilder"] = HTMLBuilder
-
 GDBuilder = Builder(action=helper.bundle_godot_project,
         suffix='.zip',
         )

@@ -2,6 +2,8 @@ import pathlib
 from programs import highlight_code as highlighter
 import subprocess
 import colorama
+import fileinput
+from panflute import run_filter, Header
 
 
 colorama.init(autoreset=True)
@@ -73,8 +75,8 @@ def process_markdown_file_in_place(target, source, env):
     with open(filename, "w") as document:
         document.write(content)
     file_parent = pathlib.Path(filename).parent.as_posix()
-    #TODO: "../build" replace this with a dynamic path!
-    out = subprocess.run(["./convert_markdown.sh", "-c", "css/pandoc.css", "-o", "../build", filename], cwd="./programs", capture_output=True)
+    #TODO: "../build" replace this with a dynamic path! "../" + env["BUILD"] this is broken
+    out = subprocess.run(["./convert_markdown.sh", "-c", "css/pandoc.css", "-o", "../" , filename], cwd="./programs", capture_output=True)
 
     if out.returncode != 0:
         err_log(out.stderr.decode())
@@ -82,6 +84,39 @@ def process_markdown_file_in_place(target, source, env):
     success_log(out.stdout.decode())
 
     remove_figcaption(pathlib.Path(target[0].abspath))
+
+    return None
+
+
+def increase_header_level(elem, doc):
+    if type(elem)==Header:
+        if elem.level < 6:
+            elem.level += 1
+        else:
+            return []
+
+
+def run_pandoc_filter(doc):
+    return run_filter(increase_header_level, doc=doc)
+
+
+def build_chapter_md(target, source, env):
+    """A SCons Builder script"""
+    source.sort()
+    source_files = []
+    for s in source:
+        out = subprocess.run(
+            ["pandoc", "-s", s.abspath, "--filter", "programs/filter.py", "-o", s.abspath], capture_output=True)
+        if out.returncode != 0:
+            err_log(out.stderr.decode())
+            raise Exception(out.stderr.decode())
+        success_log(out.stdout.decode())
+        source_files.append(s.abspath)
+    target_path = pathlib.Path(target[0].abspath).stem
+    with open(target[0].abspath, 'w') as fout:
+        fout.write("# " + target_path + "\n")
+        for line in fileinput.input(files=source_files):
+            fout.write(line)
 
     return None
 
@@ -102,16 +137,14 @@ def get_epub_css():
 def convert_to_epub(target, source, env):
     md_files = []
     for file in env["installed_md_files"]:
-        md_files.append(pathlib.Path(file).relative_to(pathlib.Path(env["BUILD_DIR"])).as_posix())
-    print(md_files)
+        md_files.append(pathlib.Path(file[0].abspath).relative_to(pathlib.Path(env["BUILD_DIR"]).absolute()))
     # for the title you need a metadata.text file
     # pass in all the files to the book, they need to be ordered
     # how do chapters and the contenst work
     # generate a title
     # css works but isn't being passed in...
     err_log("BUILD")
-    out = subprocess.run(["pandoc", "-o", "thebook.epub", "metadata.txt"] + md_files + ["--epub-stylesheet", "pandoc.css", "--table-of-contents"], cwd=env["BUILD_DIR"], capture_output=True)
-
+    out = subprocess.run(["pandoc", "-o", "thebook.epub", "metadata.txt"] + md_files + ["--css", "pandoc.css", "--toc"], cwd=env["BUILD_DIR"], capture_output=True)
     if out.returncode != 0:
         err_log(out.stderr.decode())
         raise Exception(out.stderr.decode())
