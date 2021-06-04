@@ -75,8 +75,7 @@ def process_markdown_file_in_place(target, source, env):
     with open(filename, "w") as document:
         document.write(content)
     file_parent = pathlib.Path(filename).parent.as_posix()
-    #TODO: "../build" replace this with a dynamic path! "../" + env["BUILD"] this is broken
-    out = subprocess.run(["./convert_markdown.sh", "-c", "css/pandoc.css", "-o", "../" , filename], cwd="./programs", capture_output=True)
+    out = subprocess.run(["./convert_markdown.sh", "-c", "css/pandoc.css", "-o", "../" + env["BUILD_DIR"], filename], cwd="./programs", capture_output=True)
 
     if out.returncode != 0:
         err_log(out.stderr.decode())
@@ -134,17 +133,23 @@ def get_epub_css():
     return relative_path.absolute().as_posix()
 
 
+def capture_book_title(metadata_path: str) -> str:
+    metadata_file = pathlib.Path(metadata_path)
+    prefix = "title: "
+    with open(metadata_file, 'r') as read_obj:
+        for line in read_obj:
+            if line.startswith(prefix):
+                book_name = line.lstrip(prefix)
+                return "".join(x for x in book_name if x.isalnum()) + ".epub"
+    raise Exception("missing project name")
+
+
 def convert_to_epub(target, source, env):
     md_files = []
     for file in env["installed_md_files"]:
         md_files.append(pathlib.Path(file[0].abspath).relative_to(pathlib.Path(env["BUILD_DIR"]).absolute()))
-    # for the title you need a metadata.text file
-    # pass in all the files to the book, they need to be ordered
-    # how do chapters and the contenst work
-    # generate a title
-    # css works but isn't being passed in...
     err_log("BUILD")
-    out = subprocess.run(["pandoc", "-o", "thebook.epub", "metadata.txt"] + md_files + ["--css", "pandoc.css", "--toc"], cwd=env["BUILD_DIR"], capture_output=True)
+    out = subprocess.run(["pandoc", "-o", env["EPUB_NAME"], "metadata.txt"] + md_files + ["--css", "pandoc.css", "--toc"], cwd=env["BUILD_DIR"], capture_output=True)
     if out.returncode != 0:
         err_log(out.stderr.decode())
         raise Exception(out.stderr.decode())

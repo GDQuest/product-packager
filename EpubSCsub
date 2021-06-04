@@ -47,27 +47,19 @@ sorted_chapters = list(chapter_tiers.keys())
 sorted_chapters.sort()
 for chapter in sorted_chapters:
     built_chapter = env.ChapterBuilder(env["BUILD_DIR"] + chapter + ".md", chapter_tiers[chapter])
-    # build_html_file = env.HTMLBuilder(env["BUILD_DIR"] + chapter + ".md")
     env["installed_md_files"].append(built_chapter)
     for md in chapter_tiers[chapter]:
         env.AddPostAction(built_chapter, Delete(md))
-    # build_html_file = env.HTMLBuilder(env["BUILD_DIR"] + chapter + ".md")
-    # for dependency in ilist:
-    #     Depends(build_html_file, dependency)
-    # for dependency in vlist:
-    #     Depends(build_html_file, dependency)
-    # Depends(build_html_file, built_chapter)
-    # env["installed_md_files"].append(build_html_file)
 
 
 meta_file, cover_file = helper.get_epub_metadata(env["src"])
+env["EPUB_NAME"] = helper.capture_book_title(meta_file)
 meta = Install(env["BUILD_DIR"], meta_file)
 cover = Install(env["BUILD_DIR"], cover_file)
 css = Install(env["BUILD_DIR"], helper.get_epub_css())
 
 dependencies = ilist + vlist + env["installed_md_files"] + [meta, cover, css]
-
-build_epub_file = env.EpubBuilder(env["BUILD_DIR"] + "output.epub", dependencies)
+build_epub_file = env.EpubBuilder(env["BUILD_DIR"] + env["EPUB_NAME"], dependencies)
 
 for dependency in dependencies:
     Depends(build_epub_file, dependency)
