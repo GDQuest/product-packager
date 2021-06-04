@@ -6,6 +6,8 @@ helper.success_log("Attempting Epub build")
 env["BUILD_DIR"] = "EpubBuild/"
 env["DIST_DIR"] = "EpubDist/"
 VariantDir(env["BUILD_DIR"], env["src"], duplicate=False)
+VariantDir(env["DIST_DIR"], env["src"], duplicate=False)
+
 
 EpubBuilder = Builder(action=helper.convert_to_epub,
         suffix='.epub',
@@ -64,9 +66,5 @@ build_epub_file = env.EpubBuilder(env["BUILD_DIR"] + env["EPUB_NAME"], dependenc
 for dependency in dependencies:
     Depends(build_epub_file, dependency)
 
-#TODO:
-"""
-cleanup all the files
-add syntax highlighting
-work on title formatting
-"""
+# export epub to dist dir
+Install(env["DIST_DIR"], build_epub_file)

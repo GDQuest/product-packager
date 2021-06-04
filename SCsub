@@ -6,12 +6,15 @@ helper.success_log("Attempting standard build")
 env["BUILD_DIR"] = "build/"
 env["DIST_DIR"] = "dist/"
 VariantDir(env["BUILD_DIR"], env["src"], duplicate=False)
+VariantDir(env["DIST_DIR"], env["src"], duplicate=False)
 
-GDBuilder = Builder(action=helper.bundle_godot_project,
-        suffix='.zip',
+HTMLBuilder = Builder(action=helper.process_markdown_file_in_place,
+        suffix='.html',
+        src_suffix='.md',
+        single_source=1,
         )
 
-env['BUILDERS']["GDBuilder"] = GDBuilder
+env['BUILDERS']["HTMLBuilder"] = HTMLBuilder
 
 ilist = []
 for image_path in env["images"]:
@@ -25,12 +28,11 @@ for markdown_path in env["markdown_files"]:
     targ = env["BUILD_DIR"] + markdown_path.relative_to(env["content_folder_path"]).as_posix()
     Install(env["BUILD_DIR"] + markdown_path.relative_to(env["content_folder_path"]).parent.as_posix(), markdown_path.as_posix())
     build_html_file = env.HTMLBuilder(targ)
-    env.AddPostAction(build_html_file, Delete(targ))
     for image in ilist:
         Depends(build_html_file, image)
     for video in vlist:
         Depends(build_html_file, video)
+    # export the html file to the dist dir
+    Install(env["DIST_DIR"] + markdown_path.relative_to(env["content_folder_path"]).parent.as_posix(), build_html_file)
 
-for folder in helper.get_godot_folders(env["src"]):
-    gd_name = helper.get_godot_filename(folder)
-    env.GDBuilder(env["BUILD_DIR"] + gd_name + ".zip", folder + "/project.godot")
+

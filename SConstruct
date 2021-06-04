@@ -9,13 +9,11 @@ env = Environment()
 
 AddOption('--Epub')
 
-""" 
-functionality:
-compare submodule release tags and current to ensure they match, otherwise error out.
+GDBuilder = Builder(action=helper.bundle_godot_project,
+        suffix='.zip',
+        )
 
-https://github.com/GDQuest/godot-pcg-secrets
-this project uses the subodule and is a good test branch
-"""
+env['BUILDERS']["GDBuilder"] = GDBuilder
 
 if env.GetOption("clean"):
     Execute(Delete("build"))
@@ -33,14 +31,6 @@ if not helper.validate_source_dir(env["src"]):
 
 env["content_folder_path"] = helper.pathlib.Path(env["src"]) / "content"
 env["contents_folders"] = helper.content_introspection(env["src"])
-
-HTMLBuilder = Builder(action=helper.process_markdown_file_in_place,
-        suffix='.html',
-        src_suffix='.md',
-        single_source=1,
-        )
-
-env['BUILDERS']["HTMLBuilder"] = HTMLBuilder
 
 # Gather images
 env["images"] = []
@@ -68,3 +58,8 @@ if env.GetOption("Epub"):
     SConscript("EpubSCsub")
 else:
     SConscript("SCsub")
+
+# package godot projects (after Sconscript so build dir is defined
+for folder in helper.get_godot_folders(env["src"]):
+    gd_name = helper.get_godot_filename(folder)
+    env.GDBuilder(env["DIST_DIR"] + gd_name + ".zip", folder + "/project.godot")
