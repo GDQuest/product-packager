@@ -165,14 +165,23 @@ FORMATTERS = [
 
 
 def format_line(line: str) -> str:
+
+    def split_formatted_words(text: str) -> List[str]:
+        return [s for s in re.split(r"([`*].+?[`*])", text) if s != ""]
+
     out: str = line
-    if not re.match("^[`*]", line):
+    split_line: List[str] = split_formatted_words(line)
+
+    if len(split_line) > 1:
+        out = "".join(list(map(format_line, split_line)))
+
+    elif not re.match("^[`*]", line):
         for formatter in FORMATTERS:
             formatted_line: str = formatter(line)
             if formatted_line == line:
                 continue
 
-            split_line: List[str] = re.split(r"([`*].+?[`*])", formatted_line)
+            split_line: List[str] = split_formatted_words(formatted_line)
             if len(split_line) > 1:
                 out = "".join(list(map(format_line, split_line)))
             else:

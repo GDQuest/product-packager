@@ -43,3 +43,4 @@ func test():
 	## laser specializations.
 	pass
 ```","Comments inside blocks should wrap at 80 characters."
+"This is a `test` of *premade* **formatting**.","This is a `test` of *premade* **formatting**.","The formatter should ignore already formatted words."
