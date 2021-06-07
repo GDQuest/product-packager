@@ -1,4 +1,4 @@
-from programs import highlight_code as highlighter
+import highlight_code as highlighter
 import subprocess
 import colorama
 import fileinput
@@ -57,7 +57,7 @@ def bundle_godot_project(target, source, env):
     gdname = s.stem
     success_log("Building project %s" % gdname)
 
-    out = subprocess.run(["./package_godot_projects.sh", "-t", gdname, t, pathlib.Path(s).parent], cwd="./programs", capture_output=True)
+    out = subprocess.run(["./package_godot_projects.sh", "-t", gdname, t, pathlib.Path(s).parent], capture_output=True)
     if out.returncode != 0:
         err_log(out.stderr.decode())
         raise Exception(out.stderr.decode())
@@ -72,7 +72,7 @@ def process_markdown_file_in_place(target, source, env):
     content = highlighter.highlight_code_blocks(filename)
     with open(filename, "w") as document:
         document.write(content)
-    out = subprocess.run(["./convert_markdown.sh", "-c", "css/pandoc.css", "-o", "../" + env["BUILD_DIR"], filename], cwd="./programs", capture_output=True)
+    out = subprocess.run(["./convert_markdown.sh", "-c", "css/pandoc.css", "-o", env["BUILD_DIR"], filename], capture_output=True)
 
     if out.returncode != 0:
         err_log(out.stderr.decode())
@@ -115,17 +115,17 @@ def get_epub_metadata(root_path: str) -> tuple[str, str]:
 
 
 def get_epub_css():
-    relative_path = pathlib.Path("programs/css/pandoc_epub.css")
+    relative_path = pathlib.Path("css/pandoc_epub.css")
     return relative_path.absolute().as_posix()
 
 
 def get_gd_script_syntax():
-    relative_path = pathlib.Path("programs/gd-script.xml")
+    relative_path = pathlib.Path("gd-script.xml")
     return relative_path.absolute().as_posix()
 
 
 def get_gd_theme():
-    relative_path = pathlib.Path("programs/gdscript.theme")
+    relative_path = pathlib.Path("gdscript.theme")
     return relative_path.absolute().as_posix()
 
 
