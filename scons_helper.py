@@ -86,25 +86,13 @@ def process_markdown_file_in_place(target, source, env):
     return None
 
 
-def increase_header_level(elem, doc):
-    if type(elem)==Header:
-        if elem.level < 6:
-            elem.level += 1
-        else:
-            return []
-
-
-def run_pandoc_filter(doc):
-    return run_filter(increase_header_level, doc=doc)
-
-
 def build_chapter_md(target, source, env):
     """A SCons Builder script"""
     source.sort()
     source_files = []
     for s in source:
-        out = subprocess.run(
-            ["pandoc", "-s", s.abspath, "--filter", "programs/filter.py", "-o", s.abspath], capture_output=True)
+        out = subprocess.run(#markdown_in_html_blocks
+            ["pandoc", "-s", s.abspath, "--shift-heading-level-by=1", "-o", s.abspath], capture_output = True)
         if out.returncode != 0:
             err_log(out.stderr.decode())
             raise Exception(out.stderr.decode())
@@ -128,7 +116,7 @@ def get_epub_metadata(root_path: str) -> tuple[str, str]:
 
 
 def get_epub_css():
-    relative_path = pathlib.Path("programs/css/pandoc.css")
+    relative_path = pathlib.Path("programs/css/pandoc_epub.css")
     return relative_path.absolute().as_posix()
 
 
@@ -163,7 +151,7 @@ def convert_to_epub(target, source, env):
     #                                                                      "--no-highlight"],
     #     cwd=env["BUILD_DIR"], capture_output=True)
 
-    out = subprocess.run(["pandoc", "-o", env["EPUB_NAME"], "metadata.txt"] + md_files + ["--css", "pandoc.css", "--toc", "--syntax-definition", "gd-script.xml", "--highlight-style", "gdscript.theme"], cwd=env["BUILD_DIR"], capture_output=True)
+    out = subprocess.run(["pandoc", "-o", env["EPUB_NAME"], "metadata.txt"] + md_files + ["--css", "pandoc_epub.css", "--toc", "--syntax-definition", "gd-script.xml", "--highlight-style", "gdscript.theme"], cwd=env["BUILD_DIR"], capture_output=True)
     if out.returncode != 0:
         err_log(out.stderr.decode())
         raise Exception(out.stderr.decode())

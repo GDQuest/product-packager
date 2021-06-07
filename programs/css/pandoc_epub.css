@@ -169,23 +169,21 @@ hr {
   padding: 0;
 }
 
-/* pre,
+pre,
 code,
 kbd,
 samp {
-  color: #0084b8;
   font-family: monospace, monospace;
-} */
+}
 
-/* pre {
-  background-color: #f9f9f9;
+pre {
 
   padding: 1em;
   font-size: 14px;
 
   white-space: pre-wrap;
   word-wrap: break-word;
-} */
+}
 
 code {
   white-space: pre-wrap;
