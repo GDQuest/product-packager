@@ -59,8 +59,10 @@ env["EPUB_NAME"] = helper.capture_book_title(meta_file)
 meta = Install(env["BUILD_DIR"], meta_file)
 cover = Install(env["BUILD_DIR"], cover_file)
 css = Install(env["BUILD_DIR"], helper.get_epub_css())
+syntax = Install(env["BUILD_DIR"], helper.get_gd_script_syntax())
+theme = Install(env["BUILD_DIR"], helper.get_gd_theme())
 
-dependencies = ilist + vlist + env["installed_md_files"] + [meta, cover, css]
+dependencies = ilist + vlist + env["installed_md_files"] + [meta, cover, css, syntax, theme]
 build_epub_file = env.EpubBuilder(env["BUILD_DIR"] + env["EPUB_NAME"], dependencies)
 
 for dependency in dependencies:

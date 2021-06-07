@@ -3,7 +3,6 @@ from programs import highlight_code as highlighter
 import subprocess
 import colorama
 import fileinput
-from panflute import run_filter, Header
 
 
 colorama.init(autoreset=True)
@@ -133,6 +132,16 @@ def get_epub_css():
     return relative_path.absolute().as_posix()
 
 
+def get_gd_script_syntax():
+    relative_path = pathlib.Path("programs/gd-script.xml")
+    return relative_path.absolute().as_posix()
+
+
+def get_gd_theme():
+    relative_path = pathlib.Path("programs/gdscript.theme")
+    return relative_path.absolute().as_posix()
+
+
 def capture_book_title(metadata_path: str) -> str:
     metadata_file = pathlib.Path(metadata_path)
     prefix = "title: "
@@ -147,9 +156,14 @@ def capture_book_title(metadata_path: str) -> str:
 def convert_to_epub(target, source, env):
     md_files = []
     for file in env["installed_md_files"]:
-        md_files.append(pathlib.Path(file[0].abspath).relative_to(pathlib.Path(env["BUILD_DIR"]).absolute()))
-    err_log("BUILD")
-    out = subprocess.run(["pandoc", "-o", env["EPUB_NAME"], "metadata.txt"] + md_files + ["--css", "pandoc.css", "--toc"], cwd=env["BUILD_DIR"], capture_output=True)
+        path = pathlib.Path(file[0].abspath).relative_to(pathlib.Path(env["BUILD_DIR"]).absolute())
+        md_files.append(path)
+    # out = subprocess.run(
+    #     ["pandoc", "-o", env["EPUB_NAME"], "metadata.txt"] + md_files + ["--css", "pandoc.css", "--toc",
+    #                                                                      "--no-highlight"],
+    #     cwd=env["BUILD_DIR"], capture_output=True)
+
+    out = subprocess.run(["pandoc", "-o", env["EPUB_NAME"], "metadata.txt"] + md_files + ["--css", "pandoc.css", "--toc", "--syntax-definition", "gd-script.xml", "--highlight-style", "gdscript.theme"], cwd=env["BUILD_DIR"], capture_output=True)
     if out.returncode != 0:
         err_log(out.stderr.decode())
         raise Exception(out.stderr.decode())
