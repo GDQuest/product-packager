@@ -173,11 +173,15 @@ pre,
 code,
 kbd,
 samp {
+  color: #0084b8;
   font-family: monospace, monospace;
 }
 
-pre {
+pre > code {
+  color: #f8f8f2;
+}
 
+pre {
   padding: 1em;
   font-size: 14px;
 

@@ -1,9 +1,8 @@
-import pathlib
 from programs import highlight_code as highlighter
 import subprocess
 import colorama
 import fileinput
-
+import pathlib
 
 colorama.init(autoreset=True)
 
@@ -73,7 +72,6 @@ def process_markdown_file_in_place(target, source, env):
     content = highlighter.highlight_code_blocks(filename)
     with open(filename, "w") as document:
         document.write(content)
-    file_parent = pathlib.Path(filename).parent.as_posix()
     out = subprocess.run(["./convert_markdown.sh", "-c", "css/pandoc.css", "-o", "../" + env["BUILD_DIR"], filename], cwd="./programs", capture_output=True)
 
     if out.returncode != 0:
@@ -91,7 +89,7 @@ def build_chapter_md(target, source, env):
     source.sort()
     source_files = []
     for s in source:
-        out = subprocess.run(#markdown_in_html_blocks
+        out = subprocess.run(
             ["pandoc", "-s", s.abspath, "--shift-heading-level-by=1", "-o", s.abspath], capture_output = True)
         if out.returncode != 0:
             err_log(out.stderr.decode())
@@ -108,6 +106,7 @@ def build_chapter_md(target, source, env):
 
 
 def get_epub_metadata(root_path: str) -> tuple[str, str]:
+    """Verify all epub settings files are present and return their paths"""
     root = pathlib.Path(root_path)
     assert(root / "epub_metadata").exists()
     assert (root / "epub_metadata" / "metadata.txt").exists()
@@ -131,6 +130,7 @@ def get_gd_theme():
 
 
 def capture_book_title(metadata_path: str) -> str:
+    """Read the book title from the metadata file to use as the filename."""
     metadata_file = pathlib.Path(metadata_path)
     prefix = "title: "
     with open(metadata_file, 'r') as read_obj:
@@ -142,15 +142,11 @@ def capture_book_title(metadata_path: str) -> str:
 
 
 def convert_to_epub(target, source, env):
+    """Build epub file from installed sources."""
     md_files = []
     for file in env["installed_md_files"]:
         path = pathlib.Path(file[0].abspath).relative_to(pathlib.Path(env["BUILD_DIR"]).absolute())
         md_files.append(path)
-    # out = subprocess.run(
-    #     ["pandoc", "-o", env["EPUB_NAME"], "metadata.txt"] + md_files + ["--css", "pandoc.css", "--toc",
-    #                                                                      "--no-highlight"],
-    #     cwd=env["BUILD_DIR"], capture_output=True)
-
     out = subprocess.run(["pandoc", "-o", env["EPUB_NAME"], "metadata.txt"] + md_files + ["--css", "pandoc_epub.css", "--toc", "--syntax-definition", "gd-script.xml", "--highlight-style", "gdscript.theme"], cwd=env["BUILD_DIR"], capture_output=True)
     if out.returncode != 0:
         err_log(out.stderr.decode())
@@ -159,6 +155,7 @@ def convert_to_epub(target, source, env):
 
 
 def remove_figcaption(html_path: pathlib.Path):
+    """A cleanup step for generated md files."""
     out = subprocess.run(["sed -Ei 's|<figcaption>.+</figcaption>||' " + html_path.as_posix()], capture_output=True,
                          shell=True)
     success_log(out.stdout.decode())

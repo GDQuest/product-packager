@@ -1,9 +1,4 @@
-"""
-https://scons.org/doc/production/PDF/scons-user.pdf
-https://github.com/SCons/scons/wiki/SconsRecipes
-"""
 import scons_helper as helper
-#  7.4.5 pyPackageDir
 
 env = Environment()
 
