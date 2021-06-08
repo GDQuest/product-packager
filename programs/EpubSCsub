@@ -3,8 +3,6 @@ import scons_helper as helper
 
 helper.success_log("Attempting Epub build")
 
-env["BUILD_DIR"] = "EpubBuild/"
-env["DIST_DIR"] = "EpubDist/"
 VariantDir(env["BUILD_DIR"], env["src"], duplicate=False)
 VariantDir(env["DIST_DIR"], env["src"], duplicate=False)
 

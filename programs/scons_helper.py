@@ -5,6 +5,7 @@ import fileinput
 import pathlib
 
 colorama.init(autoreset=True)
+cwd_base = pathlib.Path(__file__).parent.absolute().as_posix()
 
 
 def validate_git_version(source_dir: str):
@@ -77,7 +78,7 @@ def bundle_godot_project(target, source, env):
     gdname = s.stem
     success_log("Building project %s" % gdname)
 
-    out = subprocess.run(["./package_godot_projects.sh", "-t", gdname, t, pathlib.Path(s).parent], capture_output=True)
+    out = subprocess.run(["./package_godot_projects.sh", "-t", gdname, t, pathlib.Path(s).parent], capture_output=True, cwd=cwd_base)
     if out.returncode != 0:
         err_log(out.stderr.decode())
         raise Exception(out.stderr.decode())
@@ -92,7 +93,7 @@ def process_markdown_file_in_place(target, source, env):
     content = highlighter.highlight_code_blocks(filename)
     with open(filename, "w") as document:
         document.write(content)
-    out = subprocess.run(["./convert_markdown.sh", "-c", "css/pandoc.css", "-o", env["BUILD_DIR"], filename], capture_output=True)
+    out = subprocess.run(["./convert_markdown.sh", "-c", "css/pandoc.css", "-o", env["BUILD_DIR"], filename], capture_output=True, cwd=cwd_base)
 
     if out.returncode != 0:
         err_log(out.stderr.decode())
@@ -110,7 +111,7 @@ def build_chapter_md(target, source, env):
     source_files = []
     for s in source:
         out = subprocess.run(
-            ["pandoc", "-s", s.abspath, "--shift-heading-level-by=1", "-o", s.abspath], capture_output = True)
+            ["pandoc", "-s", s.abspath, "--shift-heading-level-by=1", "-o", s.abspath], capture_output=True)
         if out.returncode != 0:
             err_log(out.stderr.decode())
             raise Exception(out.stderr.decode())

@@ -3,8 +3,6 @@ import scons_helper as helper
 
 helper.success_log("Attempting standard build")
 
-env["BUILD_DIR"] = "build/"
-env["DIST_DIR"] = "dist/"
 VariantDir(env["BUILD_DIR"], env["src"], duplicate=False)
 VariantDir(env["DIST_DIR"], env["src"], duplicate=False)
 

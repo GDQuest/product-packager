@@ -1,6 +1,5 @@
 import scons_helper as helper
-
-env = Environment()
+Import("env")
 
 AddOption('--epub', action="store_true", dest="epub")
 AddOption('--strict', action="store_true", dest="strict")
@@ -11,18 +10,8 @@ GDBuilder = Builder(action=helper.bundle_godot_project,
 
 env['BUILDERS']["GDBuilder"] = GDBuilder
 
-if env.GetOption("clean"):
-    Execute(Delete("build"))
-    Execute(Delete("dist"))
-
-if not COMMAND_LINE_TARGETS:
-    helper.err_log("missing targets")
-    Exit(1)
-
-env["src"] = COMMAND_LINE_TARGETS[0]
-
 if not helper.validate_source_dir(env["src"]):
-    helper.err_log("SRC dir invalid")
+    helper.err_log("SRC dir invalid (missing content file)")
     Exit(1)
 
 if env.GetOption("strict"):
