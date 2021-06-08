@@ -178,7 +178,6 @@ def remove_figcaption(html_path: pathlib.Path):
     """A cleanup step for generated md files."""
     out = subprocess.run(["sed -Ei 's|<figcaption>.+</figcaption>||' " + html_path.as_posix()], capture_output=True,
                          shell=True)
-    success_log(out.stdout.decode())
     err_log(out.stderr.decode())
 
 
