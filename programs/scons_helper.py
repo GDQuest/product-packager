@@ -7,6 +7,26 @@ import pathlib
 colorama.init(autoreset=True)
 
 
+def validate_git_version(source_dir: str):
+    godot_projects = get_godot_folders(source_dir)
+    godot_projects.append(source_dir)
+    result_set = {}
+    for item in godot_projects:
+        out = subprocess.run(["git", "describe", "--tags"],
+                             capture_output=True, cwd=item)
+        if out.returncode != 0:
+            err_log(out.stderr.decode())
+            raise Exception(out.stderr.decode())
+        result_set[pathlib.Path(item).name] = out.stdout.decode().strip()
+    if len(set(result_set.values())) == 1:
+        # All git versions match
+        return True
+    err_log("Multiple git release tags found")
+    for key, value in result_set.items():
+        err_log(key + ' : ' + value)
+
+
+
 def validate_source_dir(source_dir: str) -> bool:
     """Returns whether the directory contains a content folder"""
     source = pathlib.Path(source_dir)

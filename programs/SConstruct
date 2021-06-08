@@ -2,7 +2,8 @@ import scons_helper as helper
 
 env = Environment()
 
-AddOption('--Epub')
+AddOption('--epub', action="store_true", dest="epub")
+AddOption('--strict', action="store_true", dest="strict")
 
 GDBuilder = Builder(action=helper.bundle_godot_project,
         suffix='.zip',
@@ -23,6 +24,11 @@ env["src"] = COMMAND_LINE_TARGETS[0]
 if not helper.validate_source_dir(env["src"]):
     helper.err_log("SRC dir invalid")
     Exit(1)
+
+if env.GetOption("strict"):
+    if not helper.validate_git_version(env["src"]):
+        helper.err_log("GIT version error")
+        Exit(1)
 
 env["content_folder_path"] = helper.pathlib.Path(env["src"]) / "content"
 env["contents_folders"] = helper.content_introspection(env["src"])
@@ -49,7 +55,7 @@ for folder in env["contents_folders"]:
 # Make environment variables available to subscripts
 Export("env")
 
-if env.GetOption("Epub"):
+if env.GetOption("epub"):
     SConscript("EpubSCsub")
 else:
     SConscript("SCsub")
