@@ -1,29 +1,25 @@
 Import("env")
 import scons_helper as helper
 
-helper.success_log("Attempting Epub build")
+helper.print_success("Attempting Epub build")
 
 VariantDir(env["BUILD_DIR"], env["src"], duplicate=False)
 VariantDir(env["DIST_DIR"], env["src"], duplicate=False)
 
+EpubBuilder = Builder(action=helper.convert_to_epub, suffix=".epub")
+env["BUILDERS"]["EpubBuilder"] = EpubBuilder
 
-EpubBuilder = Builder(action=helper.convert_to_epub, suffix='.epub')
+ChapterBuilder = Builder(action=helper.build_chapter_md, suffix=".md")
+env["BUILDERS"]["ChapterBuilder"] = ChapterBuilder
 
-env['BUILDERS']["EpubBuilder"] = EpubBuilder
-
-ChapterBuilder = Builder(action=helper.build_chapter_md, suffix='.md')
-
-env['BUILDERS']["ChapterBuilder"] = ChapterBuilder
-
-ilist = []
+images = []
 for image_path in env["images"]:
-    ilist.append(Install(env["BUILD_DIR"] + "images/", image_path.as_posix()))
-
-vlist = []
+    images.append(Install(env["BUILD_DIR"] + "images/", image_path.as_posix()))
+videos = []
 for video_path in env["videos"]:
-    vlist.append(Install(env["BUILD_DIR"] + "videos/", video_path.as_posix()))
-new_list = []
+    videos.append(Install(env["BUILD_DIR"] + "videos/", video_path.as_posix()))
 
+new_list = []
 chapter_tiers = {}
 for markdown_path in env["markdown_files"]:
     targ = env["BUILD_DIR"] + markdown_path.name
@@ -42,21 +38,24 @@ sorted_chapters = list(chapter_tiers.keys())
 sorted_chapters.sort()
 
 for chapter in sorted_chapters:
-    built_chapter = env.ChapterBuilder(env["BUILD_DIR"] + chapter + ".md", chapter_tiers[chapter])
+    built_chapter = env.ChapterBuilder(
+        env["BUILD_DIR"] + chapter + ".md", chapter_tiers[chapter]
+    )
     env["installed_md_files"].append(built_chapter)
     for md in chapter_tiers[chapter]:
         env.AddPostAction(built_chapter, Delete(md))
 
-
-meta_file, cover_file = helper.get_epub_metadata(env["src"])
-env["EPUB_NAME"] = helper.capture_book_title(meta_file)
-meta = Install(env["BUILD_DIR"], meta_file)
+metadata_file, cover_file = helper.get_epub_metadata(env["src"])
+env["EPUB_NAME"] = helper.capture_book_title(metadata_file)
+metadata = Install(env["BUILD_DIR"], metadata_file)
 cover = Install(env["BUILD_DIR"], cover_file)
 css = Install(env["BUILD_DIR"], helper.get_epub_css())
 syntax = Install(env["BUILD_DIR"], helper.get_gd_script_syntax())
 theme = Install(env["BUILD_DIR"], helper.get_gd_theme())
 
-dependencies = ilist + vlist + env["installed_md_files"] + [meta, cover, css, syntax, theme]
+dependencies = (
+    images + videos + env["installed_md_files"] + [metadata, cover, css, syntax, theme]
+)
 build_epub_file = env.EpubBuilder(env["BUILD_DIR"] + env["EPUB_NAME"], dependencies)
 
 for dependency in dependencies:

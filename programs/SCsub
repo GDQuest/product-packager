@@ -1,7 +1,7 @@
 Import("env")
 import scons_helper as helper
 
-helper.success_log("Attempting standard build")
+helper.print_success("Attempting standard build")
 
 VariantDir(env["BUILD_DIR"], env["src"], duplicate=False)
 VariantDir(env["DIST_DIR"], env["src"], duplicate=False)
@@ -14,23 +14,21 @@ HTMLBuilder = Builder(action=helper.process_markdown_file_in_place,
 
 env['BUILDERS']["HTMLBuilder"] = HTMLBuilder
 
-ilist = []
+images = []
 for image_path in env["images"]:
-    ilist.append(Install(env["BUILD_DIR"] + image_path.relative_to(env["content_folder_path"]).parent.as_posix(), image_path.as_posix()))
+    images.append(Install(env["BUILD_DIR"] + image_path.relative_to(env["content_folder_path"]).parent.as_posix(), image_path.as_posix()))
 
-vlist = []
+videos = []
 for video_path in env["videos"]:
-    vlist.append(Install(env["BUILD_DIR"] + video_path.relative_to(env["content_folder_path"]).parent.as_posix(), video_path.as_posix()))
+    videos.append(Install(env["BUILD_DIR"] + video_path.relative_to(env["content_folder_path"]).parent.as_posix(), video_path.as_posix()))
 
 for markdown_path in env["markdown_files"]:
-    targ = env["BUILD_DIR"] + markdown_path.relative_to(env["content_folder_path"]).as_posix()
+    target = env["BUILD_DIR"] + markdown_path.relative_to(env["content_folder_path"]).as_posix()
     Install(env["BUILD_DIR"] + markdown_path.relative_to(env["content_folder_path"]).parent.as_posix(), markdown_path.as_posix())
-    build_html_file = env.HTMLBuilder(targ)
-    for image in ilist:
+    build_html_file = env.HTMLBuilder(target)
+    for image in images:
         Depends(build_html_file, image)
-    for video in vlist:
+    for video in videos:
         Depends(build_html_file, video)
     # export the html file to the dist dir
     Install(env["DIST_DIR"] + markdown_path.relative_to(env["content_folder_path"]).parent.as_posix(), build_html_file)
-
-

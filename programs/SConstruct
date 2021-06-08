@@ -9,12 +9,12 @@ GDBuilder = Builder(action=helper.bundle_godot_project, suffix='.zip')
 env['BUILDERS']["GDBuilder"] = GDBuilder
 
 if not helper.validate_source_dir(env["src"]):
-    helper.err_log("SRC dir invalid (missing content file)")
+    helper.print_error("SRC dir invalid (missing content file)")
     Exit(1)
 
 if env.GetOption("strict"):
     if not helper.validate_git_version(env["src"]):
-        helper.err_log("GIT version error")
+        helper.print_error("GIT version error")
         Exit(1)
 
 env["content_folder_path"] = helper.pathlib.Path(env["src"]) / "content"

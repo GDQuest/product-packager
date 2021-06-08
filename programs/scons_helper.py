@@ -3,6 +3,7 @@ import subprocess
 import colorama
 import fileinput
 import pathlib
+from typing import Tuple
 
 colorama.init(autoreset=True)
 cwd_base = pathlib.Path(__file__).parent.absolute().as_posix()
@@ -17,15 +18,15 @@ def validate_git_version(source_dir: str) -> bool:
         out = subprocess.run(["git", "describe", "--tags"],
                              capture_output=True, cwd=item)
         if out.returncode != 0:
-            err_log(out.stderr.decode())
+            print_error(out.stderr.decode())
             raise Exception(out.stderr.decode())
         result_set[pathlib.Path(item).name] = out.stdout.decode().strip()
     if len(set(result_set.values())) == 1:
         # All git versions match
         return True
-    err_log("Multiple git release tags found")
+    print_error("Multiple git release tags found")
     for key, value in result_set.items():
-        err_log(key + ' : ' + value)
+        print_error(key + ' : ' + value)
     return False
 
 
@@ -77,14 +78,14 @@ def bundle_godot_project(target, source, env):
     s = pathlib.Path(target[0].abspath)
     t = source[0].abspath
     gdname = s.stem
-    success_log("Building project %s" % gdname)
+    print_success("Building project %s" % gdname)
 
     out = subprocess.run(["./package_godot_projects.sh", "-t", gdname, t, pathlib.Path(s).parent], capture_output=True, cwd=cwd_base)
     if out.returncode != 0:
-        err_log(out.stderr.decode())
+        print_error(out.stderr.decode())
         raise Exception(out.stderr.decode())
     if "Done." in out.stdout.decode().split("\n"):
-        success_log("%s built successfully." % gdname)
+        print_success("%s built successfully." % gdname)
     return None
 
 
@@ -97,9 +98,9 @@ def process_markdown_file_in_place(target, source, env):
     out = subprocess.run(["./convert_markdown.sh", "-c", "css/pandoc.css", "-o", env["BUILD_DIR"], filename], capture_output=True, cwd=cwd_base)
 
     if out.returncode != 0:
-        err_log(out.stderr.decode())
+        print_error(out.stderr.decode())
         raise Exception(out.stderr.decode())
-    success_log(out.stdout.decode())
+    print_success(out.stdout.decode())
 
     remove_figcaption(pathlib.Path(target[0].abspath))
 
@@ -114,9 +115,9 @@ def build_chapter_md(target, source, env):
         out = subprocess.run(
             ["pandoc", "-s", s.abspath, "--shift-heading-level-by=1", "-o", s.abspath], capture_output=True)
         if out.returncode != 0:
-            err_log(out.stderr.decode())
+            print_error(out.stderr.decode())
             raise Exception(out.stderr.decode())
-        success_log(out.stdout.decode())
+        print_success(out.stdout.decode())
         source_files.append(s.abspath)
     target_path = pathlib.Path(target[0].abspath).stem
     with open(target[0].abspath, 'w') as fout:
@@ -127,7 +128,7 @@ def build_chapter_md(target, source, env):
     return None
 
 
-def get_epub_metadata(root_path: str) -> tuple[str, str]:
+def get_epub_metadata(root_path: str) -> Tuple[str, str]:
     """Verify all epub settings files are present and return their paths"""
     root = pathlib.Path(root_path)
     assert(root / "epub_metadata").exists()
@@ -171,21 +172,21 @@ def convert_to_epub(target, source, env):
         md_files.append(path)
     out = subprocess.run(["pandoc", "-o", env["EPUB_NAME"], "metadata.txt"] + md_files + ["--css", "pandoc_epub.css", "--toc", "--syntax-definition", "gd-script.xml", "--highlight-style", "gdscript.theme"], cwd=env["BUILD_DIR"], capture_output=True)
     if out.returncode != 0:
-        err_log(out.stderr.decode())
+        print_error(out.stderr.decode())
         raise Exception(out.stderr.decode())
-    success_log(out.stdout.decode())
+    print_success(out.stdout.decode())
 
 
 def remove_figcaption(html_path: pathlib.Path):
     """A cleanup step for generated md files."""
     out = subprocess.run(["sed -Ei 's|<figcaption>.+</figcaption>||' " + html_path.as_posix()], capture_output=True,
                          shell=True)
-    err_log(out.stderr.decode())
+    print_error(out.stderr.decode())
 
 
-def success_log(log_message: str):
+def print_success(log_message: str):
     print(colorama.Fore.GREEN + log_message)
 
 
-def err_log(log_message: str):
+def print_error(log_message: str):
     print(colorama.Fore.RED + log_message)

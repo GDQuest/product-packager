@@ -1,9 +1,10 @@
 # SCons usage guide
 
 ## Requirements:
-- Install the requirements.txt file via pip.
+
+- Install the requirements.txt file via pip: `pip3 install -r requirements.txt`. You can find `requirements.txt` in the parent directory.
 - Install chroma for coloring HTML files.
-- Copy the scons/SConstruct file into the directory you want to package
+- Copy the `SConstruct` file from this directory into the directory you want to package.
 - update `path_to_product_packager` in the SConstruct file to the absolute path to the product-packager/programs directory.
 
 ## Usage:
@@ -11,7 +12,7 @@
 In the directory you want to build, you can package a file by running Scons:
 
 ```sh
-scons 
+scons
 ```
 
 A 'dist' directory will be created where packaged files will go. The program will convert any markdown files in a contents directory into formatted HTML files.
