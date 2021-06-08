@@ -4,9 +4,7 @@ Import("env")
 AddOption('--epub', action="store_true", dest="epub")
 AddOption('--strict', action="store_true", dest="strict")
 
-GDBuilder = Builder(action=helper.bundle_godot_project,
-        suffix='.zip',
-        )
+GDBuilder = Builder(action=helper.bundle_godot_project, suffix='.zip')
 
 env['BUILDERS']["GDBuilder"] = GDBuilder
 
@@ -49,7 +47,7 @@ if env.GetOption("epub"):
 else:
     SConscript("SCsub")
 
-# package godot projects (after Sconscript so build dir is defined
+# package godot projects
 for folder in helper.get_godot_folders(env["src"]):
     gd_name = helper.get_godot_filename(folder)
     env.GDBuilder(env["DIST_DIR"] + gd_name + ".zip", folder + "/project.godot")

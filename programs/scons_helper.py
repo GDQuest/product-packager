@@ -8,7 +8,8 @@ colorama.init(autoreset=True)
 cwd_base = pathlib.Path(__file__).parent.absolute().as_posix()
 
 
-def validate_git_version(source_dir: str):
+def validate_git_version(source_dir: str) -> bool:
+    """Compares git release tags, of root and godot projects to make sure they are identical"""
     godot_projects = get_godot_folders(source_dir)
     godot_projects.append(source_dir)
     result_set = {}
@@ -25,7 +26,7 @@ def validate_git_version(source_dir: str):
     err_log("Multiple git release tags found")
     for key, value in result_set.items():
         err_log(key + ' : ' + value)
-
+    return False
 
 
 def validate_source_dir(source_dir: str) -> bool:
@@ -135,17 +136,17 @@ def get_epub_metadata(root_path: str) -> tuple[str, str]:
     return (root / "epub_metadata" / "metadata.txt").as_posix(), (root / "epub_metadata" / "cover.png").as_posix()
 
 
-def get_epub_css():
+def get_epub_css() -> str:
     relative_path = pathlib.Path("css/pandoc_epub.css")
     return relative_path.absolute().as_posix()
 
 
-def get_gd_script_syntax():
+def get_gd_script_syntax() -> str:
     relative_path = pathlib.Path("gd-script.xml")
     return relative_path.absolute().as_posix()
 
 
-def get_gd_theme():
+def get_gd_theme() -> str:
     relative_path = pathlib.Path("gdscript.theme")
     return relative_path.absolute().as_posix()
 
