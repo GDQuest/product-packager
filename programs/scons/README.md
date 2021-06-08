@@ -3,16 +3,16 @@
 ## Requirements:
 - Install the requirements.txt file via pip.
 - Install chroma for coloring HTML files.
+- Copy the scons/SConstruct file into the directory you want to package
+- update `path_to_product_packager` in the SConstruct file to the absolute path to the product-packager/programs directory.
 
 ## Usage:
 
-In the program's directory, you can package a file by running Scons and passing a path to the directory to package as a parameter:
+In the directory you want to build, you can package a file by running Scons:
 
 ```sh
-scons ../../../godot-pcg-secrets/ 
+scons 
 ```
-
-If a path to a target directory isn't passed in, the program will raise an error.
 
 A 'dist' directory will be created where packaged files will go. The program will convert any markdown files in a contents directory into formatted HTML files.
 
@@ -23,7 +23,7 @@ Additionally, Scons will bundle any present Godot projects into zip files in the
 The --epub flag will let you export your project as an epub document in a local EpubDist directory.
 
 ```sh
-scons --epub ../../../godot-pcg-secrets/ 
+scons --epub
 ```
 
 ## Build options
