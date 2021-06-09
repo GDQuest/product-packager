@@ -1,0 +1,65 @@
+Import("env")
+import scons_helper as helper
+
+helper.print_success("Attempting Epub build")
+
+VariantDir(env["BUILD_DIR"], env["src"], duplicate=False)
+VariantDir(env["DIST_DIR"], env["src"], duplicate=False)
+
+EpubBuilder = Builder(action=helper.convert_to_epub, suffix=".epub")
+env["BUILDERS"]["EpubBuilder"] = EpubBuilder
+
+ChapterBuilder = Builder(action=helper.build_chapter_md, suffix=".md")
+env["BUILDERS"]["ChapterBuilder"] = ChapterBuilder
+
+images = []
+for image_path in env["images"]:
+    images.append(Install(env["BUILD_DIR"] + "images/", image_path.as_posix()))
+videos = []
+for video_path in env["videos"]:
+    videos.append(Install(env["BUILD_DIR"] + "videos/", video_path.as_posix()))
+
+new_list = []
+chapter_tiers = {}
+for markdown_path in env["markdown_files"]:
+    targ = env["BUILD_DIR"] + markdown_path.name
+    new_md_file = env["BUILD_DIR"] + markdown_path.parent.stem + markdown_path.name
+
+    installed_md = InstallAs(new_md_file, markdown_path.as_posix())
+
+    if markdown_path.parent.name not in chapter_tiers.keys():
+        chapter_tiers[markdown_path.parent.name] = [installed_md]
+    else:
+        chapter_tiers[markdown_path.parent.name].append(installed_md)
+    new_list.append(new_md_file)
+
+env["installed_md_files"] = []
+sorted_chapters = list(chapter_tiers.keys())
+sorted_chapters.sort()
+
+for chapter in sorted_chapters:
+    built_chapter = env.ChapterBuilder(
+        env["BUILD_DIR"] + chapter + ".md", chapter_tiers[chapter]
+    )
+    env["installed_md_files"].append(built_chapter)
+    for md in chapter_tiers[chapter]:
+        env.AddPostAction(built_chapter, Delete(md))
+
+metadata_file, cover_file = helper.get_epub_metadata(env["src"])
+env["EPUB_NAME"] = helper.capture_book_title(metadata_file)
+metadata = Install(env["BUILD_DIR"], metadata_file)
+cover = Install(env["BUILD_DIR"], cover_file)
+css = Install(env["BUILD_DIR"], helper.get_epub_css())
+syntax = Install(env["BUILD_DIR"], helper.get_gd_script_syntax())
+theme = Install(env["BUILD_DIR"], helper.get_gd_theme())
+
+dependencies = (
+    images + videos + env["installed_md_files"] + [metadata, cover, css, syntax, theme]
+)
+build_epub_file = env.EpubBuilder(env["BUILD_DIR"] + env["EPUB_NAME"], dependencies)
+
+for dependency in dependencies:
+    Depends(build_epub_file, dependency)
+
+# export epub to dist dir
+Install(env["DIST_DIR"], build_epub_file)

@@ -24,7 +24,7 @@ The programs in this repository can already:
 
 Product packager is a modular set of tools to help process files and package products. You can find them in the `programs/` directory.
 
-To package complete products, we use `make`, a program to create incremental builds and process files based on sets of rules. For more information, see [the makefiles directory's README](makefiles/README.md). There, you can also find our example make files.
+To package complete products, we use `scons`, a program to create incremental builds and process files based on sets of rules. For more information, see [the scons documentation](scons/README.md).
 
 You can use these tools individually. For example, here are some example commands I would use to compress pictures and videos in a directory using my favorite shell, [fish](https://fishshell.com/):
 
