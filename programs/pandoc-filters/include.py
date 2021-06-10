@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Pandoc filter to include the content of files or part of files.
 
@@ -11,27 +12,12 @@ Usage syntax:
 - {% include FileName.gd %} - finds and includes the complete file.
 - {% include FileName.gd anchor_name %} - finds and includes part of the file.
 - {% include path/to/FileName.gd anchor_name %} - includes part of the provided file path.
-"""
 
-# Finding files:
-# DONE: find or get project directory
-# DONE: map filenames to file paths in project
-# DONE: map anchors to files?
-# DONE: mark multiple files with the same name and output warning
-#
-# Template:
-# DONE: parse template arguments
-# DONE: distinguish dirpaths from filenames
-# DONE: if a filename matches multiple files, error out
-# DONE: store anchor
-#
-# Parsing files
-# DONE: find and cache lines inside anchors?
-# DONE: remove any line containing an anchor
-#
-# filter:
-# TODO: find and replace the pattern
-# DONE: write main function running filter
+Known limitations:
+
+- Currently, we only automatically find and cache gdscript files in the project.
+- Only automatically finds files to include inside the current project, in top-level directories that are Godot projects.
+"""
 import os
 import re
 import sys
@@ -43,9 +29,8 @@ import panflute
 ERROR_PROJECT_DIRECTORY_NOT_FOUND: int = 1
 ERROR_ATTEMPT_TO_FIND_DUPLICATE_FILE: int = 2
 
-# Cached for the whole script.
-files: dict = {}
-duplicate_files: list = []
+# The variables below are cached for the whole script.
+# Maps file names to the path to a found file on the disk.
 project_directory: str = ""
 
 
@@ -55,61 +40,53 @@ class Include:
 
     file_path: str
     anchor: str
-    text: str
+    text: str = ""
 
 
-def parse_include_template(content: str) -> Include:
-    REGEX_INCLUDE: re.Pattern = re.compile(
-        r"include [\"']?(?P<file>.+?\.[a-zA-Z0-9]+)[\"']? [\"']?(?P<anchor>\w+)[\"']?"
-    )
-    match: re.Match = REGEX_INCLUDE.match(content)
-    return Include(match.group("file"), match.group("anchor"))
-
-
-def is_include_line(line: str) -> bool:
-    REGEX_INCLUDE_LINE: re.Pattern = re.compile(r"^{% include .+%}$")
-    return REGEX_INCLUDE_LINE.match(line) is not None
-
-
-def is_filename(file_path: str) -> bool:
-    """Returns `True` if the provided path does not contain a slash character."""
-    return not file_path.find("/") and not file_path.find("\\")
-
-
-def find_file(project_directory: str, name: str) -> str:
-    for dirpath, dirnames, filenames in os.walk(project_directory):
-        for filename in filenames:
-            if filename == name:
-                filepath: str = os.path.join(dirpath, filename)
-                yield filepath
-
-
-def find_project_files(project_directory: str) -> Tuple[dict, list]:
+def find_godot_project_files(project_directory: str) -> Tuple[dict, list]:
     """Maps the name of files in the project to their full path."""
     files: dict = {}
     duplicate_files: list = []
-    include_extensions: set = {".gd"}
+    include_extensions: set = {".gd", ".shader"}
 
-    for dirpath, dirnames, filenames in os.walk(project_directory):
-        dirnames = [d for d in dirnames if not d.startswith(".")]
-        for filename in filenames:
-            if os.path.splitext(filename).lower() not in include_extensions:
-                continue
+    godot_directories: List[str] = list(filter(
+        lambda name: os.path.isdir(os.path.join(project_directory, name)) and "godot" in name,
+        os.listdir(project_directory),
+    ))
 
-            if filename in files:
-                duplicate_files.append(filename)
-            else:
-                files[filename]["path"] = os.path.join(dirpath, filename)
+    for directory_name in godot_directories:
+        godot_directory = os.path.join(project_directory, directory_name)
+
+        for dirpath, dirnames, filenames in os.walk(godot_directory):
+            dirnames = [d for d in dirnames if not d.startswith(".")]
+            for filename in filenames:
+                if os.path.splitext(filename)[-1].lower() not in include_extensions:
+                    continue
+
+                if filename in files:
+                    duplicate_files.append(filename)
+                else:
+                    files[filename] = {
+                       "path": os.path.join(dirpath, filename)
+                    }
     return files, duplicate_files
 
 
-def get_file_content(file_path: str) -> str:
+def get_file_content(file_path: str, files: dict, duplicate_files: list) -> str:
+    """Returns the content of a file, finding it if `file_path` is only a file name."""
+
+    def is_filename(file_path: str) -> bool:
+        """Returns `True` if the provided path does not contain a slash character."""
+        return file_path.find("/") == -1 and file_path.find("\\") == -1
+
     content: str = ""
     if is_filename(file_path):
         assert (
             file_path not in duplicate_files
         ), "The requested file to include has duplicates with the same name in the project."
         file_path = files[file_path]["path"]
+    else:
+        assert os.path.exists(file_path), "File not found: {}".format(file_path)
 
     with open(file_path, "r") as text_file:
         content = text_file.read()
@@ -147,50 +124,72 @@ def find_all_file_anchors(content: str) -> dict:
     return anchor_map
 
 
-def process_includes(elem, doc):
-    if not type(elem) == panflute.CodeBlock:
+def process_includes(elem, doc, files, duplicate_files):
+    """Pandoc filter to process include patterns with the form
+    `{% include FileName anchor_name %}`
+
+    Directly replaces the content of matched markdown elements."""
+
+    REGEX_INCLUDE_LINE: re.Pattern = re.compile(r"^{% include .+%}$", re.MULTILINE)
+
+    def parse_include_template(content: str) -> Include:
+        REGEX_INCLUDE: re.Pattern = re.compile(
+            r"{% *include [\"']?(?P<file>.+?\.[a-zA-Z0-9]+)[\"']? [\"']?(?P<anchor>\w+)[\"']? *%}"
+        )
+        match: re.Match = REGEX_INCLUDE.match(content)
+        assert match.group("file") and match.group(
+            "anchor"
+        ), "Missing file or anchor in the include template."
+        return Include(match.group("file"), match.group("anchor"))
+
+    def contains_include_pattern(line: str) -> bool:
+        return REGEX_INCLUDE_LINE.match(line) is not None
+
+    if not type(elem) in [panflute.CodeBlock]:
+        return
+    if not contains_include_pattern(elem.text):
         return
 
     line: str = elem.text
-
     include: Include = parse_include_template(line)
     path: str = include.file_path
-    content: str = get_file_content(path)
+    content: str = get_file_content(path, files, duplicate_files)
 
     if "anchors" not in files[path]:
         files[path]["anchors"] = find_all_file_anchors(content)
 
     anchor_content: str = files[path]["anchors"][include.anchor]
-    print(anchor_content)
-
-
-def find_git_root_directory() -> str:
-    """Attempts to find a .git directory, starting to the folder where we run the
-script and moving up the filesystem."""
-    out: str = ""
-    path = os.getcwd()
-    for index in range(5):
-        if os.path.exists(os.path.join(path, ".git")):
-            out = path
-            break
-        path = os.path.join(path, "..")
-    return out
+    elem.text = anchor_content
 
 
 def main(doc=None):
-    # TODO: find Godot directory only?
+    def find_git_root_directory() -> str:
+        """Attempts to find a .git directory, starting to the folder where we run the
+    script and moving up the filesystem."""
+        out: str = ""
+        path = os.getcwd()
+        for index in range(5):
+            if os.path.exists(os.path.join(path, ".git")):
+                out = path
+                break
+            path = os.path.join(path, "..")
+        return os.path.realpath(out)
+
     project_directory = find_git_root_directory()
     if not project_directory:
         # TODO: replace with logger warning
-        print("E")
+        print("Project directory not found, aborting.")
         sys.exit(ERROR_PROJECT_DIRECTORY_NOT_FOUND)
 
-    files, duplicate_files = find_project_files(project_directory)
+    files, duplicate_files = find_godot_project_files(project_directory)
+    if not files:
+        # TODO: replace with logger warning
+        print("No Godot project folder found, include patterns will need complete file paths.")
     if duplicate_files:
         # TODO: replace with logger warning
         print("Found duplicates in the project: " + str(duplicate_files))
 
-    return panflute.run_filter(process_includes, doc=doc)
+    return panflute.run_filter(process_includes, doc=doc, files=files, duplicate_files=duplicate_files)
 
 
 if __name__ == "__main__":
