@@ -18,6 +18,7 @@ Known limitations:
 - Currently, we only automatically find and cache gdscript files in the project.
 - Only automatically finds files to include inside the current project, in top-level directories that are Godot projects.
 """
+import logging
 import os
 import re
 import sys
@@ -25,6 +26,8 @@ from dataclasses import dataclass
 from typing import List, Tuple
 
 import panflute
+
+LOGGER = logging.getLogger("include")
 
 ERROR_PROJECT_DIRECTORY_NOT_FOUND: int = 1
 ERROR_ATTEMPT_TO_FIND_DUPLICATE_FILE: int = 2
@@ -114,8 +117,7 @@ def find_all_file_anchors(content: str) -> dict:
         )
         match: re.Match = regex_anchor.match(content)
         if not match:
-            # TODO: log error
-            print('Malformed anchor pattern for anchor "{}"'.format(anchor))
+            LOGGER.error('Malformed anchor pattern for anchor "{}"'.format(anchor))
             sys.exit(ERROR_ATTEMPT_TO_FIND_DUPLICATE_FILE)
         anchor_content = re.sub(
             r"^\s*# (ANCHOR|END): \w+\s*$", "", match.group(1), flags=re.MULTILINE
@@ -177,17 +179,14 @@ def main(doc=None):
 
     project_directory = find_git_root_directory()
     if not project_directory:
-        # TODO: replace with logger warning
-        print("Project directory not found, aborting.")
+        LOGGER.error("Project directory not found, aborting.")
         sys.exit(ERROR_PROJECT_DIRECTORY_NOT_FOUND)
 
     files, duplicate_files = find_godot_project_files(project_directory)
     if not files:
-        # TODO: replace with logger warning
-        print("No Godot project folder found, include patterns will need complete file paths.")
+        LOGGER.warn("No Godot project folder found, include patterns will need complete file paths.")
     if duplicate_files:
-        # TODO: replace with logger warning
-        print("Found duplicates in the project: " + str(duplicate_files))
+        LOGGER.warn("Found duplicate files in the project: " + str(duplicate_files))
 
     return panflute.run_filter(process_includes, doc=doc, files=files, duplicate_files=duplicate_files)
 
