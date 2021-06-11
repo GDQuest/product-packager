@@ -35,9 +35,10 @@ def find_content_files(project_directory: str) -> dict:
     for dirpath, dirnames, filenames in os.walk(content_directory):
         dirnames = [d for d in dirnames if not d.startswith(".")]
         for filename in filenames:
-            if os.path.splitext(filename)[-1].lower() not in include_extensions:
+            name, extension = os.path.splitext(filename)
+            if extension.lower() not in include_extensions:
                 continue
-            files[filename] = {
+            files[name] = {
                 "path": os.path.relpath(
                     os.path.join(dirpath, filename), content_directory
                 )
@@ -54,16 +55,28 @@ def process_links(elem, doc, files):
     REGEX_LINK: re.Pattern = re.compile(r"{% *link (\w+) *%}")
     LINK_TEMPLATE: str = "[{}](../{})"
 
-    if not type(elem) in [panflute.Str]:
+    def is_link_template(element) -> bool:
+        return (
+            type(element.content[0]) == panflute.Str
+            and element.content[0].text == "{%"
+            and type(element.content[1]) == panflute.Space
+            and type(element.content[2]) == panflute.Str
+            and element.content[2].text == "link"
+            and type(element.content[3]) == panflute.Space
+            and type(element.content[-1]) == panflute.Str
+            and element.content[-1].text == "%}"
+        )
+
+    if not type(elem) in [panflute.Para]:
+        return
+    if not is_link_template(elem):
         return
 
-    match: re.Match = REGEX_LINK.match(elem.text)
-    if match:
-        filename: str = match.group(1)
-        if not filename in files:
-            LOGGER.error("Trying to link to a nonexistent file, aborting.")
-            sys.exit(ERROR_LINK_TO_NONEXISTENT_FILE)
-        elem.text = LINK_TEMPLATE.format(filename, filename)
+    filename: str = elem.content[4].text
+    if not filename in files:
+        LOGGER.error("Trying to link to a nonexistent file named '{}', aborting.".format(filename))
+        sys.exit(ERROR_LINK_TO_NONEXISTENT_FILE)
+    return panflute.convert_text(LINK_TEMPLATE.format(filename, filename))
 
 
 def main(doc=None):
@@ -78,6 +91,7 @@ def main(doc=None):
                 break
             path = os.path.join(path, "..")
         return os.path.realpath(out)
+
     project_directory = find_git_root_directory()
     if not project_directory:
         LOGGER.error("Project directory not found, aborting.")
