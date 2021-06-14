@@ -12,14 +12,14 @@ import sys
 from dataclasses import dataclass
 from typing import List
 
-from lib.gdscript_classes import BUILT_IN_CLASSES
+from gdscript_class_list import BUILT_IN_CLASSES
 
 LOGGER = logging.getLogger("format_tutorial.py")
 ERROR_INCORRECT_FILE_PATHS: int = 2
 
 RE_SPLIT_CODE_BLOCK: re.Pattern = re.compile("(```[a-z]*\n.*?```)", flags=re.DOTALL)
 RE_BUILT_IN_CLASSES: re.Pattern = re.compile(
-    "(`?{}`?)".format("`?|`?".join(BUILT_IN_CLASSES))
+    "(`{}`)".format("`|`".join(BUILT_IN_CLASSES))
 )
 RE_PASCAL_TO_SNAKE_CASE: re.Pattern = re.compile(
     "((?<=[a-z])[A-Z0-9]|(?!^)[A-Z](?=[a-z]))"
@@ -74,7 +74,15 @@ def output_result(args: argparse.Namespace, document: ProcessedDocument) -> None
             output_file.write(document.content)
 
 
-def add_built_in_icons(file_path: List[str]) -> ProcessedDocument:
+def process_file(file_path) -> ProcessedDocument:
+    output: ProcessedDocument
+    with open(file_path, "r") as markdown_file:
+        content: str = add_built_in_icons(markdown_file.read())
+        output = ProcessedDocument(file_path, content)
+    return output
+
+
+def add_built_in_icons(content: str) -> str:
     """Inserts icons in front of built-in classes outside markdown code fences."""
 
     def prepend_icon(match: re.Match) -> str:
@@ -82,32 +90,32 @@ def add_built_in_icons(file_path: List[str]) -> ProcessedDocument:
         corresponding icon.
         """
         TEMPLATE = '<img src="{}" class="node-icon"/>'
-        node_name: str = match.group(0).replace("`", "")
+        class_name: str = match.group(0).replace("`", "")
 
         icon_filename: str = "icon_" + RE_PASCAL_TO_SNAKE_CASE.sub(
-            r"_\1", node_name
+            r"_\1", class_name
         ).lower()
+
         icon_filepath: str = os.path.join(
             os.path.dirname(__file__), "godot-icons", icon_filename + ".svg"
         )
         if not os.path.exists(icon_filepath):
             LOGGER.warning("File {} not found.".format(icon_filepath))
+            return ""
+
         return TEMPLATE.format(icon_filepath) + match.group(0)
 
-    output: ProcessedDocument
-    with open(file_path, "r") as markdown_file:
-        content: str = markdown_file.read()
-        sections: List[str] = re.split(RE_SPLIT_CODE_BLOCK, content)
-        formatted_sections: List[str] = []
+    output: str = ""
+    sections: List[str] = re.split(RE_SPLIT_CODE_BLOCK, content)
+    formatted_sections: List[str] = []
 
-        for section in sections:
-            # Only add image tags outside code fences.
-            if not section.startswith("```"):
-                section = re.sub(RE_BUILT_IN_CLASSES, prepend_icon, section)
-            formatted_sections.append(section)
+    for section in sections:
+        # Only add image tags outside code fences.
+        if not section.startswith("```"):
+            section = re.sub(RE_BUILT_IN_CLASSES, prepend_icon, section)
+        formatted_sections.append(section)
 
-        output = ProcessedDocument(file_path, "\n".join(formatted_sections))
-    return output
+    return "\n".join(formatted_sections)
 
 
 def main():
@@ -128,7 +136,7 @@ def main():
         )
         sys.exit(ERROR_INCORRECT_FILE_PATHS)
 
-    documents: List[ProcessedDocument] = list(map(add_built_in_icons, filepaths))
+    documents: List[ProcessedDocument] = list(map(process_file, filepaths))
     list(map(output_result, itertools.repeat(args), documents))
 
 

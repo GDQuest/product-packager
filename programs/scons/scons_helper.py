@@ -1,4 +1,5 @@
 import highlight_code as highlighter
+import add_node_icons
 import subprocess
 import colorama
 import fileinput
@@ -111,9 +112,10 @@ def bundle_godot_project(target, source, env):
 
 def process_markdown_file_in_place(target, source, env):
     """A SCons Builder script, builds a markdown file into a rendered html file."""
-    filename = source[0].abspath
-    content = highlighter.highlight_code_blocks(filename)
-    with open(filename, "w") as document:
+    file_path = source[0].abspath
+    content = add_node_icons.add_built_in_icons(file_path)
+    content = highlighter.highlight_code_blocks(content)
+    with open(file_path, "w") as document:
         document.write(content)
     out = subprocess.run(
         [
@@ -122,7 +124,7 @@ def process_markdown_file_in_place(target, source, env):
             "css/pandoc.css",
             "-o",
             env["BUILD_DIR"],
-            filename,
+            file_path,
         ],
         capture_output=True,
         cwd=cwd_base,
