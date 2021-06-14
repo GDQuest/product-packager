@@ -1,0 +1,13 @@
+import os
+
+env = Environment()
+
+path_to_product_packager="~/Documents/GDQuest/product-packager/product-packager/programs/scons"
+
+env["src"] = os.getcwd()
+
+env["BUILD_DIR"] = env["src"] + "/build/"
+env["DIST_DIR"] =  env["src"] + "/dist/"
+
+Export("env")
+SConscript(path_to_product_packager + "/SConstruct")

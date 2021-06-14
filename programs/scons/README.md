@@ -4,8 +4,8 @@
 
 - Install the requirements.txt file via pip: `pip3 install -r requirements.txt`. You can find `requirements.txt` in the parent directory.
 - Install chroma for coloring HTML files.
-- Copy the `SConstruct` file from this directory into the directory you want to package.
-- update `path_to_product_packager` in the SConstruct file to the absolute path to the product-packager/programs directory.
+- Copy the content of `to_copy/` into the directory you want to package.
+- Inside the copied `SConstruct` file, update the `path_to_product_packager` variable to the absolute path to this directory.
 
 ## Usage:
 
