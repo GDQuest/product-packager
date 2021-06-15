@@ -1,10 +1,13 @@
-import highlight_code as highlighter
-import add_node_icons
-import subprocess
-import colorama
 import fileinput
 import pathlib
+import subprocess
 from typing import Tuple
+
+import colorama
+
+import add_node_icons
+import highlight_code as highlighter
+import table_of_contents
 
 colorama.init(autoreset=True)
 cwd_base = pathlib.Path(__file__).parent.absolute().as_posix()
@@ -114,15 +117,26 @@ def process_markdown_file_in_place(target, source, env):
     """A SCons Builder script, builds a markdown file into a rendered html file."""
     file_path = source[0].abspath
     content = add_node_icons.add_built_in_icons(file_path)
+    content = table_of_contents.replace_contents_template(content)
     content = highlighter.highlight_code_blocks(content)
     with open(file_path, "w") as document:
         document.write(content)
+    extra_pandoc_args: str = " ".join(
+        [
+            "--data-dir",
+            pathlib.Path(cwd_base).joinpath("pandoc-filters").absolute().as_posix(),
+            "--filter",
+            "link.py",
+            "include.py",
+        ]
+    )
     out = subprocess.run(
         [
             "./convert_markdown.sh",
-            "-c",
+            "--css",
             "css/pandoc.css",
-            "-o",
+            "--extra-args",
+            extra_pandoc_args,
             env["BUILD_DIR"],
             file_path,
         ],
