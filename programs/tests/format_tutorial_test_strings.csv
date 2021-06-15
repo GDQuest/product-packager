@@ -44,3 +44,4 @@ func test():
 	pass
 ```","Comments inside blocks should wrap at 80 characters."
 "This is a `test` of *premade* **formatting**.","This is a `test` of *premade* **formatting**.","The formatter should ignore already formatted words."
+"res://TacticalSpaceCombat.tscn","`res://TacticalSpaceCombat.tscn`","Absolute paths should be formatted with the backticks."
