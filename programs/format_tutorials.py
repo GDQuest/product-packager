@@ -11,11 +11,11 @@ Auto-formats our tutorials, saving manual formatting work:
 """
 import argparse
 import itertools
+import logging
 import os
 import re
 import sys
 import textwrap
-import logging
 from dataclasses import dataclass
 from typing import List
 
@@ -42,7 +42,7 @@ WORDS_TO_KEEP_UNFORMATTED: List[str] = [
     "duckduckgo",
 ]
 
-RE_SPLIT_CODE_BLOCK: re.Pattern = re.compile(r"(```[a-z]*\n.*?```)", flags=re.DOTALL)
+RE_SPLIT_CODE_BLOCK: re.Pattern = re.compile(r"(```[a-z]*.*?```)", flags=re.DOTALL)
 RE_SPLIT_HTML: re.Pattern = re.compile(r"(<.+?>*\n.*?<\/.+?>)", flags=re.DOTALL)
 RE_SPLIT_TEMPLATE: re.Pattern = re.compile(r"({%.+?%})")
 RE_BUILT_IN_CLASSES: re.Pattern = re.compile(
@@ -275,11 +275,20 @@ def process_content(content: str) -> str:
         """Returns true if the text starts like HTML or a template element."""
         return text.startswith("<") or text.startswith("{%")
 
+    def split_html(text: str) -> List[str]:
+        if is_code_block(text):
+            return [text]
+        return RE_SPLIT_CODE_BLOCK.split(text)
+
+    def split_templates(text: str) -> List[str]:
+        if is_code_block(text):
+            return [text]
+        return RE_SPLIT_TEMPLATE.split(text)
 
     sections: List[str] = RE_SPLIT_CODE_BLOCK.split(content)
-    sections = map(lambda s: RE_SPLIT_HTML.split(s), sections)
+    sections = map(split_html, sections)
     sections = list(flatten(sections))
-    sections = map(lambda s: RE_SPLIT_TEMPLATE.split(s), sections)
+    sections = map(split_templates, sections)
     sections = list(flatten(sections))
 
     formatted_sections: List[str] = []
