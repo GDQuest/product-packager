@@ -50,3 +50,4 @@ func test():
 ```","```gdscript
 {% include PlayerSideScroll.gd constants %}
 ```","The content of code blocks should not get split or formatted."
+"What if you want a projectile to bounce against surfaces? With move_and_slide(), when it hits a wall, the projectile will slide alongside it.","What if you want a projectile to bounce against surfaces? With `move_and_slide()`, when it hits a wall, the projectile will slide alongside it.","A capital word should not be italicized after a question."
