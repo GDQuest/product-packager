@@ -2,7 +2,7 @@ import os
 
 env = Environment()
 
-path_to_product_packager="~/Documents/GDQuest/product-packager/product-packager/programs/scons"
+path_to_product_packager="/absolute/path/to/scons/folder"
 
 env["src"] = os.getcwd()
 

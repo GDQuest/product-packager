@@ -10,15 +10,29 @@ To get notified when the first stable release is out, click the GitHub Watch but
 
 ## Features
 
-The programs in this repository can already:
+This repository contains our complete build system to create courses.
+
+It takes markdown, images, video files, and Godot projects and turns them into standalone HTML files or EPUB ebooks (you can also output PDF files).
+
+You can find the build system inside `programs/scons/`. There, you'll find another README file with requirements and instructions to use it.
+
+It does things such as:
 
 - Process and package Godot projects to distribute their source code.
-- Auto checkout git repositories to master.
-- Render Blender video project with our [Blender multi-threaded video rendered](https://github.com/GDQuest/blender-sequencer-multithreaded-render).
 - Render source documents to self-contained HTML or PDF with Pandoc.
+    - You can use templates in markdown to link to other documents `{% link %}`, include content from code files `{% include Filename.gd anchor_name %}`, or generate a table of contents with `{% contents %}`.
+    - It uses the css files you'll find in `programs/scons/css/` for styling.
+    - It appends Godot icon images before detected class names.
+- Render your whole project as an EPUB ebook, to use with screen readers.
+- Highlight GDScript code blocks in markdown documents with [Chroma](https://github.com/alecthomas/chroma) and pandoc's highlighter.
+
+In the `programs/` directory, we included some other utilities to:
+
+- Automate formatting for Godot tutorials (`format_tutorials.py`). 
+- Auto checkout git repositories to master.
 - Compress and resize png and jpg images using [imagemagick](https://www.imagemagick.org/).
 - Compress and resize videos with [FFMpeg](https://ffmpeg.org/).
-- Highlight code blocks in markdown documents with [Chroma](https://github.com/alecthomas/chroma)
+- Strip documents to translate from code, to count words to translate.
 
 ## How to use
 
