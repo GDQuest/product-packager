@@ -49,7 +49,14 @@ RE_BUILT_IN_CLASSES: re.Pattern = re.compile(
     r"\b(?<!`)({})\b".format(r"|".join(BUILT_IN_CLASSES))
 )
 # Matches paths with a filename at the end.
-RE_FILE_PATH: re.Pattern = re.compile(r"\b((res|user)://)?/?(([\w]+/)+(\w*\.\w+)?\b)|(res|user)://\w+\.\w+")
+PATTERN_DIR_PATH: str = r"\b((res|user)://)?/?(([\w]+/)+(\w*\.\w+)?\b)"
+PATTERN_FILE_AT_ROOT: str = r"(res|user)://\w+\.\w+"
+SUPPORTED_EXTENSIONS: List[str] = [
+    "png", "jpe?g", "mp4", "mkv", "t?res", "t?scn", "gd", "py", "shader"
+]
+PATTERN_FILENAME_ONLY: str = r"(\w+\.({}))".format("|".join(SUPPORTED_EXTENSIONS))
+RE_FILE_PATH: re.Pattern = re.compile(
+    "|".join([PATTERN_DIR_PATH, PATTERN_FILE_AT_ROOT, PATTERN_FILENAME_ONLY]))
 # Matches directory paths without a filename at the end. Group 1 targets the path.
 #
 # Known limitations:

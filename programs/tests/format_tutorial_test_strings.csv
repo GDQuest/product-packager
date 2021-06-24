@@ -54,3 +54,6 @@ func test():
 "- How to synchronize two nodes' transforms.","- How to synchronize two nodes' transforms.","The formatter shouldn't italicize the first word in a list item."
 "The node's Z Index.","The node's *Z Index*.","A property like Z Index should be italicized."
 "You can expand the tileset editor by pressing Shift+F12","You can expand the tileset editor by pressing <kbd>Shift</kbd>+<kbd>F12</kbd>","Keyboard shortcuts should be in kbd tags."
+"Drag tileset_mining.png into the editor!","Drag `tileset_mining.png` into the editor!","Filenames should be in code with extensions."
+
+
