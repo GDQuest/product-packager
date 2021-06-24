@@ -76,7 +76,7 @@ RE_TO_ITALICIZE_ONE_WORD: re.Pattern = re.compile(
 )
 RE_TO_IGNORE: re.Pattern = re.compile(r"(!?\[.*\]\(.+\)|^#+ .+$)", flags=re.MULTILINE)
 RE_KEYBOARD_SHORTCUTS: re.Pattern = re.compile(
-    r"(?<!\d\.)(?<!) +(((Ctrl|Alt|Shift|CTRL|ALT|SHIFT) ?\+ ?)*([A-Z0-9]|F\d{1,2})\b)"
+    r"(?<!\d\. ) +((Ctrl|Alt|Shift|CTRL|ALT|SHIFT) ?\+ ?)(F\d{1,2}|[A-Z0-9])"
 )
 RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT: re.Pattern = re.compile(
     r"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|[A-Z0-9]+"
@@ -122,10 +122,6 @@ def replace_double_inline_code_marks(text: str) -> str:
 
 
 def italicize_word_sequences(text: str) -> str:
-    RE_TO_ITALICIZE_SEQUENCE.sub(
-        lambda match: print("*{}*".format(match.group(0))), text
-    )
-
     return RE_TO_ITALICIZE_SEQUENCE.sub(
         lambda match: "*{}*".format(match.group(0)), text
     )
@@ -160,9 +156,9 @@ FORMATTERS = [
     inline_code_paths,
     inline_code_variables_and_functions,
     italicize_word_sequences,
+    add_keyboard_tags,
     inline_code_built_in_classes,
     inline_code_hex_values,
-    add_keyboard_tags,
     italicize_other_words,
     inline_code_numeric_values,
 ]

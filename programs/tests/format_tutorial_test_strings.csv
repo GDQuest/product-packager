@@ -53,3 +53,4 @@ func test():
 "What if you want a projectile to bounce against surfaces? With move_and_slide(), when it hits a wall, the projectile will slide alongside it.","What if you want a projectile to bounce against surfaces? With `move_and_slide()`, when it hits a wall, the projectile will slide alongside it.","A capital word should not be italicized after a question."
 "- How to synchronize two nodes' transforms.","- How to synchronize two nodes' transforms.","The formatter shouldn't italicize the first word in a list item."
 "The node's Z Index.","The node's *Z Index*.","A property like Z Index should be italicized."
+"You can expand the tileset editor by pressing Shift+F12","You can expand the tileset editor by pressing <kbd>Shift</kbd>+<kbd>F12</kbd>","Keyboard shortcuts should be in kbd tags."
