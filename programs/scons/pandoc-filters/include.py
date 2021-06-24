@@ -102,12 +102,12 @@ def find_all_file_anchors(content: str) -> dict:
     def find_all_anchors_in_file(content: str) -> List[str]:
         """Finds and returns the list of all anchors inside `content`."""
         REGEX_ANCHOR_START: re.Pattern = re.compile(
-            r"^\s*# ANCHOR: (\w+)\s*$", flags=re.MULTILINE
+            r"^\s*# *ANCHOR: *(\w+)\s*$", flags=re.MULTILINE
         )
         return REGEX_ANCHOR_START.findall(content)
 
     anchor_map: dict = {}
-    ANCHOR_REGEX_TEMPLATE = r"^\s*# ANCHOR: {}\s*$(.+)^\s*# END: {}\s*$"
+    ANCHOR_REGEX_TEMPLATE = r"^\s*# *ANCHOR: *{}\s*$(.+)^\s*# *END: *{}\s*$"
 
     anchors = find_all_anchors_in_file(content)
 
