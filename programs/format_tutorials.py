@@ -43,7 +43,7 @@ WORDS_TO_KEEP_UNFORMATTED: List[str] = [
 ]
 
 RE_SPLIT_CODE_BLOCK: re.Pattern = re.compile(r"(```[a-z]*.*?```)", flags=re.DOTALL)
-RE_SPLIT_HTML: re.Pattern = re.compile(r"(<.+?>*\n.*?<\/.+?>)", flags=re.DOTALL)
+RE_SPLIT_HTML: re.Pattern = re.compile(r"(<.+?>.*?<\/.+?>)", flags=re.DOTALL)
 RE_SPLIT_TEMPLATE: re.Pattern = re.compile(r"({%.+?%})")
 RE_BUILT_IN_CLASSES: re.Pattern = re.compile(
     r"\b(?<!`)({})\b".format(r"|".join(BUILT_IN_CLASSES))
@@ -285,7 +285,7 @@ def process_content(content: str) -> str:
     def split_html(text: str) -> List[str]:
         if is_code_block(text):
             return [text]
-        return RE_SPLIT_CODE_BLOCK.split(text)
+        return RE_SPLIT_HTML.split(text)
 
     def split_templates(text: str) -> List[str]:
         if is_code_block(text):
