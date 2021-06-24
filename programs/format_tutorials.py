@@ -67,7 +67,7 @@ RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(
 )
 # Sequence of multiple words with an optional "->" separator, to italicize.
 RE_TO_ITALICIZE_SEQUENCE: re.Pattern = re.compile(
-    r"(?<![-\.] )(?<!^)[A-Z][a-zA-Z0-9]+( (-> )?[A-Z][a-zA-Z0-9]+(\.\.\.)?)+", flags=re.MULTILINE
+    r"(?<![\-\.] )(?<!^)[A-Z0-9]+[a-zA-Z0-9]*( (-> )?[A-Z][a-zA-Z0-9]+(\.\.\.)?)+", flags=re.MULTILINE
 )
 # Capitalized words and PascalCase that are not at the start of a sentence or a line.
 RE_TO_ITALICIZE_ONE_WORD: re.Pattern = re.compile(
@@ -122,6 +122,10 @@ def replace_double_inline_code_marks(text: str) -> str:
 
 
 def italicize_word_sequences(text: str) -> str:
+    RE_TO_ITALICIZE_SEQUENCE.sub(
+        lambda match: print("*{}*".format(match.group(0))), text
+    )
+
     return RE_TO_ITALICIZE_SEQUENCE.sub(
         lambda match: "*{}*".format(match.group(0)), text
     )
@@ -130,7 +134,6 @@ def italicize_word_sequences(text: str) -> str:
 def italicize_other_words(text: str) -> str:
     def replace_match(match: re.Match) -> str:
         expression: str = match.group(0)
-        print(expression)
         if (
             expression.lower() in WORDS_TO_KEEP_UNFORMATTED
             or expression.upper() == expression

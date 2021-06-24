@@ -51,3 +51,5 @@ func test():
 {% include PlayerSideScroll.gd constants %}
 ```","The content of code blocks should not get split or formatted."
 "What if you want a projectile to bounce against surfaces? With move_and_slide(), when it hits a wall, the projectile will slide alongside it.","What if you want a projectile to bounce against surfaces? With `move_and_slide()`, when it hits a wall, the projectile will slide alongside it.","A capital word should not be italicized after a question."
+"- How to synchronize two nodes' transforms.","- How to synchronize two nodes' transforms.","The formatter shouldn't italicize the first word in a list item."
+"The node's Z Index.","The node's *Z Index*.","A property like Z Index should be italicized."
