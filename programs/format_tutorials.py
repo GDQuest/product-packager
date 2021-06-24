@@ -71,7 +71,7 @@ RE_TO_ITALICIZE_SEQUENCE: re.Pattern = re.compile(
 )
 # Capitalized words and PascalCase that are not at the start of a sentence or a line.
 RE_TO_ITALICIZE_ONE_WORD: re.Pattern = re.compile(
-    r"(?<![\.-?!] )(?<!^)([A-Z][a-zA-Z0-9]+(\.\.\.)?)",
+    r"(?<![\.\-?!] )(?<!^)([A-Z][a-zA-Z0-9]+(\.\.\.)?)",
     flags=re.MULTILINE,
 )
 RE_TO_IGNORE: re.Pattern = re.compile(r"(!?\[.*\]\(.+\)|^#+ .+$)", flags=re.MULTILINE)
@@ -130,6 +130,7 @@ def italicize_word_sequences(text: str) -> str:
 def italicize_other_words(text: str) -> str:
     def replace_match(match: re.Match) -> str:
         expression: str = match.group(0)
+        print(expression)
         if (
             expression.lower() in WORDS_TO_KEEP_UNFORMATTED
             or expression.upper() == expression
