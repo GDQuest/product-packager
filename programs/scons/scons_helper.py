@@ -116,7 +116,10 @@ def bundle_godot_project(target, source, env):
 def process_markdown_file_in_place(target, source, env):
     """A SCons Builder script, builds a markdown file into a rendered html file."""
     file_path = source[0].abspath
-    content = add_node_icons.add_built_in_icons(file_path)
+    content: str = ""
+    with open(file_path, "r") as document:
+        content = document.read()
+    content = add_node_icons.add_built_in_icons(content)
     content = table_of_contents.replace_contents_template(content)
     content = highlighter.highlight_code_blocks(content)
     with open(file_path, "w") as document:
