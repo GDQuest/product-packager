@@ -44,6 +44,7 @@ THIS_DIRECTORY: Path = Path(__file__).parent
 
 CONTENT_DIRECTORY: str = "content"
 DEFAULT_CSS_FILE_PATH: Path = Path(THIS_DIRECTORY, "css/pandoc.css")
+DEFAULT_DATA_DIRECTORY: Path = Path(THIS_DIRECTORY, "pandoc-filters")
 
 ERROR_CSS_INVALID: str = "Invalid CSS file. {} is not a valid file. Using default path {}."
 PDF_ENGINE_MEMBERS = [member.value for member in PdfEngines]
@@ -65,7 +66,7 @@ class Args:
                                    help="Type of file to output, either html or pdf.", aliases=["-t"])
     css: Path = arg(default=DEFAULT_CSS_FILE_PATH, help=HELP_CSS_FILE, aliases=["-c"])
     pandoc_data_directory: Path = arg(
-        default=Path(), help="Path to a data directory to use for pandoc.", aliases=["-d"])
+        default=DEFAULT_DATA_DIRECTORY, help="Path to a data directory to use for pandoc.", aliases=["-d"])
     filters: Sequence[str] = arg(default=(), aliases=['-f'],
                                  help="List of pandoc filters to run on each content file.")
 
@@ -89,21 +90,23 @@ def convert_markdown(args: Args, path: str) -> None:
     """Builds and runs a pandoc command to convert the input markdown document
     `path` to the desired output format."""
     title: str = path_to_title(path)
-    pandoc_command = ["pandoc", path, "--self-contained", "--css", args.css,
+    pandoc_command = ["pandoc", path.absolute().as_posix(), "--self-contained", "--css", args.css.absolute().as_posix(),
                       "--metadata", "pagetitle='{}'".format(title)]
     if args.output_type == OutputTypes.pdf:
         pandoc_command += ["--pdf-engine", args.pdf_engine]
     if args.filters:
         pandoc_command += ["--filter", *args.filters]
     if args.pandoc_data_directory != "":
-        pandoc_command += ["--data-dir", args.pandoc_data_directory]
+        pandoc_command += ["--data-dir",
+                           args.pandoc_data_directory.absolute().as_posix()]
 
     output_path: Path = get_output_path(path, args.output_type)
-    pandoc_command += ["--output", output_path]
+    pandoc_command += ["--output", output_path.absolute().as_posix()]
 
-    output_path.parent.mkdir(parents=True)
+    if not output_path.parent.exists():
+        output_path.parent.mkdir(parents=True)
 
-    out = subprocess.run(pandoc_command, capture_output=True)
+    out = subprocess.run(pandoc_command, capture_output=True, cwd=path.parent)
     if out.returncode != 0:
         print(out.stderr.decode())
         raise Exception(out.stderr.decode())
