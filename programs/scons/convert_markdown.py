@@ -44,7 +44,7 @@ THIS_DIRECTORY: Path = Path(__file__).parent
 
 CONTENT_DIRECTORY: str = "content"
 DEFAULT_CSS_FILE_PATH: Path = Path(THIS_DIRECTORY, "css/pandoc.css")
-DEFAULT_DATA_DIRECTORY: Path = Path(THIS_DIRECTORY, "pandoc-filters")
+DEFAULT_DATA_DIRECTORY: Path = Path(THIS_DIRECTORY, "pandoc")
 
 ERROR_CSS_INVALID: str = "Invalid CSS file. {} is not a valid file. Using default path {}."
 PDF_ENGINE_MEMBERS = [member.value for member in PdfEngines]
