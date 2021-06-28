@@ -24,7 +24,7 @@ env["contents_folders"] = helper.content_introspection(env["src"])
 env["images"] = []
 for folder in env["contents_folders"]:
     env["images"].extend(
-        helper.glob_extensions(folder, ["*.png", "*.jpg", "*.svg"])
+        helper.glob_extensions(folder, ["*.png", "*.jpg", "*.svg", "*.gif"])
     )
 # Gather videos
 env["videos"] = []
