@@ -116,7 +116,6 @@ def bundle_godot_project(target, source, env):
 def process_markdown_file_in_place(target, source, env):
     """A SCons Builder script, builds a markdown file into a rendered html file."""
     file_path = source[0].abspath
-    print_success(file_path)
     content: str = ""
     with open(file_path, "r") as document:
         content = document.read()
@@ -128,24 +127,13 @@ def process_markdown_file_in_place(target, source, env):
     with open(file_path, "w") as document:
         document.write(content)
 
-    pandoc_filter_directory = Path(cwd_base).joinpath(
-        "pandoc-filters").absolute().as_posix()
-    extra_pandoc_args: List[str] = " ".format(" ".join([
-        "--data-dir",
-        "'{}'".format(pandoc_filter_directory),
-        "--filter",
-        "link.py",
-        "include.py",
-    ]))
-    print_error(extra_pandoc_args)
     out = subprocess.run(
         [
-            "./convert_markdown.sh",
-            "--css",
-            "css/pandoc.css",
-            "--extra-args",
-            extra_pandoc_args,
-            "--output",
+            "./convert_markdown.py",
+            "--filters",
+            "link.py",
+            "include.py",
+            "--output-directory",
             env["BUILD_DIR"],
             file_path,
         ],
@@ -156,6 +144,7 @@ def process_markdown_file_in_place(target, source, env):
     if out.returncode != 0:
         print_error(out.stderr.decode())
         raise Exception(out.stderr.decode())
+    
     print_success(out.stdout.decode())
     remove_figcaption(Path(target[0].abspath))
     return None

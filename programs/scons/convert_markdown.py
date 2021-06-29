@@ -18,6 +18,7 @@
 # Description:
 #
 # Converts markdown documents to self-contained HTML or PDF files using Pandoc.
+import logging
 import re
 import subprocess
 from dataclasses import dataclass
@@ -40,6 +41,7 @@ class OutputTypes(Enum):
     html = "html"
 
 
+LOGGER = logging.getLogger("convert_markdown.py")
 THIS_DIRECTORY: Path = Path(__file__).parent
 
 CONTENT_DIRECTORY: str = "content"
@@ -96,10 +98,8 @@ def convert_markdown(args: Args, path: str) -> None:
         pandoc_command += ["--pdf-engine", args.pdf_engine]
     if args.filters:
         pandoc_command += ["--filter", *args.filters]
-    if args.pandoc_data_directory != "":
-        pandoc_command += ["--data-dir",
-                           args.pandoc_data_directory.absolute().as_posix()]
-
+    pandoc_command += ["--data-dir",
+                       args.pandoc_data_directory.absolute().as_posix()]
     output_path: Path = get_output_path(path, args.output_type)
     pandoc_command += ["--output", output_path.absolute().as_posix()]
 

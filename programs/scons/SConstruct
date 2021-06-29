@@ -17,7 +17,7 @@ if env.GetOption("strict"):
         helper.print_error("GIT version error")
         Exit(1)
 
-env["content_folder_path"] = helper.pathlib.Path(env["src"]) / "content"
+env["content_folder_path"] = helper.Path(env["src"]) / "content"
 env["contents_folders"] = helper.content_introspection(env["src"])
 
 # Gather images
