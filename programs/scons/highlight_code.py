@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 
 """Finds code blocks in markdown documents and runs their content through the code highlighting
 program Chroma. Requires `chroma` to be installed and available on the PATH variable."""
@@ -22,9 +21,7 @@ COMMAND_HIGHLIGHT = [
 ]
 
 
-def highlight_code_blocks(file_path: str) -> str:
-    """Finds code blocks in the markdown document"""
-
+def highlight_code_blocks(content: str) -> str:
     def highlight_with_chroma(match):
         language = match.group(1)
         if language == "":
@@ -36,10 +33,15 @@ def highlight_code_blocks(file_path: str) -> str:
         )
         return result.stdout if result.returncode == 0 else match.string
 
+    return re.sub(
+        "```([a-z]*)\n(.*?)```", highlight_with_chroma, content, flags=re.S
+    )
+
+
+def highlight_file(file_path: str) -> str:
+    """Finds code blocks in the markdown document"""
     with open(file_path, "r") as md_file:
-        return re.sub(
-            "```([a-z]*)\n(.*?)```", highlight_with_chroma, md_file.read(), flags=re.S
-        )
+        return highlight_code_blocks(md_file.read())
 
 
 def is_chroma_installed():
@@ -75,7 +77,7 @@ def main():
     args: argparse.Namespace = get_args(sys.argv)
     filepaths = [f for f in args.files if f.lower().endswith(".md")]
     for filepath in filepaths:
-        content = highlight_code_blocks(filepath)
+        content = highlight_file(filepath)
 
         # If no --output option set, output to stdout
         if args.output == "":

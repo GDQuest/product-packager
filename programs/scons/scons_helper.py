@@ -123,7 +123,7 @@ def process_markdown_file_in_place(target, source, env):
         print_error("Couldn't open file {}".format(file_path))
     content = add_node_icons.add_built_in_icons(content)
     content = table_of_contents.replace_contents_template(content)
-    # content = highlighter.highlight_code_blocks(content)
+    content = highlighter.highlight_code_blocks(content)
     with open(file_path, "w") as document:
         document.write(content)
         
@@ -131,8 +131,6 @@ def process_markdown_file_in_place(target, source, env):
         [
             "./convert_markdown.py",
             file_path,
-            "--filters",
-            "include.py",
             "--output-directory",
             env["BUILD_DIR"],
         ],
@@ -223,8 +221,6 @@ def convert_to_epub(target, source, env):
         ["pandoc", "-o", env["EPUB_NAME"], "metadata.txt"]
         + md_files
         + [
-            "--css",
-            "pandoc_epub.css",
             "--toc",
             "--syntax-definition",
             "gd-script.xml",

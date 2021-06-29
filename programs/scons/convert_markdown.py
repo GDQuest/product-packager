@@ -101,6 +101,14 @@ def convert_markdown(args: Args, path: str) -> None:
         pandoc_command += ["--filter", *args.filters]
     output_path: Path = get_output_path(args, path)
     pandoc_command += ["--output", output_path.absolute().as_posix()]
+    # To use pandoc's built-in syntax highlighter. The theme still needs some work.
+    # PANDOC_DIRECTORY: Path = Path(THIS_DIRECTORY, "pandoc")
+    # pandoc_command += [
+        # "--syntax-definition",
+        # Path(PANDOC_DIRECTORY, "gd-script.xml").absolute().as_posix(),
+        # "--highlight-style",
+        # Path(PANDOC_DIRECTORY, "gdscript.theme").absolute().as_posix()
+    # ]
 
     if not output_path.parent.exists():
         output_path.parent.mkdir(parents=True)
