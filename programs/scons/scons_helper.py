@@ -142,7 +142,6 @@ def process_markdown_file_in_place(target, source, env):
         print_error(out.stderr.decode())
         raise Exception(out.stderr.decode())
     
-    print_success(out.stdout.decode())
     remove_figcaption(Path(target[0].abspath))
     return None
 
@@ -243,7 +242,8 @@ def remove_figcaption(html_path: Path):
         capture_output=True,
         shell=True,
     )
-    print_error(out.stderr.decode())
+    if out.returncode != 0:
+        print_error(out.stderr.decode())
 
 
 def print_success(log_message: str):
