@@ -1,6 +1,6 @@
 import fileinput
-import pathlib
 import subprocess
+from pathlib import Path
 from typing import Tuple
 
 import colorama
@@ -10,7 +10,7 @@ import highlight_code as highlighter
 import table_of_contents
 
 colorama.init(autoreset=True)
-cwd_base = pathlib.Path(__file__).parent.absolute().as_posix()
+cwd_base = Path(__file__).parent.absolute().as_posix()
 
 
 def validate_git_version(source_dir: str) -> bool:
@@ -25,7 +25,7 @@ def validate_git_version(source_dir: str) -> bool:
         if out.returncode != 0:
             print_error(out.stderr.decode())
             raise Exception(out.stderr.decode())
-        result_set[pathlib.Path(item).name] = out.stdout.decode().strip()
+        result_set[Path(item).name] = out.stdout.decode().strip()
     if len(set(result_set.values())) == 1:
         # All git versions match
         return True
@@ -37,14 +37,14 @@ def validate_git_version(source_dir: str) -> bool:
 
 def validate_source_dir(source_dir: str) -> bool:
     """Returns whether the directory contains a content folder"""
-    source = pathlib.Path(source_dir)
+    source = Path(source_dir)
     return (source / "content").exists()
 
 
 def content_introspection(source_dir: str) -> list:
     """Returns a list of folders within the content folder"""
     assert validate_source_dir(source_dir)
-    source = pathlib.Path(source_dir)
+    source = Path(source_dir)
     content = source / "content"
     content_folders = []
     for folder in content.iterdir():
@@ -56,12 +56,12 @@ def content_introspection(source_dir: str) -> list:
 def get_godot_folders(root_dir: str) -> list:
     """Return a list of all folders containing a project.godot file"""
     projects = [
-        p.parent.as_posix() for p in pathlib.Path(root_dir).glob("./**/project.godot")
+        p.parent.as_posix() for p in Path(root_dir).glob("./**/project.godot")
     ]
     return projects
 
 
-def glob_extensions(root_path: pathlib.Path, extensions: list) -> list:
+def glob_extensions(root_path: Path, extensions: list) -> list:
     """Return all files in the given path with an extension in the extension list."""
     results = []
     for extension in extensions:
@@ -71,7 +71,7 @@ def glob_extensions(root_path: pathlib.Path, extensions: list) -> list:
 
 def get_godot_filename(project_folder: str) -> str:
     """Return the project name from a directory with a project.godot file."""
-    project_settings = pathlib.Path(project_folder) / "project.godot"
+    project_settings = Path(project_folder) / "project.godot"
     prefix = "config/name="
     with open(project_settings, "r") as read_obj:
         for line in read_obj:
@@ -87,9 +87,9 @@ def get_godot_filename(project_folder: str) -> str:
 
 def bundle_godot_project(target, source, env):
     """A SCons Builder script, builds a godot project directory into a zip file"""
-    zipfile_path = pathlib.Path(target[0].abspath)
+    zipfile_path = Path(target[0].abspath)
     target_directory = zipfile_path.parent
-    godot_project_directory = pathlib.Path(source[0].abspath).parent
+    godot_project_directory = Path(source[0].abspath).parent
     godot_project_name = zipfile_path.stem
     print_success("Building project %s" % godot_project_name)
 
@@ -128,7 +128,7 @@ def process_markdown_file_in_place(target, source, env):
     with open(file_path, "w") as document:
         document.write(content)
 
-    pandoc_filter_directory = pathlib.Path(cwd_base).joinpath(
+    pandoc_filter_directory = Path(cwd_base).joinpath(
         "pandoc-filters").absolute().as_posix()
     extra_pandoc_args: List[str] = " ".format(" ".join([
         "--data-dir",
@@ -157,7 +157,7 @@ def process_markdown_file_in_place(target, source, env):
         print_error(out.stderr.decode())
         raise Exception(out.stderr.decode())
     print_success(out.stdout.decode())
-    remove_figcaption(pathlib.Path(target[0].abspath))
+    remove_figcaption(Path(target[0].abspath))
     return None
 
 
@@ -175,7 +175,7 @@ def build_chapter_md(target, source, env):
             raise Exception(out.stderr.decode())
         print_success(out.stdout.decode())
         source_files.append(s.abspath)
-    target_path = pathlib.Path(target[0].abspath).stem
+    target_path = Path(target[0].abspath).stem
     with open(target[0].abspath, "w") as fout:
         fout.write("# " + target_path + "\n")
         for line in fileinput.input(files=source_files):
@@ -186,7 +186,7 @@ def build_chapter_md(target, source, env):
 
 def get_epub_metadata(root_path: str) -> Tuple[str, str]:
     """Verify all epub settings files are present and return their paths"""
-    root = pathlib.Path(root_path)
+    root = Path(root_path)
     assert (root / "epub_metadata").exists()
     assert (root / "epub_metadata" / "metadata.txt").exists()
     assert (root / "epub_metadata" / "cover.png").exists()
@@ -197,23 +197,23 @@ def get_epub_metadata(root_path: str) -> Tuple[str, str]:
 
 
 def get_epub_css() -> str:
-    relative_path = pathlib.Path("css/pandoc_epub.css")
+    relative_path = Path("css/pandoc_epub.css")
     return relative_path.absolute().as_posix()
 
 
 def get_gd_script_syntax() -> str:
-    relative_path = pathlib.Path("gd-script.xml")
+    relative_path = Path("gd-script.xml")
     return relative_path.absolute().as_posix()
 
 
 def get_gd_theme() -> str:
-    relative_path = pathlib.Path("gdscript.theme")
+    relative_path = Path("gdscript.theme")
     return relative_path.absolute().as_posix()
 
 
 def capture_book_title(metadata_path: str) -> str:
     """Read the book title from the metadata file to use as the filename."""
-    metadata_file = pathlib.Path(metadata_path)
+    metadata_file = Path(metadata_path)
     prefix = "title: "
     with open(metadata_file, "r") as read_obj:
         for line in read_obj:
@@ -227,8 +227,8 @@ def convert_to_epub(target, source, env):
     """Build epub file from installed sources."""
     md_files = []
     for file in env["installed_md_files"]:
-        path = pathlib.Path(file[0].abspath).relative_to(
-            pathlib.Path(env["BUILD_DIR"]).absolute()
+        path = Path(file[0].abspath).relative_to(
+            Path(env["BUILD_DIR"]).absolute()
         )
         md_files.append(path)
     out = subprocess.run(
@@ -252,7 +252,7 @@ def convert_to_epub(target, source, env):
     print_success(out.stdout.decode())
 
 
-def remove_figcaption(html_path: pathlib.Path):
+def remove_figcaption(html_path: Path):
     """A cleanup step for generated md files."""
     out = subprocess.run(
         ["sed -Ei 's|<figcaption>.+</figcaption>||' " + html_path.as_posix()],
