@@ -17,7 +17,7 @@ import sys
 
 import panflute
 
-LOGGER = logging.getLogger("format_tutorial.py")
+LINK_LOGGER = logging.getLogger("format_tutorial.py")
 
 ERROR_PROJECT_DIRECTORY_NOT_FOUND: int = 1
 ERROR_LINK_TO_NONEXISTENT_FILE: int = 2
@@ -74,7 +74,7 @@ def process_links(elem, doc, files):
 
     filename: str = elem.content[4].text
     if not filename in files:
-        LOGGER.error("Trying to link to a nonexistent file named '{}', aborting.".format(filename))
+        LINK_LOGGER.error("Trying to link to a nonexistent file named '{}', aborting.".format(filename))
         sys.exit(ERROR_LINK_TO_NONEXISTENT_FILE)
     return panflute.convert_text(LINK_TEMPLATE.format(filename, filename))
 
@@ -94,7 +94,7 @@ def main(doc=None):
 
     project_directory = find_git_root_directory()
     if not project_directory:
-        LOGGER.error("Project directory not found, aborting.")
+        LINK_LOGGER.error("Project directory not found, aborting.")
         sys.exit(ERROR_PROJECT_DIRECTORY_NOT_FOUND)
 
     files = find_content_files(project_directory)

@@ -121,21 +121,20 @@ def process_markdown_file_in_place(target, source, env):
         content = document.read()
     if content == "":
         print_error("Couldn't open file {}".format(file_path))
-    # content = add_node_icons.add_built_in_icons(content)
-    # content = table_of_contents.replace_contents_template(content)
+    content = add_node_icons.add_built_in_icons(content)
+    content = table_of_contents.replace_contents_template(content)
     # content = highlighter.highlight_code_blocks(content)
     with open(file_path, "w") as document:
         document.write(content)
-
+        
     out = subprocess.run(
         [
             "./convert_markdown.py",
+            file_path,
             "--filters",
-            "link.py",
             "include.py",
             "--output-directory",
             env["BUILD_DIR"],
-            file_path,
         ],
         capture_output=True,
         cwd=cwd_base,

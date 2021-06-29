@@ -27,7 +27,7 @@ from typing import List, Tuple
 
 import panflute
 
-LOGGER = logging.getLogger("include")
+INCLUDE_LOGGER = logging.getLogger("include")
 
 ERROR_PROJECT_DIRECTORY_NOT_FOUND: int = 1
 ERROR_ATTEMPT_TO_FIND_DUPLICATE_FILE: int = 2
@@ -117,7 +117,7 @@ def find_all_file_anchors(content: str) -> dict:
         )
         match: re.Match = regex_anchor.match(content)
         if not match:
-            LOGGER.error('Malformed anchor pattern for anchor "{}"'.format(anchor))
+            INCLUDE_LOGGER.error('Malformed anchor pattern for anchor "{}"'.format(anchor))
             sys.exit(ERROR_ATTEMPT_TO_FIND_DUPLICATE_FILE)
         anchor_content = re.sub(
             r"^\s*# (ANCHOR|END): \w+\s*$", "", match.group(1), flags=re.MULTILINE
@@ -179,14 +179,14 @@ def main(doc=None):
 
     project_directory = find_git_root_directory()
     if not project_directory:
-        LOGGER.error("Project directory not found, aborting.")
+        INCLUDE_LOGGER.error("Project directory not found, aborting.")
         sys.exit(ERROR_PROJECT_DIRECTORY_NOT_FOUND)
 
     files, duplicate_files = find_godot_project_files(project_directory)
     if not files:
-        LOGGER.warn("No Godot project folder found, include patterns will need complete file paths.")
+        INCLUDE_LOGGER.warn("No Godot project folder found, include patterns will need complete file paths.")
     if duplicate_files:
-        LOGGER.warn("Found duplicate files in the project: " + str(duplicate_files))
+        INCLUDE_LOGGER.warn("Found duplicate files in the project: " + str(duplicate_files))
 
     return panflute.run_filter(process_includes, doc=doc, files=files, duplicate_files=duplicate_files)
 
