@@ -23,23 +23,33 @@ class Heading:
     level: int
 
 
-RE_HEADING: re.Pattern = re.compile(r"^(#+)(.+)$", re.MULTILINE)
+# FIXME: exclude code blocks from search
+RE_HEADING: re.Pattern = re.compile(r"^(#+)(.+)$")
 RE_TEMPLATE_CONTENTS: re.Pattern = re.compile(r"^{% contents %}$", flags=re.MULTILINE)
+RE_SPLIT_CODE_BLOCK: re.Pattern = re.compile(r"(```[a-z]*.*?```)", flags=re.DOTALL)
 
 
-def find_headings(text: List[str]) -> List[Heading]:
-    heading_lines = [line for line in text if RE_HEADING.search(line) is not None]
+def find_headings(text: str) -> List[Heading]:
     out: List[Heading] = []
-    for line in heading_lines:
-        # Skip document title
-        if line.startswith("# "):
+
+    blocks = RE_SPLIT_CODE_BLOCK.split(text)
+    for block in blocks:
+        if block.startswith("```"):
             continue
 
-        title: str = line.lstrip("# ").rstrip("\n")
-        anchor: str = title.lower().replace(" ", "-")
-        # Subtract 2 so level-2 headings are unindented
-        level: int = line.split(" ", 1)[0].count("#") - 2
-        out.append(Heading(title, anchor, level))
+        lines = block.split("\n")
+        heading_lines = [line for line in lines if RE_HEADING.search(line) is not None]
+        for line in heading_lines:
+            # Skip document title
+            if line.startswith("# "):
+                continue
+
+            title: str = line.lstrip("# ").rstrip("\n")
+            anchor: str = title.lower().replace(" ", "-").replace("'", "").rstrip("?!")
+            # Subtract 2 so level-2 headings are unindented
+            level: int = line.split(" ", 1)[0].count("#") - 2
+            out.append(Heading(title, anchor, level))
+
     return out
 
 
@@ -63,15 +73,16 @@ def replace_contents_template(content: str) -> str:
     """Finds and replace a template with the form {% contents %}"""
     output: List[str] = []
     index = 0
-    for line in content:
+    split_content = content.split("\n")
+    for line in split_content:
         match: re.Match = RE_TEMPLATE_CONTENTS.match(line)
         if match:
             headings: List[Heading] = find_headings(content)
             table_of_contents: List[str] = generate_table_of_contents(headings)
-            output = content[:index] + table_of_contents + content[index + 1 :]
+            output = split_content[:index] + table_of_contents + split_content[index + 1 :]
             break
         index += 1
-    return "".join(output)
+    return "\n".join(output)
 
 
 def get_file_content(file_path: str) -> List[str]:
