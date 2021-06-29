@@ -80,12 +80,12 @@ def path_to_title(filepath: str) -> str:
     return title
 
 
-def get_output_path(filepath: Path, out_file_type: OutputTypes) -> Path:
+def get_output_path(args: Args, filepath: Path) -> Path:
     """Calculates and return the desired output file path."""
     directory_name: str = filepath.parent.stem
     filename: str = filepath.stem
-    filename += ".{}".format(out_file_type.value)
-    return Path(directory_name, filename)
+    filename += ".{}".format(args.output_type.value)
+    return Path(args.output_directory, directory_name, filename)
 
 
 def convert_markdown(args: Args, path: str) -> None:
@@ -93,14 +93,13 @@ def convert_markdown(args: Args, path: str) -> None:
     `path` to the desired output format."""
     title: str = path_to_title(path)
     pandoc_command = ["pandoc", path.absolute().as_posix(), "--self-contained", "--css", args.css.absolute().as_posix(),
-                      "--metadata", "pagetitle='{}'".format(title)]
+                      "--metadata", "pagetitle='{}'".format(title), "--data-dir",
+                      args.pandoc_data_directory.absolute().as_posix()]
     if args.output_type == OutputTypes.pdf:
         pandoc_command += ["--pdf-engine", args.pdf_engine]
     if args.filters:
         pandoc_command += ["--filter", *args.filters]
-    pandoc_command += ["--data-dir",
-                       args.pandoc_data_directory.absolute().as_posix()]
-    output_path: Path = get_output_path(path, args.output_type)
+    output_path: Path = get_output_path(args, path)
     pandoc_command += ["--output", output_path.absolute().as_posix()]
 
     if not output_path.parent.exists():
