@@ -23,9 +23,8 @@ class Heading:
     level: int
 
 
-# FIXME: exclude code blocks from search
 RE_HEADING: re.Pattern = re.compile(r"^(#+)(.+)$")
-RE_TEMPLATE_CONTENTS: re.Pattern = re.compile(r"^{% contents %}$", flags=re.MULTILINE)
+RE_TEMPLATE_CONTENTS: re.Pattern = re.compile(r"^{% contents %}$")
 RE_SPLIT_CODE_BLOCK: re.Pattern = re.compile(r"(```[a-z]*.*?```)", flags=re.DOTALL)
 
 
@@ -63,7 +62,6 @@ def generate_table_of_contents(
         line = (
             "  " * heading.level
             + "- [{}](#{})".format(heading.title, heading.anchor)
-            + "\n"
         )
         out.append(line)
     return out
@@ -71,12 +69,12 @@ def generate_table_of_contents(
 
 def replace_contents_template(content: str) -> str:
     """Finds and replace a template with the form {% contents %}"""
-    output: List[str] = []
+    output: List[str] = content.split("\n")
+
     index = 0
-    split_content = content.split("\n")
+    split_content: List[str] = output
     for line in split_content:
-        match: re.Match = RE_TEMPLATE_CONTENTS.match(line)
-        if match:
+        if line == "{% contents %}":
             headings: List[Heading] = find_headings(content)
             table_of_contents: List[str] = generate_table_of_contents(headings)
             output = split_content[:index] + table_of_contents + split_content[index + 1 :]
@@ -85,10 +83,10 @@ def replace_contents_template(content: str) -> str:
     return "\n".join(output)
 
 
-def get_file_content(file_path: str) -> List[str]:
+def get_file_content(file_path: str) ->str:
     output: str = ""
     with open(file_path, "r") as input_file:
-        output = input_file.readlines()
+        output = input_file.read()
         if not output:
             LOGGER.error("Could not read file {}. Aborting.".format(file_path))
             sys.exit(ERROR_COULD_NOT_OPEN_INPUT_FILE)
@@ -97,7 +95,7 @@ def get_file_content(file_path: str) -> List[str]:
 
 def main():
     file_path: str = sys.argv[1]
-    content: List[str] = get_file_content(file_path)
+    content: str = get_file_content(file_path)
     print(replace_contents_template(content))
 
 
