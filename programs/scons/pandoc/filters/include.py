@@ -22,28 +22,30 @@ import logging
 import os
 import re
 import sys
+import pprint
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List, Tuple
 
-import panflute
+from datargs import arg, parse
 
 INCLUDE_LOGGER = logging.getLogger("include")
 
 ERROR_PROJECT_DIRECTORY_NOT_FOUND: int = 1
 ERROR_ATTEMPT_TO_FIND_DUPLICATE_FILE: int = 2
+ERROR_ANCHOR_NOT_FOUND: int = 3
 
-# The variables below are cached for the whole script.
-# Maps file names to the path to a found file on the disk.
-project_directory: str = ""
+REGEX_INCLUDE: re.Pattern = re.compile(
+    r"^{% *include [\"']?(?P<file>.+?\.[a-zA-Z0-9]+)[\"']? [\"']?(?P<anchor>\w+)[\"']? *%}$",
+    flags=re.MULTILINE,
+)
 
 
 @dataclass
-class Include:
-    """Holds the path, anchor, and text for an include template."""
-
-    file_path: str
-    anchor: str
-    text: str = ""
+class Args:
+    input_file: Path = arg(
+        positional=True, help="A single markdown file to process for include templates."
+    )
 
 
 def find_godot_project_files(project_directory: str) -> Tuple[dict, list]:
@@ -52,10 +54,13 @@ def find_godot_project_files(project_directory: str) -> Tuple[dict, list]:
     duplicate_files: list = []
     include_extensions: set = {".gd", ".shader"}
 
-    godot_directories: List[str] = list(filter(
-        lambda name: os.path.isdir(os.path.join(project_directory, name)) and "godot" in name,
-        os.listdir(project_directory),
-    ))
+    godot_directories: List[str] = list(
+        filter(
+            lambda name: os.path.isdir(os.path.join(project_directory, name))
+            and "godot" in name,
+            os.listdir(project_directory),
+        )
+    )
 
     for directory_name in godot_directories:
         godot_directory = os.path.join(project_directory, directory_name)
@@ -69,9 +74,7 @@ def find_godot_project_files(project_directory: str) -> Tuple[dict, list]:
                 if filename in files:
                     duplicate_files.append(filename)
                 else:
-                    files[filename] = {
-                       "path": os.path.join(dirpath, filename)
-                    }
+                    files[filename] = {"path": os.path.join(dirpath, filename)}
     return files, duplicate_files
 
 
@@ -101,23 +104,22 @@ def find_all_file_anchors(content: str) -> dict:
 
     def find_all_anchors_in_file(content: str) -> List[str]:
         """Finds and returns the list of all anchors inside `content`."""
-        REGEX_ANCHOR_START: re.Pattern = re.compile(
-            r"^\s*# *ANCHOR: *(\w+)\s*$", flags=re.MULTILINE
-        )
-        return REGEX_ANCHOR_START.findall(content)
+        return re.findall(r"# ?ANCHOR: ?(\w+)", content)
 
     anchor_map: dict = {}
-    ANCHOR_REGEX_TEMPLATE = r"^\s*# *ANCHOR: *{}\s*$(.+)^\s*# *END: *{}\s*$"
+    ANCHOR_REGEX_TEMPLATE = r"^\s*# ?ANCHOR: ?{}\s*\n(.+)\n\s*# ?END: ?{}"
 
     anchors = find_all_anchors_in_file(content)
 
     for anchor in anchors:
         regex_anchor: re.Pattern = re.compile(
-            ANCHOR_REGEX_TEMPLATE.format(anchor, anchor), flags=re.MULTILINE | re.DOTALL
+            ANCHOR_REGEX_TEMPLATE.format(anchor, anchor), flags=re.DOTALL | re.MULTILINE
         )
-        match: re.Match = regex_anchor.match(content)
+        match: re.Match = regex_anchor.search(content)
         if not match:
-            INCLUDE_LOGGER.error('Malformed anchor pattern for anchor "{}"'.format(anchor))
+            INCLUDE_LOGGER.error(
+                'Malformed anchor pattern for anchor "{}"'.format(anchor)
+            )
             sys.exit(ERROR_ATTEMPT_TO_FIND_DUPLICATE_FILE)
         anchor_content = re.sub(
             r"^\s*# (ANCHOR|END): \w+\s*$", "", match.group(1), flags=re.MULTILINE
@@ -126,69 +128,80 @@ def find_all_file_anchors(content: str) -> dict:
     return anchor_map
 
 
-def process_includes(elem, doc, files, duplicate_files):
-    """Pandoc filter to process include patterns with the form
-    `{% include FileName anchor_name %}`
-
-    Directly replaces the content of matched markdown elements."""
-
-    REGEX_INCLUDE_LINE: re.Pattern = re.compile(r"^{% include .+%}$", re.MULTILINE)
-
-    def parse_include_template(content: str) -> Include:
-        REGEX_INCLUDE: re.Pattern = re.compile(
-            r"{% *include [\"']?(?P<file>.+?\.[a-zA-Z0-9]+)[\"']? [\"']?(?P<anchor>\w+)[\"']? *%}"
-        )
-        match: re.Match = REGEX_INCLUDE.match(content)
+def replace_includes(content: str, files: dict, duplicate_files: list) -> str:
+    def replace_include(match: re.Match) -> str:
         assert match.group("file") and match.group(
             "anchor"
         ), "Missing file or anchor in the include template."
-        return Include(match.group("file"), match.group("anchor"))
 
-    def contains_include_pattern(line: str) -> bool:
-        return REGEX_INCLUDE_LINE.match(line) is not None
+        path: str = match.group("file")
+        anchor: str = match.group("anchor")
+        
+        if "anchors" not in files[path]:
+            content: str = get_file_content(path, files, duplicate_files)
+            files[path]["anchors"] = find_all_file_anchors(content)
 
-    if not type(elem) in [panflute.CodeBlock]:
-        return
-    if not contains_include_pattern(elem.text):
-        return
+        anchors = files[path]["anchors"]
+        if not anchor in anchors:
+            INCLUDE_LOGGER.error(
+                "Error: anchor {} not found in file {}. Aborting operation.".format(
+                    anchor, path
+                )
+            )
+            sys.exit(ERROR_ANCHOR_NOT_FOUND)
+            
+        anchor_content: str = files[path]["anchors"][anchor]
+        return anchor_content
 
-    line: str = elem.text
-    include: Include = parse_include_template(line)
-    path: str = include.file_path
-    content: str = get_file_content(path, files, duplicate_files)
-
-    if "anchors" not in files[path]:
-        files[path]["anchors"] = find_all_file_anchors(content)
-
-    anchor_content: str = files[path]["anchors"][include.anchor]
-    elem.text = anchor_content
+    return REGEX_INCLUDE.sub(replace_include, content)
 
 
-def main(doc=None):
-    def find_git_root_directory() -> str:
-        """Attempts to find a .git directory, starting to the folder where we run the
+def find_git_root_directory(file_path: Path) -> Path:
+    """Attempts to find a .git directory, starting to the folder where we run the
     script and moving up the filesystem."""
-        out: str = ""
-        path = os.getcwd()
-        for index in range(5):
-            if os.path.exists(os.path.join(path, ".git")):
-                out = path
-                break
-            path = os.path.join(path, "..")
-        return os.path.realpath(out)
+    out: str = ""
+    path: Path = file_path.parent
+    for index in range(5):
+        if Path(path, ".git").exists():
+            out = path
+            break
+        path = path.parent
+    return path
 
-    project_directory = find_git_root_directory()
+
+def process_document(file_path: str) -> str:
+    output: str = ""
+    project_directory: Path = find_git_root_directory(file_path)
     if not project_directory:
         INCLUDE_LOGGER.error("Project directory not found, aborting.")
         sys.exit(ERROR_PROJECT_DIRECTORY_NOT_FOUND)
 
     files, duplicate_files = find_godot_project_files(project_directory)
     if not files:
-        INCLUDE_LOGGER.warn("No Godot project folder found, include patterns will need complete file paths.")
+        INCLUDE_LOGGER.warning(
+            "No Godot project folder found, include patterns will need complete file paths."
+        )
     if duplicate_files:
-        INCLUDE_LOGGER.warn("Found duplicate files in the project: " + str(duplicate_files))
+        INCLUDE_LOGGER.warning(
+            "Found duplicate files in the project: " + str(duplicate_files)
+        )
 
-    return panflute.run_filter(process_includes, doc=doc, files=files, duplicate_files=duplicate_files)
+    pprint.pprint(files.keys())
+    with open(file_path, "r") as input_file:
+        content: str = input_file.read()
+        output = replace_includes(content, files, duplicate_files)
+
+    return output
+
+
+def main():
+    args: Args = parse(Args)
+    if not args.input_file.exists():
+        INCLUDE_LOGGER.error(
+            "File {} not found. Aborting operation.".format(args.input_file.as_posix())
+        )
+    output = process_document(args.input_file)
+    print(output)
 
 
 if __name__ == "__main__":
