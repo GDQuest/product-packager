@@ -15,14 +15,23 @@ import os
 import re
 import sys
 
-import panflute
+from dataclasses import dataclass
+from pathlib import Path
+from typing import List, Tuple
 
-LINK_LOGGER = logging.getLogger("format_tutorial.py")
+from datargs import arg, parse
+
+LINK_LOGGER = logging.getLogger("link.py")
 
 ERROR_PROJECT_DIRECTORY_NOT_FOUND: int = 1
 ERROR_LINK_TO_NONEXISTENT_FILE: int = 2
 
-project_directory: str = ""
+
+@dataclass
+class Args:
+    input_file: Path = arg(
+        positional=True, help="A single markdown file to process for include templates."
+    )
 
 
 def find_content_files(project_directory: str) -> dict:
@@ -46,59 +55,69 @@ def find_content_files(project_directory: str) -> dict:
     return files
 
 
-def process_links(elem, doc, files):
+def replace_links(content: str, files: List[Path]):
     """Pandoc filter to process link patterns with the form
     `{% link FileName %}`
 
     Directly replaces the content of matched markdown elements."""
 
-    REGEX_LINK: re.Pattern = re.compile(r"{% *link (\w+) *%}")
     LINK_TEMPLATE: str = "[{}](../{})"
+    REGEX_LINK: re.Pattern = re.compile(r"{% *link (\w+) *%}")
 
-    def is_link_template(element) -> bool:
-        return (
-            type(element.content[0]) == panflute.Str
-            and element.content[0].text == "{%"
-            and type(element.content[1]) == panflute.Space
-            and type(element.content[2]) == panflute.Str
-            and element.content[2].text == "link"
-            and type(element.content[3]) == panflute.Space
-            and type(element.content[-1]) == panflute.Str
-            and element.content[-1].text == "%}"
-        )
+    def replace_link(match: re.Match) -> str:
+        filename: str = match.group(1)
+        if not filename in files:
+            LINK_LOGGER.error(
+                "Trying to link to a nonexistent file named '{}', aborting.".format(
+                    filename
+                )
+            )
+            sys.exit(ERROR_LINK_TO_NONEXISTENT_FILE)
+        return LINK_TEMPLATE.format(filename, filename)
 
-    if not type(elem) in [panflute.Para]:
-        return
-    if not is_link_template(elem):
-        return
-
-    filename: str = elem.content[4].text
-    if not filename in files:
-        LINK_LOGGER.error("Trying to link to a nonexistent file named '{}', aborting.".format(filename))
-        sys.exit(ERROR_LINK_TO_NONEXISTENT_FILE)
-    return panflute.convert_text(LINK_TEMPLATE.format(filename, filename))
+    return REGEX_LINK.sub(replace_link, content)
 
 
-def main(doc=None):
-    def find_git_root_directory() -> str:
-        """Attempts to find a .git directory, starting to the folder where we run the
+def find_git_root_directory(file_path: Path) -> Path:
+    """Attempts to find a .git directory, starting to the folder where we run the
     script and moving up the filesystem."""
-        out: str = ""
-        path = os.getcwd()
-        for index in range(5):
-            if os.path.exists(os.path.join(path, ".git")):
-                out = path
-                break
-            path = os.path.join(path, "..")
-        return os.path.realpath(out)
+    path: Path = file_path.parent
+    for index in range(5):
+        if Path(path, ".git").exists():
+            out = path
+            break
+        path = path.parent
+    return path
 
-    project_directory = find_git_root_directory()
+
+def process_document(file_path: Path) -> str:
+    output: str = ""
+    project_directory: Path = find_git_root_directory(file_path)
     if not project_directory:
-        LINK_LOGGER.error("Project directory not found, aborting.")
+        LINK_LOGGER.error("Error: no documents to link to found. Aborting.")
         sys.exit(ERROR_PROJECT_DIRECTORY_NOT_FOUND)
 
     files = find_content_files(project_directory)
-    return panflute.run_filter(process_links, doc=doc, files=files)
+    if not files:
+        LINK_LOGGER.warning(
+            "Warning: no project documents found, links will need to use complete paths to the target."
+        )
+
+    with open(file_path, "r") as input_file:
+        content: str = input_file.read()
+        output = replace_links(content)
+
+    return output
+
+
+def main():
+    args: Args = parse(Args)
+    if not args.input_file.exists():
+        LINK_LOGGER.error(
+            "File {} not found. Aborting operation.".format(args.input_file.as_posix())
+        )
+    output = process_document(args.input_file)
+    print(output)
 
 
 if __name__ == "__main__":
