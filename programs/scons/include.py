@@ -168,7 +168,7 @@ def find_git_root_directory(file_path: Path) -> Path:
     return path
 
 
-def process_document(file_path: str) -> str:
+def process_document(content: str, file_path: Path) -> str:
     output: str = ""
     project_directory: Path = find_git_root_directory(file_path)
     if not project_directory:
@@ -185,20 +185,20 @@ def process_document(file_path: str) -> str:
             "Found duplicate files in the project: " + str(duplicate_files)
         )
 
-    with open(file_path, "r") as input_file:
-        content: str = input_file.read()
         output = replace_includes(content, files, duplicate_files)
-
     return output
 
 
 def main():
+    output: str = ""
     args: Args = parse(Args)
     if not args.input_file.exists():
         INCLUDE_LOGGER.error(
             "File {} not found. Aborting operation.".format(args.input_file.as_posix())
         )
-    output = process_document(args.input_file)
+    with open(file_path, "r") as input_file:
+        content: str = input_file.read()
+        output = process_document(content, args.input_file)
     print(output)
 
 

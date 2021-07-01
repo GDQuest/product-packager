@@ -8,6 +8,8 @@ import colorama
 import add_node_icons
 import highlight_code as highlighter
 import table_of_contents
+import include
+import link
 
 colorama.init(autoreset=True)
 cwd_base = Path(__file__).parent.absolute().as_posix()
@@ -55,9 +57,7 @@ def content_introspection(source_dir: str) -> list:
 
 def get_godot_folders(root_dir: str) -> list:
     """Return a list of all folders containing a project.godot file"""
-    projects = [
-        p.parent.as_posix() for p in Path(root_dir).glob("./**/project.godot")
-    ]
+    projects = [p.parent.as_posix() for p in Path(root_dir).glob("./**/project.godot")]
     return projects
 
 
@@ -115,18 +115,22 @@ def bundle_godot_project(target, source, env):
 
 def process_markdown_file_in_place(target, source, env):
     """A SCons Builder script, builds a markdown file into a rendered html file."""
-    file_path = source[0].abspath
+    file_path: Path = Path(source[0].abspath)
     content: str = ""
     with open(file_path, "r") as document:
         content = document.read()
+        
     if content == "":
-        print_error("Couldn't open file {}".format(file_path))
-    content = add_node_icons.add_built_in_icons(content)
+        print_error("Couldn't open file {}".format(file_path.as_posix()))
+
+    content = include.process_document(content, file_path)
+    content = link.process_document(content, file_path)
     content = table_of_contents.replace_contents_template(content)
+    content = add_node_icons.add_built_in_icons(content)
     content = highlighter.highlight_code_blocks(content)
     with open(file_path, "w") as document:
         document.write(content)
-        
+
     out = subprocess.run(
         [
             "./convert_markdown.py",
@@ -141,7 +145,7 @@ def process_markdown_file_in_place(target, source, env):
     if out.returncode != 0:
         print_error(out.stderr.decode())
         raise Exception(out.stderr.decode())
-    
+
     remove_figcaption(Path(target[0].abspath))
     return None
 
@@ -212,9 +216,7 @@ def convert_to_epub(target, source, env):
     """Build epub file from installed sources."""
     md_files = []
     for file in env["installed_md_files"]:
-        path = Path(file[0].abspath).relative_to(
-            Path(env["BUILD_DIR"]).absolute()
-        )
+        path = Path(file[0].abspath).relative_to(Path(env["BUILD_DIR"]).absolute())
         md_files.append(path)
     out = subprocess.run(
         ["pandoc", "-o", env["EPUB_NAME"], "metadata.txt"]

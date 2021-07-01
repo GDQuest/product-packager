@@ -88,7 +88,7 @@ def find_git_root_directory(file_path: Path) -> Path:
     return path
 
 
-def process_document(file_path: Path) -> str:
+def process_document(content: str, file_path: Path) -> str:
     output: str = ""
     project_directory: Path = find_git_root_directory(file_path)
     if not project_directory:
@@ -101,9 +101,7 @@ def process_document(file_path: Path) -> str:
             "Warning: no project documents found, links will need to use complete paths to the target."
         )
 
-    with open(file_path, "r") as input_file:
-        content: str = input_file.read()
-        output = replace_links(content, files)
+    output = replace_links(content, files)
 
     return output
 
@@ -114,7 +112,10 @@ def main():
         LINK_LOGGER.error(
             "File {} not found. Aborting operation.".format(args.input_file.as_posix())
         )
-    output = process_document(args.input_file)
+    output: str = ""
+    with open(file_path, "r") as input_file:
+        content: str = input_file.read()
+        output = process_document(content, args.input_file)
     print(output)
 
 
