@@ -22,7 +22,6 @@ import logging
 import os
 import re
 import sys
-import pprint
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Tuple
@@ -136,7 +135,7 @@ def replace_includes(content: str, files: dict, duplicate_files: list) -> str:
 
         path: str = match.group("file")
         anchor: str = match.group("anchor")
-        
+
         if "anchors" not in files[path]:
             content: str = get_file_content(path, files, duplicate_files)
             files[path]["anchors"] = find_all_file_anchors(content)
@@ -149,7 +148,7 @@ def replace_includes(content: str, files: dict, duplicate_files: list) -> str:
                 )
             )
             sys.exit(ERROR_ANCHOR_NOT_FOUND)
-            
+
         anchor_content: str = files[path]["anchors"][anchor]
         return anchor_content
 
@@ -186,7 +185,6 @@ def process_document(file_path: str) -> str:
             "Found duplicate files in the project: " + str(duplicate_files)
         )
 
-    pprint.pprint(files.keys())
     with open(file_path, "r") as input_file:
         content: str = input_file.read()
         output = replace_includes(content, files, duplicate_files)

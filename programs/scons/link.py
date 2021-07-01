@@ -57,9 +57,7 @@ def find_content_files(project_directory: str) -> dict:
 
 def replace_links(content: str, files: List[Path]):
     """Pandoc filter to process link patterns with the form
-    `{% link FileName %}`
-
-    Directly replaces the content of matched markdown elements."""
+    `{% link FileName %}`"""
 
     LINK_TEMPLATE: str = "[{}](../{})"
     REGEX_LINK: re.Pattern = re.compile(r"{% *link (\w+) *%}")
@@ -67,7 +65,7 @@ def replace_links(content: str, files: List[Path]):
     def replace_link(match: re.Match) -> str:
         filename: str = match.group(1)
         if not filename in files:
-            LINK_LOGGER.error(
+            LINK_LOGGER.warning(
                 "Trying to link to a nonexistent file named '{}', aborting.".format(
                     filename
                 )
@@ -105,7 +103,7 @@ def process_document(file_path: Path) -> str:
 
     with open(file_path, "r") as input_file:
         content: str = input_file.read()
-        output = replace_links(content)
+        output = replace_links(content, files)
 
     return output
 
