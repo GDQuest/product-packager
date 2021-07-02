@@ -35,7 +35,7 @@ ERROR_ATTEMPT_TO_FIND_DUPLICATE_FILE: int = 2
 ERROR_ANCHOR_NOT_FOUND: int = 3
 
 REGEX_INCLUDE: re.Pattern = re.compile(
-    r"^{% *include [\"']?(?P<file>.+?\.[a-zA-Z0-9]+)[\"']? [\"']?(?P<anchor>\w+)[\"']? *%}$",
+    r"^{% *include [\"']?(?P<file>.+?\.[a-zA-Z0-9]+)[\"']? *[\"']?(?P<anchor>\w+)?[\"']? *%}$",
     flags=re.MULTILINE,
 )
 
@@ -129,28 +129,32 @@ def find_all_file_anchors(content: str) -> dict:
 
 def replace_includes(content: str, files: dict, duplicate_files: list) -> str:
     def replace_include(match: re.Match) -> str:
-        assert match.group("file") and match.group(
-            "anchor"
-        ), "Missing file or anchor in the include template."
+        output: str = ""
+
+        assert match.group("file"), "Missing file in the include template."
 
         path: str = match.group("file")
         anchor: str = match.group("anchor")
 
-        if "anchors" not in files[path]:
-            content: str = get_file_content(path, files, duplicate_files)
-            files[path]["anchors"] = find_all_file_anchors(content)
+        # If there's no anchor specified, include the entire file.
+        if not anchor:
+            output = get_file_content(path, files, duplicate_files)
+        else:
+            if "anchors" not in files[path]:
+                content: str = get_file_content(path, files, duplicate_files)
+                files[path]["anchors"] = find_all_file_anchors(content)
 
-        anchors = files[path]["anchors"]
-        if not anchor in anchors:
-            INCLUDE_LOGGER.error(
-                "Error: anchor {} not found in file {}. Aborting operation.".format(
-                    anchor, path
+            anchors = files[path]["anchors"]
+            if not anchor in anchors:
+                INCLUDE_LOGGER.error(
+                    "Error: anchor {} not found in file {}. Aborting operation.".format(
+                        anchor, path
+                    )
                 )
-            )
-            sys.exit(ERROR_ANCHOR_NOT_FOUND)
-
-        anchor_content: str = files[path]["anchors"][anchor]
-        return anchor_content
+                sys.exit(ERROR_ANCHOR_NOT_FOUND)
+            anchor_content: str = files[path]["anchors"][anchor]
+            output = anchor_content
+        return output
 
     return REGEX_INCLUDE.sub(replace_include, content)
 
