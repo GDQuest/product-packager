@@ -47,10 +47,10 @@ class Args:
     )
 
 
-def find_godot_project_files(project_directory: str) -> Tuple[dict, list]:
+def find_godot_project_files(project_directory: str) -> Tuple[dict, set]:
     """Maps the name of files in the project to their full path."""
     files: dict = {}
-    duplicate_files: list = []
+    duplicate_files: set = set()
     include_extensions: set = {".gd", ".shader"}
 
     godot_directories: List[str] = list(
@@ -71,7 +71,7 @@ def find_godot_project_files(project_directory: str) -> Tuple[dict, list]:
                     continue
 
                 if filename in files:
-                    duplicate_files.append(filename)
+                    duplicate_files.add(filename)
                 else:
                     files[filename] = {"path": os.path.join(dirpath, filename)}
     return files, duplicate_files
