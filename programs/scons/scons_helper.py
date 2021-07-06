@@ -113,6 +113,26 @@ def bundle_godot_project(target, source, env):
     return None
 
 
+def build_cheatsheet(target, source, env):
+    """A SCons Builder script, generates a cheatsheet, using a python file in the target directory"""
+    cheat_path = Path(env["src"]) / Path("content")
+    out = subprocess.run(
+        [
+            "./generate_cheatsheet.py",
+            ".",
+            "../dist"
+        ],
+        capture_output=True,
+        cwd=cheat_path,
+    )
+    if out.returncode != 0:
+        print_error(out.stderr.decode())
+        raise Exception(out.stderr.decode())
+    else:
+        print_success("cheatsheet built successfully.")
+    return None
+
+
 def process_markdown_file_in_place(target, source, env):
     """A SCons Builder script, builds a markdown file into a rendered html file."""
     file_path: Path = Path(source[0].abspath)

@@ -3,6 +3,7 @@ Import("env")
 
 AddOption('--epub', action="store_true", dest="epub")
 AddOption('--strict', action="store_true", dest="strict")
+AddOption('--cheatsheet', action="store_true", dest="cheatsheet")
 
 GDBuilder = Builder(action=helper.bundle_godot_project, suffix='.zip')
 
