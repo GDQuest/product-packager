@@ -60,7 +60,7 @@ def replace_links(content: str, files: List[Path]):
     `{% link FileName %}`"""
 
     LINK_TEMPLATE: str = "[{}](../{})"
-    REGEX_LINK: re.Pattern = re.compile(r"{% *link (\w+) *%}")
+    REGEX_LINK: re.Pattern = re.compile(r"{% *link (\w+) ?([\w\-]+)? *%}")
 
     def replace_link(match: re.Match) -> str:
         filename: str = match.group(1)
@@ -71,7 +71,12 @@ def replace_links(content: str, files: List[Path]):
                 )
             )
             sys.exit(ERROR_LINK_TO_NONEXISTENT_FILE)
-        return LINK_TEMPLATE.format(filename, filename)
+
+        link: str = "/".join((filename, filename)) + ".html"
+        if match.group(2):
+            link += f"#{match.group(2)}"
+            
+        return LINK_TEMPLATE.format(filename, link)
 
     return REGEX_LINK.sub(replace_link, content)
 
@@ -82,7 +87,6 @@ def find_git_root_directory(file_path: Path) -> Path:
     path: Path = file_path.parent
     for index in range(5):
         if Path(path, ".git").exists():
-            out = path
             break
         path = path.parent
     return path
