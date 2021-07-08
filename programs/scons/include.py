@@ -121,7 +121,7 @@ def find_all_file_anchors(content: str) -> dict:
             )
             sys.exit(ERROR_ATTEMPT_TO_FIND_DUPLICATE_FILE)
         anchor_content = re.sub(
-            r"^\s*# (ANCHOR|END): \w+\s*$", "", match.group(1), flags=re.MULTILINE
+            r"^\s*# *(ANCHOR|END): *\w+\s*$", "", match.group(1), flags=re.MULTILINE
         )
         anchor_map[anchor] = anchor_content
     return anchor_map
