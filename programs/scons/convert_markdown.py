@@ -82,7 +82,7 @@ def path_to_title(filepath: str) -> str:
 
 def get_output_path(args: Args, filepath: Path) -> Path:
     """Calculates and return the desired output file path."""
-    directory_name: str = filepath.parent.stem
+    directory_name: str = filepath.parent.name
     filename: str = filepath.stem
     filename += ".{}".format(args.output_type.value)
     return Path(args.output_directory, directory_name, filename)
