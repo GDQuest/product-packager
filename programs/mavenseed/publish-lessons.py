@@ -67,6 +67,7 @@ class Args:
     )
     lesson_files: Sequence[Path] = arg(
         positional=True,
+        default=None,
         help="A sequence of paths to html files to upload to Mavenseed.",
     )
     overwrite: bool = arg(
@@ -96,7 +97,7 @@ class Args:
         aliases=["-p"],
     )
     list_courses: bool = arg(
-        default=False, help="List all courses on the Mavenseed website and their ID."
+        default=False, help="If true, list all courses on the Mavenseed website and exit."
     )
 
 
@@ -290,7 +291,7 @@ def get_lesson_title(filepath: Path) -> str:
         f"Unable to find the <title> HTML tag in file {filepath}.\n"
         "This is required for the program to work."
     )
-    return lesson_title.strip("'")
+    return lesson_title.strip("'").replace("&#39;", "")
 
 
 def cache_all_courses(url: str, auth_token: str) -> dict:
@@ -419,8 +420,10 @@ def create_lesson(auth_token: str, api_url: str, new_lesson: NewLesson) -> dict:
             "status": Status.PUBLISHED.value,
         },
     )
-    if response.status_code == ResponseCodes.CREATED.value:
-        raise Exception(f"Failed to create lesson {new_lesson.title}. Status code: {response.status_code}.")
+    if response.status_code != ResponseCodes.CREATED.value:
+        raise Exception(
+            f"Failed to create lesson {new_lesson.title}. Status code: {response.status_code}."
+        )
     return response.json()
 
 
@@ -437,7 +440,9 @@ def update_lesson(auth_token: str, api_url: str, lesson: Lesson) -> dict:
         },
     )
     if response.status_code != ResponseCodes.OK.value:
-        raise Exception(f"Failed to update lesson {lesson.title}. Status code: {response.status_code}.")
+        raise Exception(
+            f"Failed to update lesson {lesson.title}. Status code: {response.status_code}."
+        )
     return response.json()
 
 
@@ -454,19 +459,37 @@ def create_chapter(auth_token: str, api_url: str, new_chapter: NewChapter) -> di
         },
     )
     if response.status_code != 201:
-        raise Exception(f"Failed to create chapter {new_chapter.title}. Status code: {response.status_code}.")
+        raise Exception(
+            f"Failed to create chapter {new_chapter.title}. Status code: {response.status_code}."
+        )
     return response.json()
 
 
-def main():
-    args: Args = parse(Args)
-
-    if not args.mavenseed_url:
-        raise ValueError(
-            """You must provide a Mavenseed URL via the --mavenseed-url command line
-            option or set the MAVENSEED_URL environment variable."""
+def list_all_courses(auth_token: str, api_url: str) -> None:
+    """Gets all courses from the Mavenseed API and prints their names."""
+    print("Listing all courses.\n")
+    response = requests.get(
+        f"{api_url}/{API_SLUG_COURSES}",
+        headers={"Authorization": "Bearer " + auth_token},
+    )
+    if response.status_code != 200:
+        raise Exception(
+            f"Failed to list all courses. Status code: {response.status_code}."
         )
+    data = response.json()
+    print(f"Found {len(data)} courses:\n")
+    for course in data:
+        print(f"- {course['title']} (id: {course['id']})")
 
+
+def create_and_update_course(args: Args) -> None:
+    """Main function of the script.
+
+    Validates arguments, then attempts to create new chapters and lessons or
+    update existing lessons as needed.
+
+    Caches the course data to a file and uses the cache to speed up execution.
+    """
     valid_files: List[Path] = validate_lesson_files(args.lesson_files)
     if len(valid_files) != len(args.lesson_files):
         invalid_files: Set[Path] = {
@@ -529,7 +552,7 @@ def main():
     lessons_map: dict = {}
     for filepath in args.lesson_files:
         chapter_name: str = filepath.parent.name
-        chapter_name = re.sub(r"[\-._]", " ", chapter_name)
+        chapter_name = re.sub(r"[\-_]", " ", chapter_name)
         chapter_name = re.sub(r"\d+\.", "", chapter_name)
         chapter_name = chapter_name.capitalize()
 
@@ -559,7 +582,7 @@ def main():
             new_chapter_data: dict = create_chapter(
                 auth_token, args.mavenseed_url, new_chapter
             )
-            new_chapter_data["lessons"] = []
+            new_chapter_data["lessons"] = {}
             cached_data[course_to_update.title]["chapters"][
                 chapter_name
             ] = new_chapter_data
@@ -584,6 +607,7 @@ def main():
                 )
                 # We don't store the content to keep the cache smaller
                 del new_lesson_data["content"]
+                print(cached_data[course_to_update.title]["chapters"][chapter_name])
                 cached_data[course_to_update.title]["chapters"][chapter_name][
                     "lessons"
                 ][new_lesson_data["title"]] = new_lesson_data
@@ -601,6 +625,23 @@ def main():
     # Save changes to cache file.
     print("Saving changes to cache file.")
     save_cache(cached_data)
+
+
+def main():
+    args: Args = parse(Args)
+
+    if not args.mavenseed_url:
+        raise ValueError(
+            """You must provide a Mavenseed URL via the --mavenseed-url command line
+            option or set the MAVENSEED_URL environment variable."""
+        )
+
+    auth_token: str = get_auth_token(args.mavenseed_url, args.email, args.password)
+    if args.list_courses:
+        list_all_courses(auth_token, args.mavenseed_url)
+        sys.exit(0)
+    else:
+        create_and_update_course(args)
 
 
 if __name__ == "__main__":
