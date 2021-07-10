@@ -1,0 +1,3 @@
+# Command-line interface parser
+datargs==0.8.0
+requests==2.18.4
