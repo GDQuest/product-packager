@@ -5,6 +5,7 @@ place each lesson in the right chapter.
 """
 import re
 import json
+import dotenv
 import os
 import sys
 from dataclasses import dataclass
@@ -13,6 +14,8 @@ from typing import List, Sequence, Set, Generator
 
 import requests
 from datargs import arg, parse
+
+dotenv.load_dotenv()
 
 YOUR_MAVENSEED_URL: str = os.environ.get("MAVENSEED_URL", "")
 YOUR_EMAIL: str = os.environ.get("MAVENSEED_EMAIL", "")
@@ -139,6 +142,37 @@ class Chapter:
 
 
 @dataclass
+class NewChapter:
+    """Metadata for a new chapter to create on Mavenseed."""
+
+    title: str
+    
+    def get_slug(self):
+        return re.sub("[^a-z0-9]+", "-", self.title.lower())
+
+
+@dataclass
+class NewLesson:
+    """Metadata for a new lesson to upload to Mavenseed."""
+
+    slug: str
+    filepath: Path
+
+    def get_file_content(self) -> str:
+        """Return the content of the file to upload."""
+        with open(self.filepath, "r") as f:
+            return f.read()
+
+    def get_title(self, content: str) -> str:
+        """Return the title of the lesson from the content of the file to upload."""
+        title = re.search(r"<title>(.*?)</title>", content)
+        if title:
+            return title.group(1)
+        else:
+            return self.slug.replace("-", " ").title()
+
+
+@dataclass
 class Lesson:
     """Metadata for a lesson returned by the Mavenseed API."""
 
@@ -231,23 +265,7 @@ def get_auth_token(api_url: str, email: str, password: str) -> str:
     return auth_token
 
 
-def get_api_token(token: str = None) -> str:
-    """Gets the Mavenseed API token from the environment.
 
-    Args:
-        token: A string containing the API token. If this is omitted, the
-            program tries to read it from the environment variable MAVENSEED_TOKEN.
-    Returns:
-        A string containing the API token.
-    """
-    if token is None:
-        token = os.environ.get("MAVENSEED_TOKEN")
-    if token is None:
-        raise ValueError(
-            """You must either provide a token via the --token command line
-            option or set the MAVENSEED_TOKEN environment variable."""
-        )
-    return token
 
 
 def get_all_courses(api_url: str, auth_token: str) -> List[Course]:
@@ -390,7 +408,7 @@ def main():
         course_to_update = next(
             course
             for course in courses
-            if args.course_title in (course.title, course.slug)
+            if args.course in (course.title, course.slug)
         )
     except StopIteration:
         print(
@@ -403,11 +421,11 @@ def main():
     lessons_in_course: List[Lesson] = []
     for chapter in course_chapters:
         for lessons in chapter["lessons"]:
-            lessons_in_course.append(*lessons)
+            lessons_in_course.append(Lesson(**lessons, content=""))
 
     # Create a data structure to turn file paths into a mapping of chapters to lessons.
     lessons_map: dict = {}
-    for filepath in args.files:
+    for filepath in args.lesson_files:
         chapter_name: str = filepath.parent.name
         chapter_name = re.sub(r"[\-._]", " ", chapter_name)
         chapter_name = re.sub(r"\d+\.", "", chapter_name)
@@ -417,34 +435,30 @@ def main():
             lessons_map[chapter_name] = []
 
         lesson_slug: str = filepath.stem.lower().replace(" ", "-")
-        lessons_map[chapter_name].append(lesson_slug)
+        lessons_map[chapter_name].append((lesson_slug, filepath))
 
+    # Find all chapters and lessons to create or to update.
     chapters_to_create: List[Chapter] = []
     lessons_to_create: List[Lesson] = []
     lessons_to_update: List[Lesson] = []
-
-    # TODO: determine if the lesson already exists in the chapter. If not, create it.
-    # If it does, update the lesson.
-    # TODO: also ensure that the lesson isn't a duplicate name - check the chapter and lesson ids match - and that the chapter is part of the course.
-    # TODO: update the cache file with newly created lessons and chapters.
-    # Find all chapters and lessons to create or to update.
     for chapter_name in lessons_map:
         chapters_filter: filter = filter(
-            chapter_name == chapter.title for chapter in course_chapters
+            lambda c: c.get("title") == chapter_name, course_chapters
         )
-        found_matching_chapter: bool = next(chapters_filter, None) is not None
-        if not found_matching_chapter:
-            chapters_to_create.append(chapter_name)
-        for lesson_slug in lessons_map[chapter_name]:
+        matching_chapter: dict = next(chapters_filter, None)
+        if not matching_chapter:
+            chapters_to_create.append(NewChapter(title=chapter_name))
+
+        for lesson_slug, filepath in lessons_map[chapter_name]:
             lessons_filter: filter = filter(
-                lesson_slug == lesson.slug for lesson in lessons_in_course
+                lambda l: l.slug == lesson_slug, lessons_in_course
             )
             lesson = next(lessons_filter, None)
             if not lesson:
-                lessons_to_create.append(lesson_slug)
+                lessons_to_create.append(NewLesson(slug=lesson_slug, filepath=filepath))
             else:
                 lessons_to_update.append({lesson_slug: lesson.get("id")})
-
+                
     # Upload all the files.
     # logging.info(f"Uploading {filepath} to Mavenseed")
     # upload_lesson(auth_token, filepath, args.course, args.token, args.overwrite)
