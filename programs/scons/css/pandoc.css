@@ -1,22 +1,22 @@
 /* CSS custom properties */
 :root {
-  --c-caption: grey;
-  --c-blue: #26bfe3;
-  --c-green: #02e180;
-  --c-orange: #f2971a;
-  --c-pink: #e3266f;
+  --color-caption: grey;
+  --color-blue: #26bfe3;
+  --color-green: #02e180;
+  --color-orange: #f2971a;
+  --color-pink: #e3266f;
 
-  --c-bg: #fff;
-  --c-bg-alt: #f5f5f5;
+  --color-bg: #fff;
+  --color-bg-alt: #f5f5f5;
 
-  --c-text-header: #fff;
-  --c-text-body: #95989a;
+  --color-text-header: #fff;
+  --color-text-body: #95989a;
 
   --padding: 20px;
   --padding-inv: calc(-1 * var(--padding));
 
-  --fonts: "Open Sans", -apple-system, system-ui, "Segoe UI", "Roboto",
-    "Helvetica Neue", Arial, sans-serif;
+  --fonts: 'Open Sans', -apple-system, system-ui, 'Segoe UI', 'Roboto',
+    'Helvetica Neue', Arial, sans-serif;
   --font-size: 1.1rem;
 }
 
@@ -73,7 +73,7 @@ p {
 .caption {
   text-align: center;
 
-  color: var(--c-caption);
+  color: var(--color-caption);
   font-style: italic;
 }
 
@@ -84,7 +84,7 @@ p {
   width: calc(100% - var(--padding) * 2);
   padding: 0 var(--padding);
   padding-bottom: var(--padding);
-  background-color: var(--c-bg-alt);
+  background-color: var(--color-bg-alt);
 }
 
 .note:before,
@@ -100,18 +100,18 @@ p {
 }
 
 .note:before {
-  content: "Note";
-  background-color: var(--c-blue);
+  content: 'Note';
+  background-color: var(--color-blue);
 }
 
 .tips:before {
-  content: "Tips";
-  background-color: var(--c-pink);
+  content: 'Tips';
+  background-color: var(--color-pink);
 }
 
 .warning:before {
-  content: "Warning";
-  background-color: var(--c-orange);
+  content: 'Warning';
+  background-color: var(--color-orange);
 }
 
 img {
@@ -196,7 +196,7 @@ strong {
 
 dfn {
   font-style: italic;
-  color: var(--c-blue);
+  color: var(--color-blue);
 }
 
 ins {
@@ -278,23 +278,23 @@ tag {
 }
 
 tag.update {
-  background: var(--c-blue);
+  background: var(--color-blue);
 }
 
 tag.new {
-  background: var(--c-green);
+  background: var(--color-green);
 }
 
 tag.update:after {
-  content: "update";
+  content: 'update';
 }
 
 tag.new:after {
-  content: "new";
+  content: 'new';
 }
 
 button {
-  background-color: var(--c-blue);
+  background-color: var(--color-blue);
   color: white;
   border: none;
 
@@ -312,5 +312,8 @@ button {
 }
 
 .node-icon {
-  vertical-align: middle;
+  position: relative;
+  bottom: 1.3px;
+  padding-right: 3px;
+  height: 18px;
 }
