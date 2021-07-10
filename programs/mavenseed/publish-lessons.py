@@ -8,6 +8,7 @@ import json
 import dotenv
 import os
 import sys
+from enum import Enum
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Sequence, Set, Generator
@@ -32,6 +33,11 @@ ERROR_COURSE_NOT_FOUND: int = 2
 ERROR_CACHE_FILE_EMPTY: int = 3
 
 CACHE_FILE: Path = Path(".cache") / "courses.json"
+
+
+class Status(Enum):
+    DRAFT: int = 0
+    PUBLISHED: int = 1
 
 
 @dataclass
@@ -95,7 +101,7 @@ class Course:
     signin_required: bool
     view_count: int
     metadata: dict
-    banner_data: object
+    banner_data = None
 
     def to_dict(self):
         return {
@@ -146,9 +152,8 @@ class NewChapter:
     """Metadata for a new chapter to create on Mavenseed."""
 
     title: str
-
-    def get_slug(self):
-        return re.sub("[^a-z0-9]+", "-", self.title.lower())
+    course_id: int
+    ordinal: int
 
 
 @dataclass
@@ -157,6 +162,8 @@ class NewLesson:
 
     slug: str
     filepath: Path
+    ordinal: int
+    chapter_id: int = -1
 
     def get_file_content(self) -> str:
         """Return the content of the file to upload."""
@@ -192,7 +199,7 @@ class Lesson:
     media_type: str
     signin_required: bool
     metadata: dict
-    embed_data: object
+    embed_data = None
 
     def to_dict(self):
         """Convert the lesson to a dictionary."""
@@ -235,20 +242,6 @@ def validate_lesson_files(files: Sequence[Path]) -> List[Path]:
     return [filepath for filepath in files if is_valid_file(filepath)]
 
 
-def upload_lesson(
-    token: str, course_id: str, lesson_file: Path, overwrite: bool = True
-) -> None:
-    """Uploads a lesson to Mavenseed using the requests module.
-
-    Args:
-        token: your Mavenseed API token.
-        course_id: The ID of the course to upload the lesson to.
-        lesson_file: The path to the lesson file to upload.
-        overwrite: If set, overwrite existing lessons in the course. Otherwise, skip existing lessons.
-    """
-    pass
-
-
 def get_auth_token(api_url: str, email: str, password: str) -> str:
     """Logs into the Mavenseed API using your email, password,and API token.
 
@@ -265,49 +258,48 @@ def get_auth_token(api_url: str, email: str, password: str) -> str:
     return auth_token
 
 
-def get_all_courses(api_url: str, auth_token: str) -> List[Course]:
-    """Gets all course IDs from the Mavenseed API.
-
-    Args:
-        api_url: The URL of the Mavenseed API.
-    Returns:
-        A set of course IDs.
-    """
-    response = requests.get(
-        api_url + API_SLUG_COURSES, headers={"Authorization": "Bearer " + auth_token}
-    )
-
-    courses: List[Course] = [Course(**course) for course in response.json()]
-    return courses
-
-
-def get_all_chapters_in_course(
-    api_url: str, auth_token: str, course_id: int
-) -> List[Chapter]:
-    """Gets all chapters from the Mavenseed API.
-
-    Args:
-        api_url: The URL of the Mavenseed API.
-        auth_token: A string containing the API token.
-        course_id: The ID of the course to get the chapters from.
-    Returns:
-        A set of chapters.
-    """
-    print(f"Getting chapters for course {course_id}.", end="\r")
-    response = requests.get(
-        f"{api_url}/{API_SLUG_COURSE_CHAPTERS}/{course_id}",
-        headers={"Authorization": "Bearer " + auth_token},
-    )
-    chapters: List[Chapter] = [Chapter(**data) for data in response.json()]
-    return chapters
-
-
 def cache_all_courses(url: str, auth_token: str) -> dict:
     """Downloads serializes all courses,chapters, and lessons through the Mavenseed API.
     Returns the data as a dictionary.
     Takes some time to execute, depending on the number of lessons and courses."""
 
     output = dict()
+
+    def get_all_courses(api_url: str, auth_token: str) -> List[Course]:
+        """Gets all course IDs from the Mavenseed API.
+
+        Args:
+            api_url: The URL of the Mavenseed API.
+        Returns:
+            A set of course IDs.
+        """
+        response = requests.get(
+            api_url + API_SLUG_COURSES,
+            headers={"Authorization": "Bearer " + auth_token},
+        )
+
+        courses: List[Course] = [Course(**course) for course in response.json()]
+        return courses
+
+    def get_all_chapters_in_course(
+        api_url: str, auth_token: str, course_id: int
+    ) -> List[Chapter]:
+        """Gets all chapters from the Mavenseed API.
+
+        Args:
+            api_url: The URL of the Mavenseed API.
+            auth_token: A string containing the API token.
+            course_id: The ID of the course to get the chapters from.
+        Returns:
+            A set of chapters.
+        """
+        print(f"Getting chapters for course {course_id}.", end="\r")
+        response = requests.get(
+            f"{api_url}/{API_SLUG_COURSE_CHAPTERS}/{course_id}",
+            headers={"Authorization": "Bearer " + auth_token},
+        )
+        chapters: List[Chapter] = [Chapter(**data) for data in response.json()]
+        return chapters
 
     def get_all_lessons(api_url: str, auth_token: str) -> Generator:
         """Generator. Gets all lessons from the Mavenseed API.
@@ -363,6 +355,55 @@ def save_cache(cache: dict) -> None:
         CACHE_FILE.parent.mkdir()
     print(f"Writing the data of {len(cache)} courses to {CACHE_FILE.as_posix()}.")
     json.dump(cache, open(CACHE_FILE, "w"), indent=2)
+
+
+def create_lesson(auth_token: str, api_url: str, new_lesson: NewLesson) -> dict:
+    """Creates a new lesson via the Mavenseed API. Returns the lesson's data as a dictionary."""
+    response = requests.post(
+        f"{api_url}/{API_SLUG_LESSONS}",
+        headers={"Authorization": "Bearer " + auth_token},
+        json={
+            "lessonable_id": new_lesson.lessonable_id,
+            "title": new_lesson.get_title(),
+            "slug": new_lesson.slug,
+            "content": new_lesson.get_content(),
+            "status": Status.PUBLISHED.value,
+        },
+    )
+    assert (
+        response.status_code == 201
+    ), f"Failed to create lesson {new_lesson.get_title()}. Status code: {response.status_code}."
+    return response.json()
+
+
+def update_lesson(auth_token: str, api_url: str, lesson: Lesson) -> dict:
+    """Updates a lesson via the Mavenseed API. Returns the lesson's data as a dictionary."""
+    response = requests.patch(
+        f"{api_url}/{API_SLUG_LESSONS}/{lesson.id}",
+        headers={"Authorization": "Bearer " + auth_token},
+        json={"title": lesson.title, "content": lesson.content},
+    )
+    assert (
+        response.status_code == 200
+    ), f"Failed to create lesson {new_lesson.get_title()}. Status code: {response.status_code}."
+    return response.json()
+
+
+def create_chapter(auth_token: str, api_url: str, new_chapter: NewChapter) -> dict:
+    """Create a new chapter via the Mavenseed API. Returns the chapter's data as a dictionary."""
+    response = requests.post(
+        f"{api_url}/{API_SLUG_CHAPTERS}",
+        headers={"Authorization": "Bearer " + auth_token},
+        json={
+            "course_id": new_chapter.course_id,
+            "title": new_chapter.title,
+            "ordinal": new_chapter.ordinal,
+        },
+    )
+    assert (
+        response.status_code == 201
+    ), f"Failed to create chapter {new_chapter.title}. Status code: {response.status_code}."
+    return response.json()
 
 
 def main():
@@ -445,30 +486,58 @@ def main():
         lessons_map[chapter_name].append((lesson_slug, filepath))
 
     # Find all chapters and lessons to create or to update.
-    chapters_to_create: List[Chapter] = []
     lessons_to_create: List[Lesson] = []
     lessons_to_update: List[Lesson] = []
+    chapter_loopindex: int = 1
     for chapter_name in lessons_map:
         chapters_filter: filter = filter(
             lambda c: c.get("title") == chapter_name, course_chapters
         )
         matching_chapter: dict = next(chapters_filter, None)
+        chapter_id: int = matching_chapter["id"] if matching_chapter else -1
         if not matching_chapter:
-            chapters_to_create.append(NewChapter(title=chapter_name))
+            new_chapter: NewChapter = NewChapter(
+                title=chapter_name,
+                course_id=course_to_update.id,
+                ordinal=chapter_loopindex,
+            )
+            new_chapter_data: dict = create_chapter(
+                auth_token, args.mavenseed_url, new_chapter
+            )
+            new_chapter_data["lessons"] = []
+            # TODO: chapters are a list rather than keyed by name. Gotta key by name in the cache.
+            cached_data[course_to_update.title]["chapters"][chapter_name] = new_chapter_data
+            chapter_id = new_chapter_data["id"]
+        chapter_loopindex += 1
 
+        lesson_loopindex: int = 1
         for lesson_slug, filepath in lessons_map[chapter_name]:
             lessons_filter: filter = filter(
                 lambda l: l.slug == lesson_slug, lessons_in_course
             )
-            lesson = next(lessons_filter, None)
-            if not lesson:
-                lessons_to_create.append(NewLesson(slug=lesson_slug, filepath=filepath))
+            lesson_data = next(lessons_filter, None)
+            if not lesson_data:
+                new_lesson: NewLesson = NewLesson(
+                    slug=lesson_slug,
+                    filepath=filepath,
+                    ordinal=lesson_loopindex,
+                    chapter_id=chapter_id,
+                )
+                new_lesson_data: dict = create_lesson(
+                    auth_token, args.mavenseed_url, new_lesson
+                )
+                cached_data[course_to_update.title]["chapters"][chapter_name][
+                    "lessons"
+                ].append(new_lesson_data)
             else:
-                lessons_to_update.append({lesson_slug: lesson.get("id")})
+                content: str = ""
+                with open(filepath) as f:
+                    content = f.read()
+                lesson: Lesson = Lesson(**lesson_data, content=content)
+                update_lesson(auth_token, args.mavenseed_url, lesson)
+            lesson_loopindex += 1
 
     # Upload all the files.
-    # logging.info(f"Uploading {filepath} to Mavenseed")
-    # upload_lesson(auth_token, filepath, args.course, args.token, args.overwrite)
     # Save changes to cache file.
 
 
