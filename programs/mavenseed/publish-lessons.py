@@ -146,7 +146,7 @@ class NewChapter:
     """Metadata for a new chapter to create on Mavenseed."""
 
     title: str
-    
+
     def get_slug(self):
         return re.sub("[^a-z0-9]+", "-", self.title.lower())
 
@@ -265,9 +265,6 @@ def get_auth_token(api_url: str, email: str, password: str) -> str:
     return auth_token
 
 
-
-
-
 def get_all_courses(api_url: str, auth_token: str) -> List[Course]:
     """Gets all course IDs from the Mavenseed API.
 
@@ -305,7 +302,7 @@ def get_all_chapters_in_course(
     return chapters
 
 
-def cache_all_courses(url: str, auth_token: str) -> None:
+def cache_all_courses(url: str, auth_token: str) -> dict:
     """Downloads serializes all courses,chapters, and lessons through the Mavenseed API.
     Returns the data as a dictionary.
     Takes some time to execute, depending on the number of lessons and courses."""
@@ -344,7 +341,9 @@ def cache_all_courses(url: str, auth_token: str) -> None:
 
     courses: List[Course] = get_all_courses(url, auth_token)
     for course in courses:
-        output[course.title] = []
+        output[course.title] = {}
+        output[course.title]["data"] = course.to_dict()
+        output[course.title]["chapters"] = list()
         chapters: List[Chapter] = get_all_chapters_in_course(url, auth_token, course.id)
         for chapter in chapters:
             lessons_in_chapter_as_dict = [
@@ -354,13 +353,16 @@ def cache_all_courses(url: str, auth_token: str) -> None:
             ]
             chapter_as_dict = chapter.to_dict()
             chapter_as_dict["lessons"] = lessons_in_chapter_as_dict
-            output[course.title].append(chapter_as_dict)
+            output[course.title]["chapters"].append(chapter_as_dict)
+    return output
 
+
+def save_cache(cache: dict) -> None:
     if not CACHE_FILE.parent.exists():
         print("Creating .cache/ directory.")
         CACHE_FILE.parent.mkdir()
-    print(f"Writing the data of {len(output)} courses to {CACHE_FILE.as_posix()}.")
-    json.dump(output, open(CACHE_FILE, "w"), indent=2)
+    print(f"Writing the data of {len(cache)} courses to {CACHE_FILE.as_posix()}.")
+    json.dump(cache, open(CACHE_FILE, "w"), indent=2)
 
 
 def main():
@@ -385,39 +387,44 @@ def main():
 
     auth_token: str = get_auth_token(args.mavenseed_url, args.email, args.password)
 
-    if not CACHE_FILE.exists():
-        print("Cache file not found. Downloading and caching all data from Mavenseed.")
-        cache_all_courses(args.mavenseed_url, auth_token)
-
     cached_data: dict = {}
-    with open(CACHE_FILE) as f:
-        cached_data = json.load(f)
+    if CACHE_FILE.exists():
+        with open(CACHE_FILE) as f:
+            cached_data = json.load(f)
+    else:
+        print("Cache file not found. Downloading and caching all data from Mavenseed.")
+        cached_data = cache_all_courses(args.mavenseed_url, auth_token)
+        save_cache(cached_data)
+
     if not cached_data:
         print("Cache file is empty. Exiting.")
         sys.exit(ERROR_CACHE_FILE_EMPTY)
 
-    # Get all courses and ensure we don't try to upload to a nonexistent course.
-    courses: List[Course] = get_all_courses(args.mavenseed_url, auth_token)
-    if args.list_courses:
-        for course in courses:
-            print(f"{course.id} - {course.title}")
-        sys.exit(0)
-
-    course_to_update: Course
-    try:
+    course_to_update: Course = None
+    while not course_to_update:
         course_to_update = next(
-            course
-            for course in courses
-            if args.course in (course.title, course.slug)
+            (
+                Course(**cached_data[course_title]["data"])
+                for course_title in cached_data.keys()
+                if course_title == args.course
+            ),
+            None,
         )
-    except StopIteration:
-        print(
-            "No course found with the given title or url slug: {desired_course}. Exiting."
-        )
-        sys.exit(ERROR_COURSE_NOT_FOUND)
+        if not course_to_update:
+            print(
+                f"No cached course data found for the course named '{args.course}'. "
+                f"Do you want to update the course data? [y/N]"
+            )
+            if input().lower() != "y":
+                print("Course missing. Exiting.")
+                sys.exit(ERROR_COURSE_NOT_FOUND)
+            else:
+                print("Updating course data.")
+                cached_data = cache_all_courses(args.mavenseed_url, auth_token)
+                save_cache(cached_data)
 
     # Mapping lessons to their respective chapters.
-    course_chapters: dict = cached_data[course_to_update.title]
+    course_chapters: dict = cached_data[course_to_update.title]["chapters"]
     lessons_in_course: List[Lesson] = []
     for chapter in course_chapters:
         for lessons in chapter["lessons"]:
@@ -458,10 +465,11 @@ def main():
                 lessons_to_create.append(NewLesson(slug=lesson_slug, filepath=filepath))
             else:
                 lessons_to_update.append({lesson_slug: lesson.get("id")})
-                
+
     # Upload all the files.
     # logging.info(f"Uploading {filepath} to Mavenseed")
     # upload_lesson(auth_token, filepath, args.course, args.token, args.overwrite)
+    # Save changes to cache file.
 
 
 if __name__ == "__main__":
