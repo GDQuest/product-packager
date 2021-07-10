@@ -3,20 +3,20 @@
 The tool uses our course builds to generate a web page for each lesson, and
 place each lesson in the right chapter.
 """
-import logging
 import re
 import json
 import os
 import sys
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
-from typing import List, Sequence, Set, Dict, Generator
+from typing import List, Sequence, Set, Generator
 
 import requests
 from datargs import arg, parse
 
 YOUR_MAVENSEED_URL: str = os.environ.get("MAVENSEED_URL", "")
+YOUR_EMAIL: str = os.environ.get("MAVENSEED_EMAIL", "")
+YOUR_PASSWORD: str = os.environ.get("MAVENSEED_PASSWORD", "")
 
 API_SLUG_LOGIN: str = "/api/login"
 API_SLUG_COURSES: str = "/api/v1/courses"
@@ -50,10 +50,24 @@ class Args:
     )
     mavenseed_url: str = arg(
         default=YOUR_MAVENSEED_URL,
-        help="""The URL of your Mavenseed website.
-        If you omit this option, the program tries to read it from the environment variable MAVENSEED_URL.
+        help="""the url of your mavenseed website.
+        if you omit this option, the program tries to read it from the environment variable MAVENSEED_URL.
         """,
         aliases=["-u"],
+    )
+    email: str = arg(
+        default=YOUR_EMAIL,
+        help="""Your email to log into your Mavenseed's admin account.
+        if you omit this option, the program tries to read it from the environment variable MAVENSEED_EMAIL.
+        """,
+        aliases=["-e"],
+    )
+    password: str = arg(
+        default=YOUR_PASSWORD,
+        help="""Your password to log into your Mavenseed's admin account.
+        if you omit this option, the program tries to read it from the environment variable MAVENSEED_PASSWORD.
+        """,
+        aliases=["-p"],
     )
     list_courses: bool = arg(
         default=False, help="List all courses on the Mavenseed website and their ID."
@@ -90,10 +104,16 @@ class Course:
             "updated_at": self.updated_at,
             "scheduled_at": self.scheduled_at,
             "published_at": self.published_at,
+            "excerpt": self.excerpt,
+            "free": self.free,
+            "questions_enabled": self.questions_enabled,
+            "signin_required": self.signin_required,
+            "view_count": self.view_count,
+            "metadata": self.metadata,
+            "banner_data": self.banner_data,
         }
 
 
-@dataclass
 @dataclass
 class Chapter:
     """Metadata for a chapter returned by the Mavenseed API."""
@@ -111,6 +131,7 @@ class Chapter:
             "id": self.id,
             "course_id": self.course_id,
             "title": self.title,
+            "content": self.content,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "ordinal": self.ordinal,
@@ -151,6 +172,13 @@ class Lesson:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "ordinal": self.ordinal,
+            "exercise_votes_threshold": self.exercise_votes_threshold,
+            "exercise_type": self.exercise_type,
+            "free": self.free,
+            "media_type": self.media_type,
+            "signin_required": self.signin_required,
+            "metadata": self.metadata,
+            "embed_data": self.embed_data,
         }
 
 
@@ -259,8 +287,6 @@ def get_all_chapters_in_course(
     return chapters
 
 
-
-
 def cache_all_courses(url: str, auth_token: str) -> None:
     """Downloads serializes all courses,chapters, and lessons through the Mavenseed API.
     Returns the data as a dictionary.
@@ -308,7 +334,6 @@ def cache_all_courses(url: str, auth_token: str) -> None:
                 for lesson in lessons
                 if lesson.lessonable_id == chapter.id
             ]
-            # convert each Chapter object to a dictionary
             chapter_as_dict = chapter.to_dict()
             chapter_as_dict["lessons"] = lessons_in_chapter_as_dict
             output[course.title].append(chapter_as_dict)
@@ -320,8 +345,7 @@ def cache_all_courses(url: str, auth_token: str) -> None:
     json.dump(output, open(CACHE_FILE, "w"), indent=2)
 
 
-
-def main_final():
+def main():
     args: Args = parse(Args)
 
     if not args.mavenseed_url:
@@ -336,9 +360,7 @@ def main_final():
             filepath for filepath in args.lesson_files if filepath not in valid_files
         }
         for filepath in invalid_files:
-            print(
-                f"{filepath} is not a valid lesson file. It won't be uploaded."
-            )
+            print(f"{filepath} is not a valid lesson file. It won't be uploaded.")
     if len(valid_files) == 0:
         print("No valid lesson files found to upload in the provided list. Exiting.")
         sys.exit(ERROR_NO_VALID_LESSON_FILES)
@@ -371,23 +393,61 @@ def main_final():
             if args.course_title in (course.title, course.slug)
         )
     except StopIteration:
-        print("No course found with the given title or url slug: {desired_course}. Exiting.")
+        print(
+            "No course found with the given title or url slug: {desired_course}. Exiting."
+        )
         sys.exit(ERROR_COURSE_NOT_FOUND)
 
-
+    # Mapping lessons to their respective chapters.
     course_chapters: dict = cached_data[course_to_update.title]
-    #TODO: convert each file path to a chapter and lesson slug
-    #TODO: determine if the chapter already exists in the course. If not, create it.
-    #TODO: determine if the lesson already exists in the chapter. If not, create it.
-    # If it does, update the lesson.
-    #TODO: also ensure that the lesson isn't a duplicate name - check the chapter and lesson ids match - and that the chapter is part of the course.
-    #TODO: update the cache file with newly created lessons and chapters.
+    lessons_in_course: List[Lesson] = []
+    for chapter in course_chapters:
+        for lessons in chapter["lessons"]:
+            lessons_in_course.append(*lessons)
+
+    # Create a data structure to turn file paths into a mapping of chapters to lessons.
+    lessons_map: dict = {}
     for filepath in args.files:
-        chapter_slug: str = filepath.parent.name.lower().replace(" ", "-")
+        chapter_name: str = filepath.parent.name
+        chapter_name = re.sub(r"[\-._]", " ", chapter_name)
+        chapter_name = re.sub(r"\d+\.", "", chapter_name)
+        chapter_name = chapter_name.capitalize()
+
+        if not lessons_map.get(chapter_name):
+            lessons_map[chapter_name] = []
+
         lesson_slug: str = filepath.stem.lower().replace(" ", "-")
-        
-        logging.info(f"Uploading {filepath} to Mavenseed")
-        upload_lesson(auth_token, filepath, args.course, args.token, args.overwrite)
+        lessons_map[chapter_name].append(lesson_slug)
+
+    chapters_to_create: List[Chapter] = []
+    lessons_to_create: List[Lesson] = []
+    lessons_to_update: List[Lesson] = []
+
+    # TODO: determine if the lesson already exists in the chapter. If not, create it.
+    # If it does, update the lesson.
+    # TODO: also ensure that the lesson isn't a duplicate name - check the chapter and lesson ids match - and that the chapter is part of the course.
+    # TODO: update the cache file with newly created lessons and chapters.
+    # Find all chapters and lessons to create or to update.
+    for chapter_name in lessons_map:
+        chapters_filter: filter = filter(
+            chapter_name == chapter.title for chapter in course_chapters
+        )
+        found_matching_chapter: bool = next(chapters_filter, None) is not None
+        if not found_matching_chapter:
+            chapters_to_create.append(chapter_name)
+        for lesson_slug in lessons_map[chapter_name]:
+            lessons_filter: filter = filter(
+                lesson_slug == lesson.slug for lesson in lessons_in_course
+            )
+            lesson = next(lessons_filter, None)
+            if not lesson:
+                lessons_to_create.append(lesson_slug)
+            else:
+                lessons_to_update.append({lesson_slug: lesson.get("id")})
+
+    # Upload all the files.
+    # logging.info(f"Uploading {filepath} to Mavenseed")
+    # upload_lesson(auth_token, filepath, args.course, args.token, args.overwrite)
 
 
 if __name__ == "__main__":
