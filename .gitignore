@@ -5,3 +5,4 @@ results/
 archive.zip
 
 .sconsign.dblite
+.vscode/
