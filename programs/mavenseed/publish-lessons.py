@@ -40,6 +40,23 @@ class Status(Enum):
     PUBLISHED: int = 1
 
 
+class ResponseCodes(Enum):
+    """RestAPI response codes"""
+
+    OK: int = 200
+    CREATED: int = 201
+    NO_CONTENT: int = 204
+    BAD_REQUEST: int = 400
+    UNAUTHORIZED: int = 401
+    FORBIDDEN: int = 403
+    NOT_FOUND: int = 404
+    METHOD_NOT_ALLOWED: int = 405
+    CONFLICT: int = 409
+    UNPROCESSABLE_ENTITY: int = 422
+    INTERNAL_SERVER_ERROR: int = 500
+    NOT_IMPLEMENTED: int = 501
+
+
 @dataclass
 class Args:
     """Command-line arguments."""
@@ -402,9 +419,8 @@ def create_lesson(auth_token: str, api_url: str, new_lesson: NewLesson) -> dict:
             "status": Status.PUBLISHED.value,
         },
     )
-    assert (
-        response.status_code == 201
-    ), f"Failed to create lesson {new_lesson.title}. Status code: {response.status_code}."
+    if response.status_code == ResponseCodes.CREATED.value:
+        raise Exception(f"Failed to create lesson {new_lesson.title}. Status code: {response.status_code}.")
     return response.json()
 
 
@@ -420,9 +436,8 @@ def update_lesson(auth_token: str, api_url: str, lesson: Lesson) -> dict:
             "status": Status.PUBLISHED.value,
         },
     )
-    assert (
-        response.status_code == 200
-    ), f"Failed to update lesson {lesson.title}. Status code: {response.status_code}."
+    if response.status_code != ResponseCodes.OK.value:
+        raise Exception(f"Failed to update lesson {lesson.title}. Status code: {response.status_code}.")
     return response.json()
 
 
@@ -438,9 +453,8 @@ def create_chapter(auth_token: str, api_url: str, new_chapter: NewChapter) -> di
             "ordinal": new_chapter.ordinal,
         },
     )
-    assert (
-        response.status_code == 201
-    ), f"Failed to create chapter {new_chapter.title}. Status code: {response.status_code}."
+    if response.status_code != 201:
+        raise Exception(f"Failed to create chapter {new_chapter.title}. Status code: {response.status_code}.")
     return response.json()
 
 
