@@ -11,7 +11,7 @@ import sys
 from enum import Enum
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Sequence, Set, Generator
+from typing import List, Sequence, Set, Generator, Dict
 
 import requests
 from datargs import arg, parse
@@ -160,7 +160,7 @@ class NewChapter:
 class NewLesson:
     """Metadata for a new lesson to upload to Mavenseed."""
 
-    slug: str
+    title: str
     filepath: Path
     ordinal: int
     chapter_id: int = -1
@@ -237,7 +237,7 @@ def validate_lesson_files(files: Sequence[Path]) -> List[Path]:
         """
         is_valid: bool = filepath.exists() and filepath.suffix.lower() == ".html"
         with filepath.open() as f:
-            return is_valid and bool(re.search(r"<h1>.*</h1>", f.read()))
+            return is_valid and bool(re.search(r"<title>.*</title>", f.read()))
 
     return [filepath for filepath in files if is_valid_file(filepath)]
 
@@ -256,6 +256,24 @@ def get_auth_token(api_url: str, email: str, password: str) -> str:
     )
     auth_token = response.json()["auth_token"]
     return auth_token
+
+
+def get_lesson_title(filepath: Path) -> str:
+    lesson_title: str = ""
+    with open(filepath) as f:
+        while True:
+            line = f.readline()
+            # Find the content of the title html tag.
+            if re.search(r"<title>", line):
+                lesson_title = re.search(r"<title>(.*)</title>", line).group(1)
+                break
+            if not line:
+                break
+    assert lesson_title != "", (
+        f"Unable to find the <title> HTML tag in file {filepath}.\n"
+        "This is required for the program to work."
+    )
+    return lesson_title.strip("'")
 
 
 def cache_all_courses(url: str, auth_token: str) -> dict:
@@ -301,7 +319,9 @@ def cache_all_courses(url: str, auth_token: str) -> dict:
         chapters: List[Chapter] = [Chapter(**data) for data in response.json()]
         return chapters
 
-    def get_all_lessons(api_url: str, auth_token: str, max_pages: int = -1) -> Generator:
+    def get_all_lessons(
+        api_url: str, auth_token: str, max_pages: int = -1
+    ) -> Generator:
         """Generator. Gets all lessons from the Mavenseed API.
 
         Args:
@@ -369,15 +389,14 @@ def save_cache(cache: dict) -> None:
 def create_lesson(auth_token: str, api_url: str, new_lesson: NewLesson) -> dict:
     """Creates a new lesson via the Mavenseed API. Returns the lesson's data as a dictionary."""
     content: str = new_lesson.get_file_content()
-    title: str = new_lesson.get_title(content)
-    print(f"Creating lesson {title}.")
+    print(f"Creating lesson {new_lesson.title}.")
     response = requests.post(
         f"{api_url}/{API_SLUG_LESSONS}",
         headers={"Authorization": "Bearer " + auth_token},
         json={
             "lessonable_id": new_lesson.chapter_id,
             "lessonable_type": "Chapter",
-            "title": title,
+            "title": new_lesson.title,
             "content": content,
             "ordinal": new_lesson.ordinal,
             "status": Status.PUBLISHED.value,
@@ -385,7 +404,7 @@ def create_lesson(auth_token: str, api_url: str, new_lesson: NewLesson) -> dict:
     )
     assert (
         response.status_code == 201
-    ), f"Failed to create lesson {title}. Status code: {response.status_code}."
+    ), f"Failed to create lesson {new_lesson.title}. Status code: {response.status_code}."
     return response.json()
 
 
@@ -395,7 +414,11 @@ def update_lesson(auth_token: str, api_url: str, lesson: Lesson) -> dict:
     response = requests.patch(
         f"{api_url}/{API_SLUG_LESSONS}/{lesson.id}",
         headers={"Authorization": "Bearer " + auth_token},
-        json={"title": lesson.title, "content": lesson.content},
+        json={
+            "title": lesson.title,
+            "content": lesson.content,
+            "status": Status.PUBLISHED.value,
+        },
     )
     assert (
         response.status_code == 200
@@ -486,7 +509,7 @@ def main():
         chapter_data: dict = course_chapters[chapter_name]
         for lesson_title in chapter_data["lessons"]:
             lesson_data: dict = chapter_data["lessons"][lesson_title]
-            lessons_in_course.append(Lesson(**lesson_data), content="")
+            lessons_in_course.append(Lesson(**lesson_data, content=""))
 
     # Create a data structure to turn file paths into a mapping of chapters to lessons.
     lessons_map: dict = {}
@@ -499,14 +522,10 @@ def main():
         if not lessons_map.get(chapter_name):
             lessons_map[chapter_name] = []
 
-        #TODO: we need to work with the lesson's title as currently we can't
-        #specify the slug when creating a lesson.
-        lesson_slug: str = filepath.stem.lower().replace(" ", "-").replace("_", "-")
-        lessons_map[chapter_name].append((lesson_slug, filepath))
+        lesson_title: str = get_lesson_title(filepath)
+        lessons_map[chapter_name].append((lesson_title, filepath))
 
     # Find all chapters and lessons to create or to update.
-    lessons_to_create: List[Lesson] = []
-    lessons_to_update: List[Lesson] = []
     chapter_loopindex: int = 1
     for chapter_name in lessons_map:
         chapters_filter: filter = filter(
@@ -531,18 +550,17 @@ def main():
                 chapter_name
             ] = new_chapter_data
             chapter_id = new_chapter_data["id"]
-        print(chapter_id)
         chapter_loopindex += 1
 
         lesson_loopindex: int = 1
-        for lesson_slug, filepath in lessons_map[chapter_name]:
+        for lesson_title, filepath in lessons_map[chapter_name]:
             lessons_filter: filter = filter(
-                lambda l: l.slug == lesson_slug, lessons_in_course
+                lambda l: l.title == lesson_title, lessons_in_course
             )
-            lesson_data = next(lessons_filter, None)
-            if not lesson_data:
+            lesson: Lesson = next(lessons_filter, None)
+            if not lesson:
                 new_lesson: NewLesson = NewLesson(
-                    slug=lesson_slug,
+                    title=lesson_title,
                     filepath=filepath,
                     ordinal=lesson_loopindex,
                     chapter_id=chapter_id,
@@ -550,12 +568,8 @@ def main():
                 new_lesson_data: dict = create_lesson(
                     auth_token, args.mavenseed_url, new_lesson
                 )
-                # We do an update request after creating the lesson to modify its slug.
-                created_lesson: Lesson = Lesson(**new_lesson_data)
-                created_lesson.slug = lesson_slug
-                new_lesson_data = update_lesson(
-                    auth_token, args.mavenseed_url, created_lesson
-                )
+                # We don't store the content to keep the cache smaller
+                del new_lesson_data["content"]
                 cached_data[course_to_update.title]["chapters"][chapter_name][
                     "lessons"
                 ][new_lesson_data["title"]] = new_lesson_data
@@ -563,12 +577,16 @@ def main():
                 content: str = ""
                 with open(filepath) as f:
                     content = f.read()
-                lesson: Lesson = Lesson(**lesson_data, content=content)
+                lesson.content = content
+                assert (
+                    content != ""
+                ), f"Empty lesson content found for lesson {lesson.title}."
                 update_lesson(auth_token, args.mavenseed_url, lesson)
             lesson_loopindex += 1
 
-    # Upload all the files.
     # Save changes to cache file.
+    print("Saving changes to cache file.")
+    save_cache(cached_data)
 
 
 if __name__ == "__main__":
