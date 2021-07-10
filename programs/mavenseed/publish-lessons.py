@@ -101,7 +101,7 @@ class Course:
     signin_required: bool
     view_count: int
     metadata: dict
-    banner_data = None
+    banner_data: object
 
     def to_dict(self):
         return {
@@ -199,7 +199,7 @@ class Lesson:
     media_type: str
     signin_required: bool
     metadata: dict
-    embed_data = None
+    embed_data: object
 
     def to_dict(self):
         """Convert the lesson to a dictionary."""
@@ -301,7 +301,7 @@ def cache_all_courses(url: str, auth_token: str) -> dict:
         chapters: List[Chapter] = [Chapter(**data) for data in response.json()]
         return chapters
 
-    def get_all_lessons(api_url: str, auth_token: str) -> Generator:
+    def get_all_lessons(api_url: str, auth_token: str, max_pages: int = -1) -> Generator:
         """Generator. Gets all lessons from the Mavenseed API.
 
         Args:
@@ -321,6 +321,9 @@ def cache_all_courses(url: str, auth_token: str) -> dict:
             )
             lessons: List[Lesson] = [Lesson(**data) for data in response.json()]
             page += 1
+
+            if max_pages != -1 and page >= max_pages:
+                break
             if not lessons:
                 break
             yield lessons
@@ -335,17 +338,23 @@ def cache_all_courses(url: str, auth_token: str) -> dict:
     for course in courses:
         output[course.title] = {}
         output[course.title]["data"] = course.to_dict()
-        output[course.title]["chapters"] = list()
-        chapters: List[Chapter] = get_all_chapters_in_course(url, auth_token, course.id)
-        for chapter in chapters:
+        output[course.title]["chapters"] = {}
+        chapters: Dict[str, Chapter] = {
+            chapter.title: chapter
+            for chapter in get_all_chapters_in_course(url, auth_token, course.id)
+        }
+        for chapter_title in chapters:
+            chapter: Chapter = chapters[chapter_title]
             lessons_in_chapter_as_dict = [
                 lesson.to_dict()
                 for lesson in lessons
                 if lesson.lessonable_id == chapter.id
             ]
             chapter_as_dict = chapter.to_dict()
-            chapter_as_dict["lessons"] = lessons_in_chapter_as_dict
-            output[course.title]["chapters"].append(chapter_as_dict)
+            chapter_as_dict["lessons"] = {
+                lesson["slug"]: lesson for lesson in lessons_in_chapter_as_dict
+            }
+            output[course.title]["chapters"][chapter_title] = chapter_as_dict
     return output
 
 
@@ -359,25 +368,30 @@ def save_cache(cache: dict) -> None:
 
 def create_lesson(auth_token: str, api_url: str, new_lesson: NewLesson) -> dict:
     """Creates a new lesson via the Mavenseed API. Returns the lesson's data as a dictionary."""
+    content: str = new_lesson.get_file_content()
+    title: str = new_lesson.get_title(content)
+    print(f"Creating lesson {title}.")
     response = requests.post(
         f"{api_url}/{API_SLUG_LESSONS}",
         headers={"Authorization": "Bearer " + auth_token},
         json={
-            "lessonable_id": new_lesson.lessonable_id,
-            "title": new_lesson.get_title(),
-            "slug": new_lesson.slug,
-            "content": new_lesson.get_content(),
+            "lessonable_id": new_lesson.chapter_id,
+            "lessonable_type": "Chapter",
+            "title": title,
+            "content": content,
+            "ordinal": new_lesson.ordinal,
             "status": Status.PUBLISHED.value,
         },
     )
     assert (
         response.status_code == 201
-    ), f"Failed to create lesson {new_lesson.get_title()}. Status code: {response.status_code}."
+    ), f"Failed to create lesson {title}. Status code: {response.status_code}."
     return response.json()
 
 
 def update_lesson(auth_token: str, api_url: str, lesson: Lesson) -> dict:
     """Updates a lesson via the Mavenseed API. Returns the lesson's data as a dictionary."""
+    print(f"Updating lesson {lesson.title}.")
     response = requests.patch(
         f"{api_url}/{API_SLUG_LESSONS}/{lesson.id}",
         headers={"Authorization": "Bearer " + auth_token},
@@ -385,12 +399,13 @@ def update_lesson(auth_token: str, api_url: str, lesson: Lesson) -> dict:
     )
     assert (
         response.status_code == 200
-    ), f"Failed to create lesson {new_lesson.get_title()}. Status code: {response.status_code}."
+    ), f"Failed to update lesson {lesson.title}. Status code: {response.status_code}."
     return response.json()
 
 
 def create_chapter(auth_token: str, api_url: str, new_chapter: NewChapter) -> dict:
     """Create a new chapter via the Mavenseed API. Returns the chapter's data as a dictionary."""
+    print(f"Creating chapter {new_chapter.title}.")
     response = requests.post(
         f"{api_url}/{API_SLUG_CHAPTERS}",
         headers={"Authorization": "Bearer " + auth_token},
@@ -467,9 +482,11 @@ def main():
     # Mapping lessons to their respective chapters.
     course_chapters: dict = cached_data[course_to_update.title]["chapters"]
     lessons_in_course: List[Lesson] = []
-    for chapter in course_chapters:
-        for lessons in chapter["lessons"]:
-            lessons_in_course.append(Lesson(**lessons, content=""))
+    for chapter_name in course_chapters:
+        chapter_data: dict = course_chapters[chapter_name]
+        for lesson_title in chapter_data["lessons"]:
+            lesson_data: dict = chapter_data["lessons"][lesson_title]
+            lessons_in_course.append(Lesson(**lesson_data), content="")
 
     # Create a data structure to turn file paths into a mapping of chapters to lessons.
     lessons_map: dict = {}
@@ -482,7 +499,9 @@ def main():
         if not lessons_map.get(chapter_name):
             lessons_map[chapter_name] = []
 
-        lesson_slug: str = filepath.stem.lower().replace(" ", "-")
+        #TODO: we need to work with the lesson's title as currently we can't
+        #specify the slug when creating a lesson.
+        lesson_slug: str = filepath.stem.lower().replace(" ", "-").replace("_", "-")
         lessons_map[chapter_name].append((lesson_slug, filepath))
 
     # Find all chapters and lessons to create or to update.
@@ -491,9 +510,12 @@ def main():
     chapter_loopindex: int = 1
     for chapter_name in lessons_map:
         chapters_filter: filter = filter(
-            lambda c: c.get("title") == chapter_name, course_chapters
+            lambda k: k == chapter_name, course_chapters.keys()
         )
-        matching_chapter: dict = next(chapters_filter, None)
+        matching_chapter_title: str = next(chapters_filter, "")
+        matching_chapter: dict = (
+            course_chapters[matching_chapter_title] if matching_chapter_title else {}
+        )
         chapter_id: int = matching_chapter["id"] if matching_chapter else -1
         if not matching_chapter:
             new_chapter: NewChapter = NewChapter(
@@ -505,9 +527,11 @@ def main():
                 auth_token, args.mavenseed_url, new_chapter
             )
             new_chapter_data["lessons"] = []
-            # TODO: chapters are a list rather than keyed by name. Gotta key by name in the cache.
-            cached_data[course_to_update.title]["chapters"][chapter_name] = new_chapter_data
+            cached_data[course_to_update.title]["chapters"][
+                chapter_name
+            ] = new_chapter_data
             chapter_id = new_chapter_data["id"]
+        print(chapter_id)
         chapter_loopindex += 1
 
         lesson_loopindex: int = 1
@@ -526,9 +550,15 @@ def main():
                 new_lesson_data: dict = create_lesson(
                     auth_token, args.mavenseed_url, new_lesson
                 )
+                # We do an update request after creating the lesson to modify its slug.
+                created_lesson: Lesson = Lesson(**new_lesson_data)
+                created_lesson.slug = lesson_slug
+                new_lesson_data = update_lesson(
+                    auth_token, args.mavenseed_url, created_lesson
+                )
                 cached_data[course_to_update.title]["chapters"][chapter_name][
                     "lessons"
-                ].append(new_lesson_data)
+                ][new_lesson_data["title"]] = new_lesson_data
             else:
                 content: str = ""
                 with open(filepath) as f:
