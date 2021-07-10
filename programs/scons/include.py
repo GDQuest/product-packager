@@ -162,11 +162,9 @@ def replace_includes(content: str, files: dict, duplicate_files: list) -> str:
 def find_git_root_directory(file_path: Path) -> Path:
     """Attempts to find a .git directory, starting to the folder where we run the
     script and moving up the filesystem."""
-    out: str = ""
     path: Path = file_path.parent
     for index in range(5):
         if Path(path, ".git").exists():
-            out = path
             break
         path = path.parent
     return path
@@ -189,7 +187,7 @@ def process_document(content: str, file_path: Path) -> str:
             "Found duplicate files in the project: " + str(duplicate_files)
         )
 
-        output = replace_includes(content, files, duplicate_files)
+    output = replace_includes(content, files, duplicate_files)
     return output
 
 
@@ -200,7 +198,7 @@ def main():
         INCLUDE_LOGGER.error(
             "File {} not found. Aborting operation.".format(args.input_file.as_posix())
         )
-    with open(file_path, "r") as input_file:
+    with open(args.input_file, "r") as input_file:
         content: str = input_file.read()
         output = process_document(content, args.input_file)
     print(output)
