@@ -32,14 +32,23 @@ def get_gdscript_css_path() -> str:
 
 def get_epub_metadata(root_path: str) -> Tuple[str, str]:
     """Verify all epub settings files are present and return their paths"""
-    root = Path(root_path)
-    assert (root / "epub_metadata").exists()
-    assert (root / "epub_metadata" / "metadata.txt").exists()
-    assert (root / "epub_metadata" / "cover.png").exists()
-    return (
-        (root / "epub_metadata" / "metadata.txt").as_posix(),
-        (root / "epub_metadata" / "cover.png").as_posix(),
+    root: Path = Path(root_path)
+    directory: Path = root / "epub_metadata"
+    metadata: Path = directory / "metadata.txt"
+    cover: Path = directory / "cover.png"
+    assert (
+        directory.is_dir(),
+        f"Missing epub_metadata/ directory in {root.as_posix()}",
     )
+    assert (
+        metadata.exists(),
+        f"Missing metadata.txt in {directory.as_posix()}",
+    )
+    assert (
+        cover.exists(),
+        f"Missing cover.png at {directory.as_posix()}",
+    )
+    return metadata.as_posix(), cover.as_posix()
 
 
 def capture_book_title(metadata_path: str) -> str:
