@@ -1,13 +1,22 @@
 Import("env")
+import subprocess
 from pathlib import Path
 from typing import List
-import scons_helper as helper
+import os
 
-helper.print_success("Attempting standard build")
+import add_node_icons
+import highlight_code as highlighter
+import include
+import link
+from scons_helper import print_success, print_error
+import table_of_contents
+
+print_success(f"Building {env['src']} as standalone HTML files.")
+
+this_directory: Path = Path(os.getcwd())
 
 VariantDir(env["BUILD_DIR"], env["src"], duplicate=False)
 VariantDir(env["DIST_DIR"], env["src"], duplicate=False)
-
 
 
 def install_media_files(
@@ -24,40 +33,110 @@ def install_media_files(
                 path.as_posix(),
             )
         )
-
     return media_files
 
 
-content_directory: Path = Path(env["content_directory"])
-media_files = install_media_files(content_directory, env["media_files"])
+def process_markdown_file_in_place(target, source, env):
+    """A SCons Builder script, builds a markdown file into a rendered html
+    file."""
 
+    def remove_figcaption(html_path: Path):
+        """A cleanup step for generated md files."""
+        out = subprocess.run(
+            ["sed -Ei 's|<figcaption>.+</figcaption>||' " + html_path.as_posix()],
+            capture_output=True,
+            shell=True,
+        )
+        if out.returncode != 0:
+            print_error(out.stderr.decode())
 
-html_files = []
-for markdown_path in env["markdown_files"]:
-    markdown_file: Path = markdown_path.relative_to(content_directory)
-    target = env["BUILD_DIR"] + markdown_file.as_posix()
-    Install(
-        env["BUILD_DIR"]
-        + markdown_path.relative_to(content_directory).parent.as_posix(),
-        markdown_path.as_posix(),
+    file_path: Path = Path(source[0].abspath)
+    content: str = ""
+    with open(file_path, "r") as document:
+        content = document.read()
+
+    if content == "":
+        print_error("Couldn't open file {}".format(file_path.as_posix()))
+
+    content = include.process_document(content, file_path)
+    content = link.process_document(content, file_path)
+    content = table_of_contents.replace_contents_template(content)
+    content = add_node_icons.add_built_in_icons(content)
+    content = highlighter.highlight_code_blocks(content)
+    with open(file_path, "w") as document:
+        document.write(content)
+
+    out = subprocess.run(
+        [
+            "./convert_markdown.py",
+            file_path,
+            "--output-directory",
+            env["BUILD_DIR"],
+        ],
+        capture_output=True,
+        cwd=this_directory,
     )
-    build_html_file = env.HTMLBuilder(target)
-    for media_file in media_files:
-        Depends(build_html_file, media_file)
-    # export the html file to the dist dir
-    html_files.extend(
+
+    if out.returncode != 0:
+        print_error(out.stderr.decode())
+        raise Exception(out.stderr.decode())
+
+    remove_figcaption(Path(target[0].abspath))
+    return None
+
+
+def prepare_html_dependencies(content_directory: Path) -> list:
+    html_files = []
+    for markdown_path in env["markdown_files"]:
+        markdown_file: Path = markdown_path.relative_to(content_directory)
+        markdown_directory: Path = markdown_file.parent
         Install(
-            env["DIST_DIR"]
-            + markdown_path.relative_to(content_directory).parent.as_posix(),
+            env["BUILD_DIR"] + markdown_directory.as_posix(),
+            markdown_path.as_posix(),
+        )
+        target = env["BUILD_DIR"] + markdown_file.as_posix()
+        build_html_file = env.HTMLBuilder(target)
+        for media_file in media_files:
+            Depends(build_html_file, media_file)
+        # export the html file to the dist dir
+        html_files += Install(
+            env["DIST_DIR"] + markdown_directory.as_posix(),
             build_html_file,
         )
-    )
+    return html_files
 
 
-def generate_cheatsheet():
-    CheatSheetBuilder = Builder(action=helper.build_cheatsheet, suffix=".html")
+def generate_cheatsheet(html_files: list) -> None:
+    def build_cheatsheet(target, source, env):
+        """A SCons Builder script, generates a cheatsheet, using a python file
+        in the target directory"""
+        cheat_path = Path(env["src"]) / Path("content")
+        out = subprocess.run(
+            ["./generate_cheatsheet.py", ".", "../dist"],
+            capture_output=True,
+            cwd=cheat_path,
+        )
+        if out.returncode != 0:
+            print_error(out.stderr.decode())
+            raise Exception(out.stderr.decode())
+        else:
+            print_success("cheatsheet built successfully.")
+        return None
+
+    CheatSheetBuilder = Builder(action=build_cheatsheet, suffix=".html")
     env["BUILDERS"]["CheatSheetBuilder"] = CheatSheetBuilder
     env.CheatSheetBuilder(env["DIST_DIR"] + "cheatsheet.html", html_files)
 
 
-generate_cheatsheet()
+HTMLBuilder = Builder(
+    action=process_markdown_file_in_place,
+    suffix=".html",
+    src_suffix=".md",
+    single_source=1,
+)
+env["BUILDERS"]["HTMLBuilder"] = HTMLBuilder
+content_directory: Path = Path(env["content_directory"])
+media_files = install_media_files(content_directory, env["media_files"])
+html_files = prepare_html_dependencies(content_directory)
+if env.GetOption("cheatsheet"):
+    generate_cheatsheet(html_files)

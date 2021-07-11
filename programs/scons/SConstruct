@@ -10,21 +10,14 @@ ERROR_GIT_VERSION_DONT_MATCH = 2
 # Default(["html", "cheatsheet"])
 AddOption("--strict", action="store_true", dest="strict")
 AddOption("--epub", action="store_true", dest="epub")
-
+AddOption("--cheatsheet", action="store_true", dest="cheatsheet")
 
 GodotProjectBuilder = Builder(action=helper.bundle_godot_project, suffix=".zip")
-HTMLBuilder = Builder(
-    action=helper.process_markdown_file_in_place,
-    suffix=".html",
-    src_suffix=".md",
-    single_source=1,
-)
 env["BUILDERS"]["GodotProjectBuilder"] = GodotProjectBuilder
-env["BUILDERS"]["HTMLBuilder"] = HTMLBuilder
 
 
 def validate_source_directory():
-    if not helper.validate_source_dir(env["src"]):
+    if not helper.is_source_directory_valid(env["src"]):
         helper.print_error(f"{env['src']} is not a valid source directory. Exiting.")
         Exit(ERROR_SOURCE_DIR_INVALID)
 
@@ -63,8 +56,24 @@ def find_all_content_files():
 
 
 def package_godot_projects():
+    def get_godot_project_name(project_folder: str) -> str:
+        """Return the project name from a directory with a project.godot
+        file."""
+        project_settings = Path(project_folder) / "project.godot"
+        prefix = "config/name="
+        with open(project_settings, "r") as read_obj:
+            for line in read_obj:
+                if line.startswith(prefix):
+                    return (
+                        line.lstrip(prefix)
+                        .replace(" ", "_")
+                        .replace('"', "")
+                        .replace("\n", "")
+                    )
+        raise Exception("Missing Godot project name")
+
     for folder in helper.get_godot_folders(env["src"]):
-        gd_name = helper.get_godot_filename(folder)
+        gd_name = get_godot_project_name(folder)
         env.GodotProjectBuilder(
             env["DIST_DIR"] + gd_name + ".zip", folder + "/project.godot"
         )
