@@ -1,32 +1,123 @@
 Import("env")
-import scons_helper as helper
+import fileinput
+import subprocess
+from pathlib import Path
+from typing import List, Tuple
+import os
 
-helper.print_success("Attempting Epub build")
+from scons_helper import print_success, print_error
+
+print_success(f"Building project {env['src']} as Epub")
 
 VariantDir(env["BUILD_DIR"], env["src"], duplicate=False)
 VariantDir(env["DIST_DIR"], env["src"], duplicate=False)
 
-EpubBuilder = Builder(action=helper.convert_to_epub, suffix=".epub")
-env["BUILDERS"]["EpubBuilder"] = EpubBuilder
+this_directory: Path = Path(os.getcwd())
 
-ChapterBuilder = Builder(action=helper.build_chapter_md, suffix=".md")
+
+def get_css_file_path() -> str:
+    relative_path = Path("pandoc/epub.css")
+    return relative_path.absolute().as_posix()
+
+
+def get_gdscript_syntax_file_path() -> str:
+    relative_path = Path("pandoc/gdscript.xml")
+    return relative_path.absolute().as_posix()
+
+
+def get_gdscript_css_path() -> str:
+    relative_path = Path("pandoc/gdscript.theme")
+    return relative_path.absolute().as_posix()
+
+
+def get_epub_metadata(root_path: str) -> Tuple[str, str]:
+    """Verify all epub settings files are present and return their paths"""
+    root = Path(root_path)
+    assert (root / "epub_metadata").exists()
+    assert (root / "epub_metadata" / "metadata.txt").exists()
+    assert (root / "epub_metadata" / "cover.png").exists()
+    return (
+        (root / "epub_metadata" / "metadata.txt").as_posix(),
+        (root / "epub_metadata" / "cover.png").as_posix(),
+    )
+
+
+def capture_book_title(metadata_path: str) -> str:
+    """Read the book title from the metadata file to use as the filename."""
+    metadata_file = Path(metadata_path)
+    prefix = "title: "
+    with open(metadata_file, "r") as read_obj:
+        for line in read_obj:
+            if line.startswith(prefix):
+                book_name = line.lstrip(prefix)
+                return "".join(x for x in book_name if x.isalnum()) + ".epub"
+    raise Exception("missing project name")
+
+
+def build_chapter_md(target, source, env):
+    """A SCons Builder script"""
+    source.sort()
+    source_files = []
+    for s in source:
+        out = subprocess.run(
+            ["pandoc", "-s", s.abspath, "--shift-heading-level-by=1", "-o", s.abspath],
+            capture_output=True,
+        )
+        if out.returncode != 0:
+            print_error(out.stderr.decode())
+            raise Exception(out.stderr.decode())
+        print_success(out.stdout.decode())
+        source_files.append(s.abspath)
+    target_path = Path(target[0].abspath).stem
+    with open(target[0].abspath, "w") as fout:
+        fout.write("# " + target_path + "\n")
+        for line in fileinput.input(files=source_files):
+            fout.write(line)
+
+    return None
+
+
+def convert_to_epub(target, source, env):
+    """Build epub file from installed sources."""
+    md_files = []
+    for file in env["installed_md_files"]:
+        path = Path(file[0].abspath).relative_to(Path(env["BUILD_DIR"]).absolute())
+        md_files.append(path)
+    out = subprocess.run(
+        ["pandoc", "-o", env["EPUB_NAME"], "metadata.txt"]
+        + md_files
+        + [
+            "--toc",
+            "--syntax-definition",
+            this_directory / "pandoc/gdscript.xml",
+            "--highlight-style",
+            this_directory / "pandoc/gdscript.theme",
+        ],
+        cwd=env["BUILD_DIR"],
+        capture_output=True,
+    )
+    if out.returncode != 0:
+        print_error(out.stderr.decode())
+        raise Exception(out.stderr.decode())
+    print_success(out.stdout.decode())
+
+
+EpubBuilder = Builder(action=convert_to_epub, suffix=".epub")
+env["BUILDERS"]["EpubBuilder"] = EpubBuilder
+ChapterBuilder = Builder(action=build_chapter_md, suffix=".md")
 env["BUILDERS"]["ChapterBuilder"] = ChapterBuilder
 
-images = []
-for image_path in env["images"]:
-    images.append(Install(env["BUILD_DIR"] + "images/", image_path.as_posix()))
-videos = []
-for video_path in env["videos"]:
-    videos.append(Install(env["BUILD_DIR"] + "videos/", video_path.as_posix()))
+
+media_files = [
+    Install(env["BUILD_DIR"] + "images/", path.as_posix())
+    for path in env["media_files"]
+]
 
 new_list = []
 chapter_tiers = {}
 for markdown_path in env["markdown_files"]:
-    targ = env["BUILD_DIR"] + markdown_path.name
     new_md_file = env["BUILD_DIR"] + markdown_path.parent.stem + markdown_path.name
-
     installed_md = InstallAs(new_md_file, markdown_path.as_posix())
-
     if markdown_path.parent.name not in chapter_tiers.keys():
         chapter_tiers[markdown_path.parent.name] = [installed_md]
     else:
@@ -34,9 +125,7 @@ for markdown_path in env["markdown_files"]:
     new_list.append(new_md_file)
 
 env["installed_md_files"] = []
-sorted_chapters = list(chapter_tiers.keys())
-sorted_chapters.sort()
-
+sorted_chapters = sorted(chapter_tiers.keys())
 for chapter in sorted_chapters:
     built_chapter = env.ChapterBuilder(
         env["BUILD_DIR"] + chapter + ".md", chapter_tiers[chapter]
@@ -45,19 +134,20 @@ for chapter in sorted_chapters:
     for md in chapter_tiers[chapter]:
         env.AddPostAction(built_chapter, Delete(md))
 
-metadata_file, cover_file = helper.get_epub_metadata(env["src"])
-env["EPUB_NAME"] = helper.capture_book_title(metadata_file)
-metadata = Install(env["BUILD_DIR"], metadata_file)
-cover = Install(env["BUILD_DIR"], cover_file)
-css = Install(env["BUILD_DIR"], helper.get_epub_css())
-syntax = Install(env["BUILD_DIR"], helper.get_gd_script_syntax())
-theme = Install(env["BUILD_DIR"], helper.get_gd_theme())
 
-dependencies = (
-    images + videos + env["installed_md_files"] + [metadata, cover, css, syntax, theme]
-)
+metadata_file, cover_file = get_epub_metadata(env["src"])
+env["EPUB_NAME"] = capture_book_title(metadata_file)
+epub_conversion_files = [
+    metadata_file,
+    cover_file,
+    get_css_file_path(),
+    get_gdscript_syntax_file_path(),
+    get_gdscript_css_path(),
+]
+installed_conversion_files = Install(env["BUILD_DIR"], epub_conversion_files)
+
+dependencies = media_files + env["installed_md_files"] + epub_conversion_files
 build_epub_file = env.EpubBuilder(env["BUILD_DIR"] + env["EPUB_NAME"], dependencies)
-
 for dependency in dependencies:
     Depends(build_epub_file, dependency)
 

@@ -1,7 +1,7 @@
 import fileinput
 import subprocess
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, List
 
 import colorama
 
@@ -61,14 +61,6 @@ def get_godot_folders(root_dir: str) -> list:
     return projects
 
 
-def glob_extensions(root_path: Path, extensions: list) -> list:
-    """Return all files in the given path with an extension in the extension list."""
-    results = []
-    for extension in extensions:
-        results.extend(root_path.glob("**/" + extension))
-    return results
-
-
 def get_godot_filename(project_folder: str) -> str:
     """Return the project name from a directory with a project.godot file."""
     project_settings = Path(project_folder) / "project.godot"
@@ -117,11 +109,7 @@ def build_cheatsheet(target, source, env):
     """A SCons Builder script, generates a cheatsheet, using a python file in the target directory"""
     cheat_path = Path(env["src"]) / Path("content")
     out = subprocess.run(
-        [
-            "./generate_cheatsheet.py",
-            ".",
-            "../dist"
-        ],
+        ["./generate_cheatsheet.py", ".", "../dist"],
         capture_output=True,
         cwd=cheat_path,
     )
@@ -139,7 +127,7 @@ def process_markdown_file_in_place(target, source, env):
     content: str = ""
     with open(file_path, "r") as document:
         content = document.read()
-        
+
     if content == "":
         print_error("Couldn't open file {}".format(file_path.as_posix()))
 
@@ -168,93 +156,6 @@ def process_markdown_file_in_place(target, source, env):
 
     remove_figcaption(Path(target[0].abspath))
     return None
-
-
-def build_chapter_md(target, source, env):
-    """A SCons Builder script"""
-    source.sort()
-    source_files = []
-    for s in source:
-        out = subprocess.run(
-            ["pandoc", "-s", s.abspath, "--shift-heading-level-by=1", "-o", s.abspath],
-            capture_output=True,
-        )
-        if out.returncode != 0:
-            print_error(out.stderr.decode())
-            raise Exception(out.stderr.decode())
-        print_success(out.stdout.decode())
-        source_files.append(s.abspath)
-    target_path = Path(target[0].abspath).stem
-    with open(target[0].abspath, "w") as fout:
-        fout.write("# " + target_path + "\n")
-        for line in fileinput.input(files=source_files):
-            fout.write(line)
-
-    return None
-
-
-def get_epub_metadata(root_path: str) -> Tuple[str, str]:
-    """Verify all epub settings files are present and return their paths"""
-    root = Path(root_path)
-    assert (root / "epub_metadata").exists()
-    assert (root / "epub_metadata" / "metadata.txt").exists()
-    assert (root / "epub_metadata" / "cover.png").exists()
-    return (
-        (root / "epub_metadata" / "metadata.txt").as_posix(),
-        (root / "epub_metadata" / "cover.png").as_posix(),
-    )
-
-
-def get_epub_css() -> str:
-    relative_path = Path("css/pandoc_epub.css")
-    return relative_path.absolute().as_posix()
-
-
-def get_gd_script_syntax() -> str:
-    relative_path = Path("gd-script.xml")
-    return relative_path.absolute().as_posix()
-
-
-def get_gd_theme() -> str:
-    relative_path = Path("gdscript.theme")
-    return relative_path.absolute().as_posix()
-
-
-def capture_book_title(metadata_path: str) -> str:
-    """Read the book title from the metadata file to use as the filename."""
-    metadata_file = Path(metadata_path)
-    prefix = "title: "
-    with open(metadata_file, "r") as read_obj:
-        for line in read_obj:
-            if line.startswith(prefix):
-                book_name = line.lstrip(prefix)
-                return "".join(x for x in book_name if x.isalnum()) + ".epub"
-    raise Exception("missing project name")
-
-
-def convert_to_epub(target, source, env):
-    """Build epub file from installed sources."""
-    md_files = []
-    for file in env["installed_md_files"]:
-        path = Path(file[0].abspath).relative_to(Path(env["BUILD_DIR"]).absolute())
-        md_files.append(path)
-    out = subprocess.run(
-        ["pandoc", "-o", env["EPUB_NAME"], "metadata.txt"]
-        + md_files
-        + [
-            "--toc",
-            "--syntax-definition",
-            "gd-script.xml",
-            "--highlight-style",
-            "gdscript.theme",
-        ],
-        cwd=env["BUILD_DIR"],
-        capture_output=True,
-    )
-    if out.returncode != 0:
-        print_error(out.stderr.decode())
-        raise Exception(out.stderr.decode())
-    print_success(out.stdout.decode())
 
 
 def remove_figcaption(html_path: Path):

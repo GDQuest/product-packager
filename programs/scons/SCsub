@@ -1,4 +1,6 @@
 Import("env")
+from pathlib import Path
+from typing import List
 import scons_helper as helper
 
 helper.print_success("Attempting standard build")
@@ -6,36 +8,56 @@ helper.print_success("Attempting standard build")
 VariantDir(env["BUILD_DIR"], env["src"], duplicate=False)
 VariantDir(env["DIST_DIR"], env["src"], duplicate=False)
 
-HTMLBuilder = Builder(action=helper.process_markdown_file_in_place,
-        suffix='.html',
-        src_suffix='.md',
-        single_source=1,
+
+
+def install_media_files(
+    content_directory: Path, source_media_files: List[Path]
+) -> list:
+    media_files = []
+    for path in source_media_files:
+        media_build_path: str = (
+            env["BUILD_DIR"] + path.relative_to(content_directory).parent.as_posix()
+        )
+        media_files.append(
+            Install(
+                media_build_path,
+                path.as_posix(),
+            )
         )
 
-env['BUILDERS']["HTMLBuilder"] = HTMLBuilder
+    return media_files
 
-images = []
-for image_path in env["images"]:
-    images.append(Install(env["BUILD_DIR"] + image_path.relative_to(env["content_folder_path"]).parent.as_posix(), image_path.as_posix()))
 
-videos = []
-for video_path in env["videos"]:
-    videos.append(Install(env["BUILD_DIR"] + video_path.relative_to(env["content_folder_path"]).parent.as_posix(), video_path.as_posix()))
+content_directory: Path = Path(env["content_directory"])
+media_files = install_media_files(content_directory, env["media_files"])
+
 
 html_files = []
-
 for markdown_path in env["markdown_files"]:
-    target = env["BUILD_DIR"] + markdown_path.relative_to(env["content_folder_path"]).as_posix()
-    Install(env["BUILD_DIR"] + markdown_path.relative_to(env["content_folder_path"]).parent.as_posix(), markdown_path.as_posix())
+    markdown_file: Path = markdown_path.relative_to(content_directory)
+    target = env["BUILD_DIR"] + markdown_file.as_posix()
+    Install(
+        env["BUILD_DIR"]
+        + markdown_path.relative_to(content_directory).parent.as_posix(),
+        markdown_path.as_posix(),
+    )
     build_html_file = env.HTMLBuilder(target)
-    for image in images:
-        Depends(build_html_file, image)
-    for video in videos:
-        Depends(build_html_file, video)
+    for media_file in media_files:
+        Depends(build_html_file, media_file)
     # export the html file to the dist dir
-    html_files.extend(Install(env["DIST_DIR"] + markdown_path.relative_to(env["content_folder_path"]).parent.as_posix(), build_html_file))
+    html_files.extend(
+        Install(
+            env["DIST_DIR"]
+            + markdown_path.relative_to(content_directory).parent.as_posix(),
+            build_html_file,
+        )
+    )
 
-if env.GetOption("cheatsheet"):
-    CheatSheetBuilder = Builder(action=helper.build_cheatsheet, suffix='.html')
-    env['BUILDERS']["CheatSheetBuilder"] = CheatSheetBuilder
+
+def generate_cheatsheet():
+    CheatSheetBuilder = Builder(action=helper.build_cheatsheet, suffix=".html")
+    env["BUILDERS"]["CheatSheetBuilder"] = CheatSheetBuilder
     env.CheatSheetBuilder(env["DIST_DIR"] + "cheatsheet.html", html_files)
+
+
+generate_cheatsheet()

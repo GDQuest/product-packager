@@ -1,54 +1,87 @@
 import scons_helper as helper
+from pathlib import Path
+from typing import List
+
 Import("env")
 
-AddOption('--epub', action="store_true", dest="epub")
-AddOption('--strict', action="store_true", dest="strict")
-AddOption('--cheatsheet', action="store_true", dest="cheatsheet")
+ERROR_SOURCE_DIR_INVALID = 1
+ERROR_GIT_VERSION_DONT_MATCH = 2
 
-GDBuilder = Builder(action=helper.bundle_godot_project, suffix='.zip')
+# Default(["html", "cheatsheet"])
+AddOption("--strict", action="store_true", dest="strict")
+AddOption("--epub", action="store_true", dest="epub")
 
-env['BUILDERS']["GDBuilder"] = GDBuilder
 
-if not helper.validate_source_dir(env["src"]):
-    helper.print_error("SRC dir invalid (missing content file)")
-    Exit(1)
+GodotProjectBuilder = Builder(action=helper.bundle_godot_project, suffix=".zip")
+HTMLBuilder = Builder(
+    action=helper.process_markdown_file_in_place,
+    suffix=".html",
+    src_suffix=".md",
+    single_source=1,
+)
+env["BUILDERS"]["GodotProjectBuilder"] = GodotProjectBuilder
+env["BUILDERS"]["HTMLBuilder"] = HTMLBuilder
 
-if env.GetOption("strict"):
+
+def validate_source_directory():
+    if not helper.validate_source_dir(env["src"]):
+        helper.print_error(f"{env['src']} is not a valid source directory. Exiting.")
+        Exit(ERROR_SOURCE_DIR_INVALID)
+
+
+def make_strict_mode_checks():
     if not helper.validate_git_version(env["src"]):
-        helper.print_error("GIT version error")
-        Exit(1)
+        helper.print_error(
+            f"The Git version of submodules does not match the required version. Exiting."
+        )
+        Exit(ERROR_GIT_VERSION_DONT_MATCH)
 
-env["content_folder_path"] = helper.Path(env["src"]) / "content"
-env["contents_folders"] = helper.content_introspection(env["src"])
 
-# Gather images
-env["images"] = []
-for folder in env["contents_folders"]:
-    env["images"].extend(
-        helper.glob_extensions(folder, ["*.png", "*.jpg", "*.svg", "*.gif"])
-    )
-# Gather videos
-env["videos"] = []
-for folder in env["contents_folders"]:
-    env["videos"].extend(
-        helper.glob_extensions(folder, ["*.mp4", "*.jpg"])
-    )
-# Gather markdown files
-env["markdown_files"] = []
-for folder in env["contents_folders"]:
-    env["markdown_files"].extend(
-        helper.glob_extensions(folder, ["*.md"])
-    )
+def set_content_folders():
+    env["content_directory"] = Path(env["src"]) / "content"
+    env["contents_folders"] = helper.content_introspection(env["src"])
+
+
+def find_all_content_files():
+    """Finds all images, videos, and markdown files to process and stores them
+    in environment variables."""
+
+    def glob_extensions(directory: Path, extensions: List[str]) -> List[Path]:
+        """Return all files in the given path with an extension in the extension list."""
+        results = []
+        for extension in extensions:
+            results += directory.glob("**/" + extension)
+        return results
+
+    env["media_files"] = []
+    env["markdown_files"] = []
+    for folder in env["contents_folders"]:
+        env["media_files"] += glob_extensions(
+            folder, ["*.png", "*.jpg", "*.svg", "*.gif", "*.mp4"]
+        )
+        env["markdown_files"] += glob_extensions(folder, ["*.md"])
+
+
+def package_godot_projects():
+    for folder in helper.get_godot_folders(env["src"]):
+        gd_name = helper.get_godot_filename(folder)
+        env.GodotProjectBuilder(
+            env["DIST_DIR"] + gd_name + ".zip", folder + "/project.godot"
+        )
+
+
+validate_source_directory()
+if env.GetOption("strict"):
+    make_strict_mode_checks()
+
+set_content_folders()
+find_all_content_files()
 
 # Make environment variables available to subscripts
 Export("env")
-
 if env.GetOption("epub"):
     SConscript("EpubSCsub")
 else:
     SConscript("SCsub")
 
-# package godot projects
-for folder in helper.get_godot_folders(env["src"]):
-    gd_name = helper.get_godot_filename(folder)
-    env.GDBuilder(env["DIST_DIR"] + gd_name + ".zip", folder + "/project.godot")
+package_godot_projects()
