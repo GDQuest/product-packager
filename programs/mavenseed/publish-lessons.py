@@ -11,7 +11,7 @@ import sys
 from enum import Enum
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Sequence, Set, Generator, Dict
+from typing import List, Sequence, Set, Generator, Dict, Tuple
 
 import requests
 from datargs import arg, parse
@@ -36,12 +36,13 @@ CACHE_FILE: Path = Path(".cache") / "courses.json"
 
 
 class Status(Enum):
+    """Valid status values for lessons in the Mavenseed API."""
     DRAFT: int = 0
     PUBLISHED: int = 1
 
 
 class ResponseCodes(Enum):
-    """RestAPI response codes"""
+    """Rest API response codes."""
 
     OK: int = 200
     CREATED: int = 201
@@ -97,7 +98,8 @@ class Args:
         aliases=["-p"],
     )
     list_courses: bool = arg(
-        default=False, help="If true, list all courses on the Mavenseed website and exit."
+        default=False,
+        help="If true, list all courses on the Mavenseed website and exit.",
     )
 
 
@@ -241,41 +243,6 @@ class Lesson:
         }
 
 
-def validate_lesson_files(files: Sequence[Path]) -> List[Path]:
-    """Validates the files to be uploaded to Mavenseed.
-
-    Returns:
-        A list of paths to files that should be uploaded.
-    """
-
-    def is_valid_file(filepath: Path) -> bool:
-        """Returns true if the file is a valid lesson file.
-
-        A valid lesson file is an html file that contains a valid lesson header.
-        """
-        is_valid: bool = filepath.exists() and filepath.suffix.lower() == ".html"
-        with filepath.open() as f:
-            return is_valid and bool(re.search(r"<title>.*</title>", f.read()))
-
-    return [filepath for filepath in files if is_valid_file(filepath)]
-
-
-def get_auth_token(api_url: str, email: str, password: str) -> str:
-    """Logs into the Mavenseed API using your email, password,and API token.
-
-    Args:
-        api_url: The URL of the Mavenseed API.
-        auth_token: A string containing the API token.
-    Returns:
-        The authorization token.
-    """
-    response = requests.post(
-        api_url + API_SLUG_LOGIN, data={"email": email, "password": password}
-    )
-    auth_token = response.json()["auth_token"]
-    return auth_token
-
-
 def get_lesson_title(filepath: Path) -> str:
     lesson_title: str = ""
     with open(filepath) as f:
@@ -404,6 +371,23 @@ def save_cache(cache: dict) -> None:
     json.dump(cache, open(CACHE_FILE, "w"), indent=2)
 
 
+def does_chapter_exist_in_course(
+    auth_token: str, api_url: str, chapter_id: int, course_id: int
+) -> bool:
+    """Makes an API request to the Mavenseed API to see if a chapter exists."""
+    response = requests.get(
+        f"{api_url}/{API_SLUG_CHAPTERS}/{chapter_id}",
+        headers={"Authorization": "Bearer " + auth_token},
+    )
+    data: dict = response.json()
+    is_valid: bool = (
+        response.status_code == 200
+        and data["id"] == chapter_id
+        and data["course_id"] == course_id
+    )
+    return is_valid
+
+
 def create_lesson(auth_token: str, api_url: str, new_lesson: NewLesson) -> dict:
     """Creates a new lesson via the Mavenseed API. Returns the lesson's data as a dictionary."""
     content: str = new_lesson.get_file_content()
@@ -482,7 +466,10 @@ def list_all_courses(auth_token: str, api_url: str) -> None:
         print(f"- {course['title']} (id: {course['id']})")
 
 
-def create_and_update_course(args: Args) -> None:
+
+
+
+def create_and_update_course(auth_token: str, args: Args) -> None:
     """Main function of the script.
 
     Validates arguments, then attempts to create new chapters and lessons or
@@ -490,77 +477,133 @@ def create_and_update_course(args: Args) -> None:
 
     Caches the course data to a file and uses the cache to speed up execution.
     """
-    valid_files: List[Path] = validate_lesson_files(args.lesson_files)
-    if len(valid_files) != len(args.lesson_files):
-        invalid_files: Set[Path] = {
-            filepath for filepath in args.lesson_files if filepath not in valid_files
-        }
-        for filepath in invalid_files:
-            print(f"{filepath} is not a valid lesson file. It won't be uploaded.")
-    if len(valid_files) == 0:
-        print("No valid lesson files found to upload in the provided list. Exiting.")
-        sys.exit(ERROR_NO_VALID_LESSON_FILES)
 
-    auth_token: str = get_auth_token(args.mavenseed_url, args.email, args.password)
+    def validate_files(args: Args) -> List[Path]:
+        """Returns the list of valid html files passed in the command line arguments."""
 
-    cached_data: dict = {}
-    if CACHE_FILE.exists():
-        with open(CACHE_FILE) as f:
-            cached_data = json.load(f)
-    else:
-        print("Cache file not found. Downloading and caching all data from Mavenseed.")
-        cached_data = cache_all_courses(args.mavenseed_url, auth_token)
-        save_cache(cached_data)
+        def validate_lesson_files(files: Sequence[Path]) -> List[Path]:
+            """Validates the files to be uploaded to Mavenseed.
 
-    if not cached_data:
-        print("Cache file is empty. Exiting.")
-        sys.exit(ERROR_CACHE_FILE_EMPTY)
+            Returns:
+                A list of paths to files that should be uploaded.
+            """
 
-    course_to_update: Course = None
-    while not course_to_update:
-        course_to_update = next(
-            (
-                Course(**cached_data[course_title]["data"])
-                for course_title in cached_data.keys()
-                if course_title == args.course
-            ),
-            None,
-        )
-        if not course_to_update:
+            def is_valid_file(filepath: Path) -> bool:
+                """Returns true if the file is a valid lesson file.
+
+                A valid lesson file is an html file that contains a valid title tag.
+                """
+                is_valid: bool = (
+                    filepath.exists() and filepath.suffix.lower() == ".html"
+                )
+                with filepath.open() as f:
+                    return is_valid and bool(re.search(r"<title>.*</title>", f.read()))
+
+            return [filepath for filepath in files if is_valid_file(filepath)]
+
+        valid_files: List[Path] = validate_lesson_files(args.lesson_files)
+        if len(valid_files) != len(args.lesson_files):
+            invalid_files: Set[Path] = {
+                filepath
+                for filepath in args.lesson_files
+                if filepath not in valid_files
+            }
+            for filepath in invalid_files:
+                print(f"{filepath} is not a valid lesson file. It won't be uploaded.")
+        if len(valid_files) == 0:
             print(
-                f"No cached course data found for the course named '{args.course}'. "
-                f"Do you want to update the course data? [y/N]"
+                "No valid lesson files found to upload in the provided list. Exiting."
             )
-            if input().lower() != "y":
-                print("Course missing. Exiting.")
-                sys.exit(ERROR_COURSE_NOT_FOUND)
-            else:
-                print("Updating course data.")
-                cached_data = cache_all_courses(args.mavenseed_url, auth_token)
-                save_cache(cached_data)
+            sys.exit(ERROR_NO_VALID_LESSON_FILES)
+        return valid_files
 
-    # Mapping lessons to their respective chapters.
+    def validate_and_update_cache(args: Args, auth_token: str) -> dict:
+        """"""
+        cached_data: dict = {}
+        if CACHE_FILE.exists():
+            with open(CACHE_FILE) as f:
+                cached_data = json.load(f)
+        else:
+            print(
+                "Cache file not found. Downloading and caching all data from Mavenseed."
+            )
+            cached_data = cache_all_courses(args.mavenseed_url, auth_token)
+            save_cache(cached_data)
+
+        if not cached_data:
+            print("Cache file is empty. Exiting.")
+            sys.exit(ERROR_CACHE_FILE_EMPTY)
+        return cached_data
+
+    def find_course_to_update(
+        args: Args, auth_token: str, cached_data: dict
+    ) -> Tuple[dict, Course]:
+        """Finds the course matching the title passed as a command-line argument
+        inside the cache.
+
+        If no matching course is found, we offer the user to update the cache
+        and return the new cache."""
+        course_to_update: Course = None
+        while not course_to_update:
+            course_to_update = next(
+                (
+                    Course(**cached_data[course_title]["data"])
+                    for course_title in cached_data.keys()
+                    if course_title == args.course
+                ),
+                None,
+            )
+            if not course_to_update:
+                print(
+                    f"No cached course data found for the course named '{args.course}'. "
+                    f"Do you want to update the course data? [y/N]"
+                )
+                if input().lower() != "y":
+                    print("Course missing. Exiting.")
+                    sys.exit(ERROR_COURSE_NOT_FOUND)
+                else:
+                    print("Updating course data.")
+                    cached_data = cache_all_courses(args.mavenseed_url, auth_token)
+                    save_cache(cached_data)
+        return cached_data, course_to_update
+
+    def get_lessons_in_course(course_chapters: dict) -> List[Lesson]:
+        """Returns the list of all lessons in a course."""
+        lessons_in_course: List[Lesson] = []
+        for chapter_name in course_chapters:
+            chapter_data: dict = course_chapters[chapter_name]
+            for lesson_title in chapter_data["lessons"]:
+                lesson_data: dict = chapter_data["lessons"][lesson_title]
+                lessons_in_course.append(Lesson(**lesson_data, content=""))
+        return lessons_in_course
+
+    def map_lessons_to_chapters(valid_files: List[Path]) -> dict:
+        """Turns file paths into a mapping of `chapter_name:
+        List[Tuple[lesson_title, filepath]]`.
+
+        Returns the new data structure."""
+        lessons_map: dict = {}
+        for filepath in valid_files:
+            chapter_name: str = filepath.parent.name
+            chapter_name = re.sub(r"[\-_]", " ", chapter_name)
+            chapter_name = re.sub(r"\d+\.", "", chapter_name)
+            chapter_name = chapter_name.capitalize()
+
+            if not lessons_map.get(chapter_name):
+                lessons_map[chapter_name] = []
+
+            lesson_title: str = get_lesson_title(filepath)
+            lessons_map[chapter_name].append((lesson_title, filepath))
+        return lessons_map
+
+    valid_files: List[Path] = validate_files(args)
+    cached_data = validate_and_update_cache(args, auth_token)
+    cached_data, course_to_update = find_course_to_update(args, auth_token, cached_data)
+
+    # Preparing data to find which lessons to create or update.
     course_chapters: dict = cached_data[course_to_update.title]["chapters"]
-    lessons_in_course: List[Lesson] = []
-    for chapter_name in course_chapters:
-        chapter_data: dict = course_chapters[chapter_name]
-        for lesson_title in chapter_data["lessons"]:
-            lesson_data: dict = chapter_data["lessons"][lesson_title]
-            lessons_in_course.append(Lesson(**lesson_data, content=""))
-
-    # Create a data structure to turn file paths into a mapping of chapters to lessons.
-    lessons_map: dict = {}
-    for filepath in args.lesson_files:
-        chapter_name: str = filepath.parent.name
-        chapter_name = re.sub(r"[\-_]", " ", chapter_name)
-        chapter_name = re.sub(r"\d+\.", "", chapter_name)
-        chapter_name = chapter_name.capitalize()
-
-        if not lessons_map.get(chapter_name):
-            lessons_map[chapter_name] = []
-
-        lesson_title: str = get_lesson_title(filepath)
-        lessons_map[chapter_name].append((lesson_title, filepath))
+    lessons_in_course: List[Lesson] = get_lessons_in_course(course_chapters)
+    lessons_map: dict = map_lessons_to_chapters(valid_files)
 
     # Find all chapters and lessons to create or to update.
     chapter_loopindex: int = 1
@@ -596,6 +639,15 @@ def create_and_update_course(args: Args) -> None:
             )
             lesson: Lesson = next(lessons_filter, None)
             if not lesson:
+                if not does_chapter_exist_in_course(
+                    auth_token, args.mavenseed_url, chapter_id, course_to_update.id
+                ):
+                    print(
+                        f"Chapter {chapter_id} not found in course {course_to_update.title}.\n"
+                        f"Skipping lesson {lesson_title}."
+                    )
+                    continue
+
                 new_lesson: NewLesson = NewLesson(
                     title=lesson_title,
                     filepath=filepath,
@@ -607,7 +659,6 @@ def create_and_update_course(args: Args) -> None:
                 )
                 # We don't store the content to keep the cache smaller
                 del new_lesson_data["content"]
-                print(cached_data[course_to_update.title]["chapters"][chapter_name])
                 cached_data[course_to_update.title]["chapters"][chapter_name][
                     "lessons"
                 ][new_lesson_data["title"]] = new_lesson_data
@@ -628,20 +679,28 @@ def create_and_update_course(args: Args) -> None:
 
 
 def main():
-    args: Args = parse(Args)
+    def get_auth_token(api_url: str, email: str, password: str) -> str:
+        """Logs into the Mavenseed API using your email and password.
 
+        Returns an auth token for future API calls."""
+        response = requests.post(
+            api_url + API_SLUG_LOGIN, data={"email": email, "password": password}
+        )
+        auth_token = response.json()["auth_token"]
+        return auth_token
+        
+    args: Args = parse(Args)
     if not args.mavenseed_url:
         raise ValueError(
             """You must provide a Mavenseed URL via the --mavenseed-url command line
             option or set the MAVENSEED_URL environment variable."""
         )
-
     auth_token: str = get_auth_token(args.mavenseed_url, args.email, args.password)
     if args.list_courses:
         list_all_courses(auth_token, args.mavenseed_url)
         sys.exit(0)
     else:
-        create_and_update_course(args)
+        create_and_update_course(auth_token, args)
 
 
 if __name__ == "__main__":
