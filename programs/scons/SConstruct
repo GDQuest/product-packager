@@ -89,9 +89,12 @@ find_all_content_files()
 
 # Make environment variables available to subscripts
 Export("env")
+mavenseed_files = []
 if env.GetOption("epub"):
     SConscript("EpubSCsub")
 else:
-    SConscript("SCsub")
+    mavenseed_files = SConscript("SCsub")
 
 package_godot_projects()
+if env.GetOption("mavenseed"):
+    Return('mavenseed_files')

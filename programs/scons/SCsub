@@ -18,6 +18,7 @@ this_directory: Path = Path(os.getcwd())
 VariantDir(env["BUILD_DIR"], env["src"], duplicate=False)
 VariantDir(env["DIST_DIR"], env["src"], duplicate=False)
 
+Clean(env["DIST_DIR"], env["BUILD_DIR"])
 
 def install_media_files(
     content_directory: Path, source_media_files: List[Path]
@@ -175,7 +176,11 @@ if env.GetOption("mavenseed"):
         single_source=1,
     )
     env["BUILDERS"]["MavenseedBuilder"] = MavenseedBuilder
+    mavenseed_files = []
     for html_node in html_nodes:
-        output_directory = env["DIST_DIR"] + "/mavenseed/" + html_node.name
-        mavenseed_output_file_node = env.MavenseedBuilder(output_directory, html_node)
-        Depends(mavenseed_output_file_node, html_node)
+        input_file: Path = Path(html_node.abspath)
+        chapter_name: str = input_file.parent.name
+        output_file = Path(env["DIST_DIR"], "mavenseed", chapter_name, input_file.name)
+        mavenseed_output_file_node = env.MavenseedBuilder(output_file.as_posix(), html_node)
+        mavenseed_files += Depends(mavenseed_output_file_node, html_node)
+    Return('mavenseed_files')
