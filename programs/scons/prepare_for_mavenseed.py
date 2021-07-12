@@ -1,7 +1,8 @@
+#!/usr/bin/env python3
 """Extract the body of html files to upload them to Mavenseed."""
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+from typing import List, Sequence
 
 from datargs import arg, parse
 
@@ -10,8 +11,8 @@ from datargs import arg, parse
 class Args:
     """Program command-line arguments."""
 
-    filepaths: List[Path] = arg(
-        positional=True, default=[], help="A list of files to process for Mavenseed."
+    filepaths: Sequence[Path] = arg(
+        positional=True, help="A list of files to process for Mavenseed."
     )
     print_files: bool = arg(
         aliases=["-p"],
