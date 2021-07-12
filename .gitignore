@@ -6,3 +6,5 @@ archive.zip
 
 .sconsign.dblite
 .vscode/
+.env
+.cache
