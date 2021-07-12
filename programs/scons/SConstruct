@@ -51,7 +51,7 @@ def find_all_content_files():
     env["markdown_files"] = []
     for folder in env["contents_folders"]:
         env["media_files"] += glob_extensions(
-            folder, ["*.png", "*.jpg", "*.svg", "*.gif", "*.mp4"]
+            folder, ["*.png", "*.jpg", "*.jpeg", "*.svg", "*.gif", "*.mp4"]
         )
         env["markdown_files"] += glob_extensions(folder, ["*.md"])
 
