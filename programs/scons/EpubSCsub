@@ -124,13 +124,13 @@ media_files = [
 
 new_list = []
 chapter_tiers = {}
-for markdown_path in env["markdown_files"]:
-    new_md_file = env["BUILD_DIR"] + markdown_path.parent.stem + markdown_path.name
-    installed_md = InstallAs(new_md_file, markdown_path.as_posix())
-    if markdown_path.parent.name not in chapter_tiers.keys():
-        chapter_tiers[markdown_path.parent.name] = [installed_md]
+for markdown_file in env["markdown_files"]:
+    new_md_file = env["BUILD_DIR"] + markdown_file.parent.stem + markdown_file.name
+    installed_md = InstallAs(new_md_file, markdown_file.as_posix())
+    if markdown_file.parent.name not in chapter_tiers.keys():
+        chapter_tiers[markdown_file.parent.name] = [installed_md]
     else:
-        chapter_tiers[markdown_path.parent.name].append(installed_md)
+        chapter_tiers[markdown_file.parent.name].append(installed_md)
     new_list.append(new_md_file)
 
 env["installed_md_files"] = []
