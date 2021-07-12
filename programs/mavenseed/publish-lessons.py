@@ -37,6 +37,7 @@ CACHE_FILE: Path = Path(".cache") / "courses.json"
 
 class Status(Enum):
     """Valid status values for lessons in the Mavenseed API."""
+
     DRAFT: int = 0
     PUBLISHED: int = 1
 
@@ -100,6 +101,12 @@ class Args:
     list_courses: bool = arg(
         default=False,
         help="If true, list all courses on the Mavenseed website and exit.",
+    )
+    refresh_cache: bool = arg(
+        default=False,
+        aliases=["-r"],
+        help="If True, resets the cache file before running the program."
+        " This deletes thecache file and forces the program to re-query the Mavenseed API.",
     )
 
 
@@ -248,14 +255,16 @@ def get_lesson_title(filepath: Path) -> str:
     with open(filepath) as f:
         while True:
             line = f.readline()
-            # Find the content of the title html tag.
             if re.search(r"<title>", line):
                 lesson_title = re.search(r"<title>(.*)</title>", line).group(1)
+                break
+            if re.search(r"<h1.*?>", line):
+                lesson_title = re.search(r"<h1.*?>(.*)</h1>", line).group(1)
                 break
             if not line:
                 break
     assert lesson_title != "", (
-        f"Unable to find the <title> HTML tag in file {filepath}.\n"
+        f"Unable to find the <title>or <h1> HTML tag in file {filepath}.\n"
         "This is required for the program to work."
     )
     return lesson_title.strip("'").replace("&#39;", "")
@@ -379,13 +388,14 @@ def does_chapter_exist_in_course(
         f"{api_url}/{API_SLUG_CHAPTERS}/{chapter_id}",
         headers={"Authorization": "Bearer " + auth_token},
     )
-    data: dict = response.json()
-    is_valid: bool = (
-        response.status_code == 200
-        and data["id"] == chapter_id
-        and data["course_id"] == course_id
-    )
-    return is_valid
+    if response.status_code == ResponseCodes.OK.value:
+        data: dict = response.json()
+        return (
+            data is not None
+            and data["id"] == chapter_id
+            and data["course_id"] == course_id
+        )
+    return False
 
 
 def create_lesson(auth_token: str, api_url: str, new_lesson: NewLesson) -> dict:
@@ -466,9 +476,6 @@ def list_all_courses(auth_token: str, api_url: str) -> None:
         print(f"- {course['title']} (id: {course['id']})")
 
 
-
-
-
 def create_and_update_course(auth_token: str, args: Args) -> None:
     """Main function of the script.
 
@@ -491,13 +498,17 @@ def create_and_update_course(auth_token: str, args: Args) -> None:
             def is_valid_file(filepath: Path) -> bool:
                 """Returns true if the file is a valid lesson file.
 
-                A valid lesson file is an html file that contains a valid title tag.
+                A valid lesson file is an html file that contains a valid
+                <title> or <h1> tag.
                 """
-                is_valid: bool = (
-                    filepath.exists() and filepath.suffix.lower() == ".html"
-                )
+                if not filepath.exists() and filepath.suffix.lower() == ".html":
+                    return False
                 with filepath.open() as f:
-                    return is_valid and bool(re.search(r"<title>.*</title>", f.read()))
+                    content = f.read()
+                    return (
+                        re.search(r"<title>.*</title>", content) is not None
+                        or re.search(r"<h1.*?>.*</h1>", content) is not None
+                    )
 
             return [filepath for filepath in files if is_valid_file(filepath)]
 
@@ -518,15 +529,18 @@ def create_and_update_course(auth_token: str, args: Args) -> None:
         return valid_files
 
     def validate_and_update_cache(args: Args, auth_token: str) -> dict:
-        """"""
         cached_data: dict = {}
+
+        if args.refresh_cache:
+            print("Refreshing cache.")
+            if CACHE_FILE.exists():
+                CACHE_FILE.unlink()
+
         if CACHE_FILE.exists():
             with open(CACHE_FILE) as f:
                 cached_data = json.load(f)
         else:
-            print(
-                "Cache file not found. Downloading and caching all data from Mavenseed."
-            )
+            print("Downloading and caching all data from Mavenseed.")
             cached_data = cache_all_courses(args.mavenseed_url, auth_token)
             save_cache(cached_data)
 
@@ -688,7 +702,7 @@ def main():
         )
         auth_token = response.json()["auth_token"]
         return auth_token
-        
+
     args: Args = parse(Args)
     if not args.mavenseed_url:
         raise ValueError(
