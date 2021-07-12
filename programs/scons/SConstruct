@@ -11,6 +11,7 @@ ERROR_GIT_VERSION_DONT_MATCH = 2
 AddOption("--strict", action="store_true", dest="strict")
 AddOption("--epub", action="store_true", dest="epub")
 AddOption("--cheatsheet", action="store_true", dest="cheatsheet")
+AddOption("--mavenseed", action="store_true", dest="mavenseed")
 
 GodotProjectBuilder = Builder(action=helper.bundle_godot_project, suffix=".zip")
 env["BUILDERS"]["GodotProjectBuilder"] = GodotProjectBuilder

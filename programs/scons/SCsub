@@ -86,7 +86,7 @@ def process_markdown_file_in_place(target, source, env):
 
 
 def prepare_html_dependencies(content_directory: Path) -> list:
-    html_files = []
+    html_nodes = []
     for markdown_path in env["markdown_files"]:
         markdown_file: Path = markdown_path.relative_to(content_directory)
         markdown_directory: Path = markdown_file.parent
@@ -99,14 +99,14 @@ def prepare_html_dependencies(content_directory: Path) -> list:
         for media_file in media_files:
             Depends(build_html_file, media_file)
         # export the html file to the dist dir
-        html_files += Install(
+        html_nodes += Install(
             env["DIST_DIR"] + markdown_directory.as_posix(),
             build_html_file,
         )
-    return html_files
+    return html_nodes
 
 
-def generate_cheatsheet(html_files: list) -> None:
+def generate_cheatsheet(html_nodes: list) -> None:
     def build_cheatsheet(target, source, env):
         """A SCons Builder script, generates a cheatsheet, using a python file
         in the target directory"""
@@ -125,7 +125,32 @@ def generate_cheatsheet(html_files: list) -> None:
 
     CheatSheetBuilder = Builder(action=build_cheatsheet, suffix=".html")
     env["BUILDERS"]["CheatSheetBuilder"] = CheatSheetBuilder
-    env.CheatSheetBuilder(env["DIST_DIR"] + "cheatsheet.html", html_files)
+    env.CheatSheetBuilder(env["DIST_DIR"] + "cheatsheet.html", html_nodes)
+
+
+def convert_files_for_mavenseed(target, source, env) -> None:
+    mavenseed_program_path: Path = this_directory / "prepare_for_mavenseed.py"
+    input_file: Path = Path(source[0].abspath)
+    chapter_name: str = input_file.parent.name
+    output_directory = Path(env["DIST_DIR"], "mavenseed", chapter_name)
+    if not output_directory.exists():
+        output_directory.mkdir(parents=True)
+    command: List[str] = [
+        mavenseed_program_path.as_posix(),
+        "--output-directory",
+        output_directory.as_posix(),
+        "--overwrite",
+        "--print-files",
+        "--",
+        input_file,
+    ]
+
+    result = subprocess.run(
+        command,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    print_success(f"Mavenseed output files:\n {result.stdout}")
 
 
 HTMLBuilder = Builder(
@@ -137,6 +162,20 @@ HTMLBuilder = Builder(
 env["BUILDERS"]["HTMLBuilder"] = HTMLBuilder
 content_directory: Path = Path(env["content_directory"])
 media_files = install_media_files(content_directory, env["media_files"])
-html_files = prepare_html_dependencies(content_directory)
+html_nodes = prepare_html_dependencies(content_directory)
+
 if env.GetOption("cheatsheet"):
-    generate_cheatsheet(html_files)
+    generate_cheatsheet(html_nodes)
+
+if env.GetOption("mavenseed"):
+    MavenseedBuilder = Builder(
+        action=convert_files_for_mavenseed,
+        suffix=".html",
+        src_suffix=".md",
+        single_source=1,
+    )
+    env["BUILDERS"]["MavenseedBuilder"] = MavenseedBuilder
+    for html_node in html_nodes:
+        output_directory = env["DIST_DIR"] + "/mavenseed/" + html_node.name
+        mavenseed_output_file_node = env.MavenseedBuilder(output_directory, html_node)
+        Depends(mavenseed_output_file_node, html_node)
