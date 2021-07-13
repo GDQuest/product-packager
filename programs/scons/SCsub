@@ -86,7 +86,7 @@ def process_markdown_file_in_place(target, source, env):
     return None
 
 
-def prepare_html_dependencies(content_directory: Path) -> list:
+def prepare_html_dependencies(content_directory: Path, media_files: list) -> list:
     html_nodes = []
     for markdown_path in env["markdown_files"]:
         markdown_file: Path = markdown_path.relative_to(content_directory)
@@ -141,7 +141,6 @@ def convert_files_for_mavenseed(target, source, env) -> None:
         "--output-directory",
         output_directory.as_posix(),
         "--overwrite",
-        "--print-files",
         "--",
         input_file,
     ]
@@ -163,7 +162,7 @@ HTMLBuilder = Builder(
 env["BUILDERS"]["HTMLBuilder"] = HTMLBuilder
 content_directory: Path = Path(env["content_directory"])
 media_files = install_media_files(content_directory, env["media_files"])
-html_nodes = prepare_html_dependencies(content_directory)
+html_nodes = prepare_html_dependencies(content_directory, media_files)
 
 if env.GetOption("cheatsheet"):
     generate_cheatsheet(html_nodes)
@@ -172,7 +171,7 @@ if env.GetOption("mavenseed"):
     MavenseedBuilder = Builder(
         action=convert_files_for_mavenseed,
         suffix=".html",
-        src_suffix=".md",
+        src_suffix=".html",
         single_source=1,
     )
     env["BUILDERS"]["MavenseedBuilder"] = MavenseedBuilder
