@@ -324,6 +324,7 @@ button {
   cursor: pointer;
 }
 .video-youtube > .playbutton {
+  pointer-events: none;
   width: 90px;
   height: 60px;
   background-color: #333;
@@ -334,7 +335,7 @@ button {
 }
 
 .playbutton:before {
-  content: "";
+  content: '';
   border-style: solid;
   border-width: 15px 0 15px 26px;
   border-color: transparent transparent transparent #fff;
