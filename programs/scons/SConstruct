@@ -1,11 +1,12 @@
 import scons_helper as helper
 from pathlib import Path
-from typing import List
+from typing import List, Set
 
 Import("env")
 
 ERROR_SOURCE_DIR_INVALID = 1
 ERROR_GIT_VERSION_DONT_MATCH = 2
+ERROR_DUPLICATE_PROJECT_NAME = 4
 
 # Default(["html", "cheatsheet"])
 AddOption("--strict", action="store_true", dest="strict")
@@ -57,6 +58,8 @@ def find_all_content_files():
 
 
 def package_godot_projects():
+    project_names: Set = set()
+
     def get_godot_project_name(project_folder: str) -> str:
         """Return the project name from a directory with a project.godot
         file."""
@@ -75,6 +78,9 @@ def package_godot_projects():
 
     for folder in helper.get_godot_folders(env["src"]):
         gd_name = get_godot_project_name(folder)
+        if gd_name in project_names:
+            helper.print_error(f"Project name {gd_name} is not unique. Exiting.")
+            Exit(ERROR_DUPLICATE_PROJECT_NAME)
         env.GodotProjectBuilder(
             env["DIST_DIR"] + gd_name + ".zip", folder + "/project.godot"
         )
