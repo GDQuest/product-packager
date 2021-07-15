@@ -77,6 +77,14 @@ def package_godot_projects():
         raise Exception("Missing Godot project name")
 
     for folder in helper.get_godot_folders(env["src"]):
+        do_ignore: bool = False
+        for pattern in env["GODOT_IGNORE_DIRECTORIES"]:
+            if pattern in folder:
+                do_ignore = True
+                break
+        if do_ignore:
+            continue
+
         gd_name = get_godot_project_name(folder)
         if gd_name in project_names:
             helper.print_error(f"Project name {gd_name} is not unique. Exiting.")
@@ -103,4 +111,4 @@ else:
 
 package_godot_projects()
 if env.GetOption("mavenseed"):
-    Return('mavenseed_files')
+    Return("mavenseed_files")
