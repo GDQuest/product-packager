@@ -108,6 +108,16 @@ class Args:
         help="If True, resets the cache file before running the program."
         " This deletes thecache file and forces the program to re-query the Mavenseed API.",
     )
+    delete: bool = arg(
+        default=False,
+        aliases=["-d"],
+        help="If True, deletes the lessons instead of uploading them.",
+    )
+    verbose: bool = arg(
+        default=False,
+        aliases=["-v"],
+        help="If True, prints more information about the process.",
+    )
 
 
 @dataclass
@@ -692,6 +702,53 @@ def create_and_update_course(auth_token: str, args: Args) -> None:
     save_cache(cached_data)
 
 
+def delete_lessons(auth_token: str, args: Args) -> None:
+    """Deletes the lessons corresponding to the given course and lesson_files
+    using the Mavenseed API."""
+
+    def delete_lesson(auth_token: str, lesson_id: int) -> bool:
+        """Deletes a lesson from the Mavenseed API.
+
+        Returns True if the lesson was deleted, False otherwise."""
+        print(f"Deleting lesson {lesson_id} from course {lesson_id}.")
+        delete_url: str = f"{args.mavenseed_url}/{API_SLUG_LESSONS}/{lesson_id}"
+        response: requests.Response = requests.delete(
+            delete_url, headers={"Authorization": f"Bearer {auth_token}"}
+        )
+        if response.status_code != ResponseCodes.OK:
+            print(
+                f"Error deleting lesson {lesson_id}.\n"
+                f"Response status code: {response.status_code}.\n"
+                f"Response text: {response.text}"
+            )
+        return response.status_code == ResponseCodes.OK
+
+    cached_data: dict = {}
+    if CACHE_FILE.exists():
+        with open(CACHE_FILE) as f:
+            cached_data = json.load(f)
+    if not cached_data:
+        raise RuntimeError("Cache file empty.")
+
+    lessons_to_delete: List[int] = [get_lesson_title(f) for f in args.lesson_files]
+    course_to_update = cached_data[args.course]
+    course_chapters: dict = course_to_update["chapters"]
+    for chapter_name in course_chapters:
+        chapter_data: dict = course_chapters[chapter_name]
+        for lesson_title in chapter_data["lessons"]:
+            if lesson_title not in lessons_to_delete:
+                continue
+            lesson_data: dict = chapter_data["lessons"][lesson_title]
+            did_deletion_succeed: bool = delete_lesson(auth_token, lesson_data["id"])
+            if did_deletion_succeed:
+                del cached_data[course_to_update.title]["chapters"][chapter_name][
+                    "lessons"
+                ][lesson_title]
+
+    print("Saving changes to cache file.")
+    save_cache(cached_data)
+
+
 def main():
     def get_auth_token(api_url: str, email: str, password: str) -> str:
         """Logs into the Mavenseed API using your email and password.
@@ -713,6 +770,8 @@ def main():
     if args.list_courses:
         list_all_courses(auth_token, args.mavenseed_url)
         sys.exit(0)
+    elif args.delete:
+        delete_lessons(auth_token, args)
     else:
         create_and_update_course(auth_token, args)
 
