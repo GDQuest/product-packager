@@ -1,13 +1,46 @@
 import os
 
+import dotenv
+from SCons.Script import Environment, Export, Dir
+
+
+def move_mavenseed_node_guides_outside_folders(target, source, env):
+    """Moves node guides to the parent directory and removes the folder
+    containing them"""
+    path: env.File = source[0]
+    directory: env.Dir = path.parent
+    path.rename(path.parent.parent / path.name)
+    directory.rmdir()
+
+
 env = Environment()
+dotenv.load_dotenv()
 
-path_to_product_packager="/absolute/path/to/scons/folder"
+env["SRC_DIR"] = Dir(".")
+env["BUILD_DIR"] = env["SRC_DIR"].Dir("build")
+env["DIST_DIR"] = env["SRC_DIR"].Dir("dist")
+env["PRODUCT_PACKAGER_DIR"] = Dir(os.environ.get("PATH_TO_PRODUCT_PACKAGER"))
 
-env["src"] = os.getcwd()
-
-env["BUILD_DIR"] = env["src"] + "/build/"
-env["DIST_DIR"] =  env["src"] + "/dist/"
+if os.environ.get("PYTHONUSERBASE", ""):
+    env["ENV"]["PYTHONUSERBASE"] = os.environ["PYTHONUSERBASE"]
 
 Export("env")
-SConscript(path_to_product_packager + "/SConstruct")
+mavenseed_files = env.SConscript(env["PRODUCT_PACKAGER_DIR"].File("SConstruct"))
+
+if env.GetOption("mavenseed"):
+    MavenseedMoveBuilder = env.Builder(
+        action=move_mavenseed_node_guides_outside_folders,
+        suffix=".html",
+        src_suffix=".html",
+        single_source=1,
+    )
+    env["BUILDERS"]["MavenseedMoveBuilder"] = MavenseedMoveBuilder
+    mavenseed_folder = env["DIST_DIR"].Dir("mavenseed")
+    IGNORED_FOLDERS = ["00.introduction"]
+for f in mavenseed_files:
+    path: Path = Path(f.abspath)
+    if path.parent.name in IGNORED_FOLDERS:
+        continue
+    moved_file = mavenseed_folder / f.name
+    mavenseed_flatten_output = env.MavenseedMoveBuilder(str(moved_file), f)
+    env.Depends(mavenseed_flatten_output, f)

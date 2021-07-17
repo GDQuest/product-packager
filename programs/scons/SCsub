@@ -1,185 +1,114 @@
-Import("env")
-import subprocess
 from pathlib import Path
-from typing import List
-import os
 
 import add_node_icons
 import highlight_code as highlighter
 import include
 import link
-from scons_helper import print_success, print_error
 import table_of_contents
+from scons_helper import print_success, print_error
+from SCons.Script import Dir, File, Environment, Import, Return
 
-print_success(f"Building {env['src']} as standalone HTML files.")
+# BEGIN - auto-completion
+env = Environment()
+# END - auto-completion
 
-this_directory: Path = Path(os.getcwd())
+Import("env")
 
-VariantDir(env["BUILD_DIR"], env["src"], duplicate=False)
-VariantDir(env["DIST_DIR"], env["src"], duplicate=False)
+env.VariantDir(env["BUILD_DIR"], env["SRC_DIR"], duplicate=False)
+env.VariantDir(env["DIST_DIR"], env["SRC_DIR"], duplicate=False)
 
-Clean(env["DIST_DIR"], env["BUILD_DIR"])
-
-def install_media_files(
-    content_directory: Path, source_media_files: List[Path]
-) -> list:
-    media_files = []
-    for path in source_media_files:
-        media_build_path: str = (
-            env["BUILD_DIR"] + path.relative_to(content_directory).parent.as_posix()
-        )
-        media_files.append(
-            Install(
-                media_build_path,
-                path.as_posix(),
-            )
-        )
-    return media_files
+env.Clean("", [env["DIST_DIR"], env["BUILD_DIR"]])
 
 
-def process_markdown_file_in_place(target, source, env):
-    """A SCons Builder script, builds a markdown file into a rendered html
-    file."""
+def calculate_target_file_paths(
+    destination: Dir, relative_dir: Dir, source_files: list[File]
+) -> list[File]:
+    """Returns the list of files taking their path from relative_dir and
+    appending it to destination."""
+    return [
+        env.File(Path(str(sf)).relative_to(str(relative_dir)), directory=destination)
+        for sf in source_files
+    ]
 
-    def remove_figcaption(html_path: Path):
-        """A cleanup step for generated md files."""
-        out = subprocess.run(
-            ["sed -Ei 's|<figcaption>.+</figcaption>||' " + html_path.as_posix()],
-            capture_output=True,
-            shell=True,
-        )
-        if out.returncode != 0:
-            print_error(out.stderr.decode())
 
-    file_path: Path = Path(source[0].abspath)
+def process_markdown_file_in_place(
+    target: list[File], source: list[File], env: Environment
+) -> None:
+    """Builds a markdown file into a rendered html file."""
+    source_file = Path(str(source[0]))
     content: str = ""
-    with open(file_path, "r") as document:
-        content = document.read()
+    with open(source_file, "r") as sf:
+        content = sf.read()
 
     if content == "":
-        print_error("Couldn't open file {}".format(file_path.as_posix()))
+        print_error(f"WARNING: Couldn't open file {source_file}")
 
-    content = include.process_document(content, file_path)
-    content = link.process_document(content, file_path)
+    content = include.process_document(content, source_file)
+    content = link.process_document(content, source_file)
     content = table_of_contents.replace_contents_template(content)
     content = add_node_icons.add_built_in_icons(content)
     content = highlighter.highlight_code_blocks(content)
-    with open(file_path, "w") as document:
-        document.write(content)
 
-    out = subprocess.run(
-        [
-            "./convert_markdown.py",
-            file_path,
-            "--output-directory",
-            env["BUILD_DIR"],
-        ],
-        capture_output=True,
-        cwd=this_directory,
-    )
+    with open(source_file, "w") as sf:
+        sf.write(content)
 
-    if out.returncode != 0:
-        print_error(out.stderr.decode())
-        raise Exception(out.stderr.decode())
-
-    remove_figcaption(Path(target[0].abspath))
-    return None
-
-
-def prepare_html_dependencies(content_directory: Path, media_files: list) -> list:
-    html_nodes = []
-    for markdown_path in env["markdown_files"]:
-        markdown_file: Path = markdown_path.relative_to(content_directory)
-        markdown_directory: Path = markdown_file.parent
-        Install(
-            env["BUILD_DIR"] + markdown_directory.as_posix(),
-            markdown_path.as_posix(),
-        )
-        target = env["BUILD_DIR"] + markdown_file.as_posix()
-        build_html_file = env.HTMLBuilder(target)
-        for media_file in media_files:
-            Depends(build_html_file, media_file)
-        # export the html file to the dist dir
-        html_nodes += Install(
-            env["DIST_DIR"] + markdown_directory.as_posix(),
-            build_html_file,
-        )
-    return html_nodes
-
-
-def generate_cheatsheet(html_nodes: list) -> None:
-    def build_cheatsheet(target, source, env):
-        """A SCons Builder script, generates a cheatsheet, using a python file
-        in the target directory"""
-        cheat_path = Path(env["src"]) / Path("content")
-        out = subprocess.run(
-            ["./generate_cheatsheet.py", ".", "../dist"],
-            capture_output=True,
-            cwd=cheat_path,
-        )
-        if out.returncode != 0:
-            print_error(out.stderr.decode())
-            raise Exception(out.stderr.decode())
-        else:
-            print_success("cheatsheet built successfully.")
-        return None
-
-    CheatSheetBuilder = Builder(action=build_cheatsheet, suffix=".html")
-    env["BUILDERS"]["CheatSheetBuilder"] = CheatSheetBuilder
-    env.CheatSheetBuilder(env["DIST_DIR"] + "cheatsheet.html", html_nodes)
-
-
-def convert_files_for_mavenseed(target, source, env) -> None:
-    mavenseed_program_path: Path = this_directory / "prepare_for_mavenseed.py"
-    input_file: Path = Path(source[0].abspath)
-    chapter_name: str = input_file.parent.name
-    output_directory = Path(env["DIST_DIR"], "mavenseed", chapter_name)
-    if not output_directory.exists():
-        output_directory.mkdir(parents=True)
-    command: List[str] = [
-        mavenseed_program_path.as_posix(),
+    command = [
+        env["PRODUCT_PACKAGER_DIR"].File("convert_markdown.py"),
+        source_file,
         "--output-directory",
-        output_directory.as_posix(),
-        "--overwrite",
-        "--",
-        input_file,
+        env["BUILD_DIR"],
     ]
+    env.Execute([command])
 
-    result = subprocess.run(
-        command,
-        stdout=subprocess.PIPE,
-        text=True,
+    command = ["sed", "-Ei", "'s|<figcaption>.+</figcaption>||'", target[0]]
+    env.Execute([command])
+
+
+def prepare_html_dependencies(media_files: list[File]) -> list[File]:
+    build_files = calculate_target_file_paths(
+        env["BUILD_DIR"], env["CONTENT_DIR"], env["MARKDOWN_FILES"]
     )
-    print_success(f"Mavenseed output files:\n {result.stdout}")
+    env.InstallAs(build_files, env["MARKDOWN_FILES"])
+    build_html_files = env.HTMLBuilder(build_files)
+
+    # TODO: depend only on specific `media_files` instead of everything.
+    env.Depends(build_html_files, media_files)
+    return env.InstallAs(
+        calculate_target_file_paths(env["DIST_DIR"], env["BUILD_DIR"], build_html_files),
+        build_html_files,
+    )
 
 
-HTMLBuilder = Builder(
+print_success(f"Building {env['SRC_DIR']} as standalone HTML files.")
+
+HTMLBuilder = env.Builder(
     action=process_markdown_file_in_place,
     suffix=".html",
     src_suffix=".md",
     single_source=1,
 )
 env["BUILDERS"]["HTMLBuilder"] = HTMLBuilder
-content_directory: Path = Path(env["content_directory"])
-media_files = install_media_files(content_directory, env["media_files"])
-html_nodes = prepare_html_dependencies(content_directory, media_files)
 
-if env.GetOption("cheatsheet"):
-    generate_cheatsheet(html_nodes)
+media_files = env.InstallAs(
+    calculate_target_file_paths(env["BUILD_DIR"], env["CONTENT_DIR"], env["MEDIA_FILES"]),
+    env["MEDIA_FILES"],
+)
+html_files = prepare_html_dependencies(media_files)
 
 if env.GetOption("mavenseed"):
-    MavenseedBuilder = Builder(
-        action=convert_files_for_mavenseed,
-        suffix=".html",
-        src_suffix=".html",
-        single_source=1,
-    )
-    env["BUILDERS"]["MavenseedBuilder"] = MavenseedBuilder
     mavenseed_files = []
-    for html_node in html_nodes:
-        input_file: Path = Path(html_node.abspath)
-        chapter_name: str = input_file.parent.name
-        output_file = Path(env["DIST_DIR"], "mavenseed", chapter_name, input_file.name)
-        mavenseed_output_file_node = env.MavenseedBuilder(output_file.as_posix(), html_node)
-        mavenseed_files += Depends(mavenseed_output_file_node, html_node)
-    Return('mavenseed_files')
+    for html_file in html_files:
+        target_dir = env["DIST_DIR"].Dir("mavenseed").Dir(html_file.Dir(".").name)
+        target_file = target_dir.File(html_file.name)
+        command = [
+            env["PRODUCT_PACKAGER_DIR"].File("prepare_for_mavenseed.py"),
+            "--output-directory",
+            target_dir,
+            "--overwrite",
+            "--",
+            "$SOURCE",
+        ]
+        mavenseed_files += env.Command(
+            target=target_file, source=html_file, action=[command]
+        )
+    Return("mavenseed_files")

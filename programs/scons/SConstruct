@@ -1,114 +1,114 @@
-import scons_helper as helper
 from pathlib import Path
-from typing import List, Set
+from enum import Enum
+from typing import Iterator
+
+import scons_helper as sh
+from SCons.Script import Dir, Environment, Export, File, Import, AddOption, Return
+
+# BEGIN - auto-completion
+env = Environment()
+# END - auto-completion
 
 Import("env")
 
-ERROR_SOURCE_DIR_INVALID = 1
-ERROR_GIT_VERSION_DONT_MATCH = 2
-ERROR_DUPLICATE_PROJECT_NAME = 4
-
-# Default(["html", "cheatsheet"])
 AddOption("--strict", action="store_true", dest="strict")
 AddOption("--epub", action="store_true", dest="epub")
-AddOption("--cheatsheet", action="store_true", dest="cheatsheet")
 AddOption("--mavenseed", action="store_true", dest="mavenseed")
 
-GodotProjectBuilder = Builder(action=helper.bundle_godot_project, suffix=".zip")
-env["BUILDERS"]["GodotProjectBuilder"] = GodotProjectBuilder
+
+class Error(Enum):
+    SOURCE_DIR_INVALID = 1
+    GIT_VERSIONS_DONT_MATCH = 2
+    MISSING_GODOT_PROJECT_NAME = 3
 
 
-def validate_source_directory():
-    if not helper.is_source_directory_valid(env["src"]):
-        helper.print_error(f"{env['src']} is not a valid source directory. Exiting.")
-        Exit(ERROR_SOURCE_DIR_INVALID)
+def validate_source_directory() -> None:
+    """Ensures the source directory contains a content folder."""
+    is_source_directory_valid: bool = env["SRC_DIR"].Dir("content").exists()
+    if not is_source_directory_valid:
+        sh.print_error(f"ERROR: {env['SRC_DIR']} is not a valid source directory!")
+        env.Exit(Error.SOURCE_DIR_INVALID)
+
+
+def try_package_godot_projects() -> None:
+    def get_godot_project_name(project_file: File) -> str:
+        """Return the project name from a directory with a project.godot file."""
+        prefix = "config/name="
+        godot_project_name = ""
+
+        with open(str(project_file), "r") as pf:
+            for line in pf:
+                if line.startswith(prefix):
+                    godot_project_name = (
+                        line.lstrip(prefix).replace(" ", "_").replace('"', "").strip()
+                    )
+        return godot_project_name
+
+    for godot_project_file in sh.get_godot_project_files(env["SRC_DIR"]):
+        godot_project_name = get_godot_project_name(godot_project_file)
+
+        if godot_project_name == "":
+            sh.print_error(
+                f"ERROR: Missing Godot project name in {godot_project_file}!"
+            )
+            env.Exit(Error.MISSING_GODOT_PROJECT_NAME)
+
+        env.Command(
+            target=env["DIST_DIR"].File(godot_project_name + ".zip"),
+            source=godot_project_file.Dir("."),
+            action=[
+                [
+                    env.File("package_godot_project.py"),
+                    "$SOURCE",
+                    "--output",
+                    "${TARGET.dir}",
+                    "--title",
+                    godot_project_name,
+                ],
+            ],
+        )
 
 
 def make_strict_mode_checks():
-    if not helper.validate_git_version(env["src"]):
-        helper.print_error(
-            f"The Git version of submodules does not match the required version. Exiting."
+    if not sh.validate_git_versions(env["SRC_DIR"]):
+        sh.print_error(
+            "ERROR: The Git version of submodules does not match the required version!"
         )
-        Exit(ERROR_GIT_VERSION_DONT_MATCH)
+        env.Exit(Error.GIT_VERSIONS_DONT_MATCH)
 
 
-def set_content_folders():
-    env["content_directory"] = Path(env["src"]) / "content"
-    env["contents_folders"] = helper.content_introspection(env["src"])
+def glob_extensions(dir: Dir, extensions: list[str]) -> Iterator[File]:
+    """Return all files in the given path with an extension in the extension list."""
+    return (File(f) for e in extensions for f in Path(str(dir)).glob("**/" + e))
 
 
-def find_all_content_files():
-    """Finds all images, videos, and markdown files to process and stores them
-    in environment variables."""
-
-    def glob_extensions(directory: Path, extensions: List[str]) -> List[Path]:
-        """Return all files in the given path with an extension in the extension list."""
-        results = []
-        for extension in extensions:
-            results += directory.glob("**/" + extension)
-        return results
-
-    env["media_files"] = []
-    env["markdown_files"] = []
-    for folder in env["contents_folders"]:
-        env["media_files"] += glob_extensions(
-            folder, ["*.png", "*.jpg", "*.jpeg", "*.svg", "*.gif", "*.mp4"]
-        )
-        env["markdown_files"] += glob_extensions(folder, ["*.md"])
-
-
-def package_godot_projects():
-    project_names: Set = set()
-
-    def get_godot_project_name(project_folder: str) -> str:
-        """Return the project name from a directory with a project.godot
-        file."""
-        project_settings = Path(project_folder) / "project.godot"
-        prefix = "config/name="
-        with open(project_settings, "r") as read_obj:
-            for line in read_obj:
-                if line.startswith(prefix):
-                    return (
-                        line.lstrip(prefix)
-                        .replace(" ", "_")
-                        .replace('"', "")
-                        .replace("\n", "")
-                    )
-        raise Exception("Missing Godot project name")
-
-    for folder in helper.get_godot_folders(env["src"]):
-        do_ignore: bool = False
-        for pattern in env["GODOT_IGNORE_DIRECTORIES"]:
-            if pattern in folder:
-                do_ignore = True
-                break
-        if do_ignore:
-            continue
-
-        gd_name = get_godot_project_name(folder)
-        if gd_name in project_names:
-            helper.print_error(f"Project name {gd_name} is not unique. Exiting.")
-            Exit(ERROR_DUPLICATE_PROJECT_NAME)
-        env.GodotProjectBuilder(
-            env["DIST_DIR"] + gd_name + ".zip", folder + "/project.godot"
-        )
+def find_subdirectories(content_dir: Dir) -> list[Dir]:
+    """Returns a list of folders within the content folder"""
+    content_path_dir = Path(str(content_dir))
+    return [Dir(str(d)) for d in content_path_dir.iterdir() if d.is_dir()]
 
 
 validate_source_directory()
 if env.GetOption("strict"):
     make_strict_mode_checks()
 
-set_content_folders()
-find_all_content_files()
+env["CONTENT_DIR"] = env["SRC_DIR"].Dir("content")
+env["CONTENT_DIRS"] = find_subdirectories(env["CONTENT_DIR"])
+env["MEDIA_FILES"] = [
+    f
+    for d in env["CONTENT_DIRS"]
+    for f in glob_extensions(d, ["*.png", "*.jpg", "*.jpeg", "*.svg", "*.gif", "*.mp4"])
+]
+env["MARKDOWN_FILES"] = [
+    f for d in env["CONTENT_DIRS"] for f in glob_extensions(d, ["*.md"])
+]
 
 # Make environment variables available to subscripts
 Export("env")
-mavenseed_files = []
-if env.GetOption("epub"):
-    SConscript("EpubSCsub")
-else:
-    mavenseed_files = SConscript("SCsub")
 
-package_godot_projects()
-if env.GetOption("mavenseed"):
+try_package_godot_projects()
+if env.GetOption("epub"):
+    env.SConscript("EpubSCsub")
+else:
+    mavenseed_files = env.SConscript("SCsub")
     Return("mavenseed_files")
