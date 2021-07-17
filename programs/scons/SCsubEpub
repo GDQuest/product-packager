@@ -1,13 +1,29 @@
-Import("env")
 import fileinput
+import os
 import subprocess
 from pathlib import Path
 from typing import List, Tuple
-import os
 
-from scons_helper import print_success, print_error
+from SCons.Script import (
+    Dir,
+    Environment,
+    File,
+    Import,
+    VariantDir,
+    Builder,
+    Install,
+    InstallAs,
+    Delete,
+    Depends,
+)
+
+from scons_helper import print_error, print_success
+
+# This line allows us to avoid linter warnings and get completion support.
+env = Environment()
 
 print_success(f"Building project {env['src']} as Epub")
+Import("env")
 
 VariantDir(env["BUILD_DIR"], env["src"], duplicate=False)
 VariantDir(env["DIST_DIR"], env["src"], duplicate=False)
@@ -89,7 +105,7 @@ def build_chapter_md(target, source, env):
 def convert_to_epub(target, source, env):
     """Build epub file from installed sources."""
     md_files = []
-    for file in env["installed_md_files"]:
+    for file in env["INSTALLED_MD_FILES"]:
         path = Path(file[0].abspath).relative_to(Path(env["BUILD_DIR"]).absolute())
         md_files.append(path)
     out = subprocess.run(
@@ -119,12 +135,12 @@ env["BUILDERS"]["ChapterBuilder"] = ChapterBuilder
 
 media_files = [
     Install(env["BUILD_DIR"] + "images/", path.as_posix())
-    for path in env["media_files"]
+    for path in env["MEDIA_FILES"]
 ]
 
 new_list = []
 chapter_tiers = {}
-for markdown_file in env["markdown_files"]:
+for markdown_file in env["MARKDOWN_FILES"]:
     new_md_file = env["BUILD_DIR"] + markdown_file.parent.stem + markdown_file.name
     installed_md = InstallAs(new_md_file, markdown_file.as_posix())
     if markdown_file.parent.name not in chapter_tiers.keys():
@@ -133,13 +149,13 @@ for markdown_file in env["markdown_files"]:
         chapter_tiers[markdown_file.parent.name].append(installed_md)
     new_list.append(new_md_file)
 
-env["installed_md_files"] = []
+env["INSTALLED_MD_FILES"] = []
 sorted_chapters = sorted(chapter_tiers.keys())
 for chapter in sorted_chapters:
     built_chapter = env.ChapterBuilder(
         env["BUILD_DIR"] + chapter + ".md", chapter_tiers[chapter]
     )
-    env["installed_md_files"].append(built_chapter)
+    env["INSTALLED_MD_FILES"].append(built_chapter)
     for md in chapter_tiers[chapter]:
         env.AddPostAction(built_chapter, Delete(md))
 
@@ -155,7 +171,7 @@ epub_conversion_files = [
 ]
 installed_conversion_files = Install(env["BUILD_DIR"], epub_conversion_files)
 
-dependencies = media_files + env["installed_md_files"] + epub_conversion_files
+dependencies = media_files + env["INSTALLED_MD_FILES"] + epub_conversion_files
 build_epub_file = env.EpubBuilder(env["BUILD_DIR"] + env["EPUB_NAME"], dependencies)
 for dependency in dependencies:
     Depends(build_epub_file, dependency)

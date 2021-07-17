@@ -108,7 +108,7 @@ Export("env")
 
 try_package_godot_projects()
 if env.GetOption("epub"):
-    env.SConscript("EpubSCsub")
+    env.SConscript("SCsubEpub")
 else:
     mavenseed_files = env.SConscript("SCsub")
     Return("mavenseed_files")
