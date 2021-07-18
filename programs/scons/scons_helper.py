@@ -38,6 +38,17 @@ def validate_git_versions(source_dir: Dir) -> bool:
     return ret
 
 
+def calculate_target_file_paths(
+    destination: Dir, relative_dir: Dir, source_files: list[File]
+) -> list[File]:
+    """Returns the list of files taking their path from relative_dir and
+    appending it to destination."""
+    return [
+        File(Path(str(sf)).relative_to(str(relative_dir)), directory=destination)
+        for sf in source_files
+    ]
+
+
 def print_success(*args, **kwargs):
     print(colorama.Fore.GREEN, end="", flush=True)
     print(*args, **kwargs)
