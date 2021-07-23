@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import dotenv
 from SCons.Script import Environment, Export, Dir
@@ -37,10 +38,10 @@ if env.GetOption("mavenseed"):
     env["BUILDERS"]["MavenseedMoveBuilder"] = MavenseedMoveBuilder
     mavenseed_folder = env["DIST_DIR"].Dir("mavenseed")
     IGNORED_FOLDERS = ["00.introduction"]
-for f in mavenseed_files:
-    path: Path = Path(f.abspath)
-    if path.parent.name in IGNORED_FOLDERS:
-        continue
-    moved_file = mavenseed_folder / f.name
-    mavenseed_flatten_output = env.MavenseedMoveBuilder(str(moved_file), f)
-    env.Depends(mavenseed_flatten_output, f)
+    for f in mavenseed_files:
+        path: Path = Path(f.abspath)
+        if path.parent.name in IGNORED_FOLDERS:
+            continue
+        moved_file = mavenseed_folder / f.name
+        mavenseed_flatten_output = env.MavenseedMoveBuilder(str(moved_file), f)
+        env.Depends(mavenseed_flatten_output, f)
