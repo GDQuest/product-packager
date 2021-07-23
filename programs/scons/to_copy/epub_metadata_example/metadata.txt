@@ -2,5 +2,4 @@
 title: PCG Secrets
 author: GDQuest
 lang: en-US
-cover-image: cover.png
 ---
