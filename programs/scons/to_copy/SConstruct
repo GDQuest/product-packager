@@ -8,8 +8,8 @@ from SCons.Script import Environment, Export, Dir
 def move_mavenseed_node_guides_outside_folders(target, source, env):
     """Moves node guides to the parent directory and removes the folder
     containing them"""
-    path: env.File = source[0]
-    directory: env.Dir = path.parent
+    path: Path = Path(source[0].abspath)
+    directory: Path = path.parent
     path.rename(path.parent.parent / path.name)
     directory.rmdir()
 
@@ -22,7 +22,7 @@ env["BUILD_DIR"] = env["SRC_DIR"].Dir("build")
 env["DIST_DIR"] = env["SRC_DIR"].Dir("dist")
 env["PRODUCT_PACKAGER_DIR"] = Dir(os.environ.get("PATH_TO_PRODUCT_PACKAGER"))
 
-if os.environ.get("PYTHONUSERBASE", ""):
+if os.environ.get("PYTHONUSERBASE", None):
     env["ENV"]["PYTHONUSERBASE"] = os.environ["PYTHONUSERBASE"]
 
 Export("env")
@@ -38,10 +38,9 @@ if env.GetOption("mavenseed"):
     env["BUILDERS"]["MavenseedMoveBuilder"] = MavenseedMoveBuilder
     mavenseed_folder = env["DIST_DIR"].Dir("mavenseed")
     IGNORED_FOLDERS = ["00.introduction"]
-    for f in mavenseed_files:
-        path: Path = Path(f.abspath)
-        if path.parent.name in IGNORED_FOLDERS:
+    for path in mavenseed_files:
+        if path.Dir(".").name in IGNORED_FOLDERS:
             continue
-        moved_file = mavenseed_folder / f.name
-        mavenseed_flatten_output = env.MavenseedMoveBuilder(str(moved_file), f)
-        env.Depends(mavenseed_flatten_output, f)
+        moved_file = mavenseed_folder.File(path.name)
+        mavenseed_flatten_output = env.MavenseedMoveBuilder(moved_file, path)
+        env.Depends(mavenseed_flatten_output, path)
