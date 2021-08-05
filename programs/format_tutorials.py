@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from typing import List
 
 from lib.gdscript_classes import BUILT_IN_CLASSES
+from scons_helper import print_error
 
 TAB_WIDTH: int = 4
 
@@ -346,7 +347,7 @@ def main():
     args: argparse.Namespace = parse_command_line_arguments(sys.argv[1:])
     logging.basicConfig(level=logging.ERROR)
     if not is_python_version_compatible():
-        LOGGER.error(
+        print_error(
             "\n".join(
                 [
                     "Your Python version ({}.{}.{}) is too old.",
@@ -364,7 +365,7 @@ def main():
         f for f in args.files if f.lower().endswith(".md") and os.path.exists(f)
     ]
     if len(filepaths) != len(args.files):
-        LOGGER.error(
+        print_error(
             "\n".join(
                 [
                     "Some files are missing or their path is incorrect.",

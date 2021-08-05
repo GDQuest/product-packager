@@ -8,6 +8,8 @@ import argparse
 import tempfile
 import shutil
 
+from scons_helper import print_error
+
 LOGGER = logging.getLogger("package_godot_project.py")
 
 ERROR_GODOT_DIRECTORY_NOT_FOUND: int = 1
@@ -45,15 +47,15 @@ def main():
 
     # Check input and output directories.
     if not os.path.exists(src):
-        LOGGER.error("Directory {} does not exist, aborting operation.".format(src))
+        print_error("Directory {} does not exist, aborting operation.".format(src))
         sys.exit(ERROR_GODOT_DIRECTORY_NOT_FOUND)
     if not os.path.isfile(os.path.join(src, "project.godot")):
-        LOGGER.error(
+        print_error(
             "Directory {} is not a Godot project, aborting operation.".format(src)
         )
         sys.exit(ERROR_GODOT_DIRECTORY_INVALID)
     if not os.path.isdir(output_folder):
-        LOGGER.error(
+        print_error(
             "Output directory {} does not exist. Aborting operation.".format(
                 output_folder
             )

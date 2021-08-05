@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import List
 
 from gdscript_class_list import BUILT_IN_CLASSES
+from scons_helper import print_error
 
 LOGGER = logging.getLogger("format_tutorial.py")
 ERROR_INCORRECT_FILE_PATHS: int = 2
@@ -125,7 +126,7 @@ def main():
         f for f in args.files if f.lower().endswith(".md") and os.path.exists(f)
     ]
     if len(filepaths) != len(args.files):
-        LOGGER.error(
+        print_error(
             "\n".join(
                 [
                     "Some files are missing or their path is incorrect.",

@@ -18,6 +18,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Tuple
+from scons_helper import print_error
 
 from datargs import arg, parse
 
@@ -65,7 +66,7 @@ def replace_links(content: str, files: List[Path]):
     def replace_link(match: re.Match) -> str:
         filename: str = match.group(1)
         if not filename in files:
-            LINK_LOGGER.warning(
+            print_error(
                 "Trying to link to a nonexistent file named '{}', aborting.".format(
                     filename
                 )
@@ -96,7 +97,7 @@ def process_document(content: str, file_path: Path) -> str:
     output: str = ""
     project_directory: Path = find_git_root_directory(file_path)
     if not project_directory:
-        LINK_LOGGER.error("Error: no documents to link to found. Aborting.")
+        print_error("Error: no documents to link to found. Aborting.")
         sys.exit(ERROR_PROJECT_DIRECTORY_NOT_FOUND)
 
     files = find_content_files(project_directory)
@@ -113,7 +114,7 @@ def process_document(content: str, file_path: Path) -> str:
 def main():
     args: Args = parse(Args)
     if not args.input_file.exists():
-        LINK_LOGGER.error(
+        print_error(
             "File {} not found. Aborting operation.".format(args.input_file.as_posix())
         )
     output: str = ""

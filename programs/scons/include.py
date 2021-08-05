@@ -28,6 +28,8 @@ from typing import List, Tuple
 
 from datargs import arg, parse
 
+from scons_helper import print_error
+
 INCLUDE_LOGGER = logging.getLogger("include")
 
 ERROR_PROJECT_DIRECTORY_NOT_FOUND: int = 1
@@ -38,7 +40,6 @@ REGEX_INCLUDE: re.Pattern = re.compile(
     r"^{% *include [\"']?(?P<file>.+?\.[a-zA-Z0-9]+)[\"']? *[\"']?(?P<anchor>\w+)?[\"']? *%}$",
     flags=re.MULTILINE,
 )
-
 
 @dataclass
 class Args:
@@ -116,8 +117,10 @@ def find_all_file_anchors(content: str) -> dict:
         )
         match: re.Match = regex_anchor.search(content)
         if not match:
-            INCLUDE_LOGGER.error(
-                'Malformed anchor pattern for anchor "{}"'.format(anchor)
+            print_error(
+                'Malformed anchor pattern for anchor "{}"'.format(
+                    anchor
+                )
             )
             sys.exit(ERROR_ATTEMPT_TO_FIND_DUPLICATE_FILE)
         anchor_content = re.sub(
@@ -146,7 +149,7 @@ def replace_includes(content: str, files: dict, duplicate_files: list) -> str:
 
             anchors = files[path]["anchors"]
             if not anchor in anchors:
-                INCLUDE_LOGGER.error(
+                print_error(
                     "Error: anchor {} not found in file {}. Aborting operation.".format(
                         anchor, path
                     )
@@ -174,7 +177,7 @@ def process_document(content: str, file_path: Path) -> str:
     output: str = ""
     project_directory: Path = find_git_root_directory(file_path)
     if not project_directory:
-        INCLUDE_LOGGER.error("Project directory not found, aborting.")
+        print_error("Project directory not found, aborting.")
         sys.exit(ERROR_PROJECT_DIRECTORY_NOT_FOUND)
 
     files, duplicate_files = find_godot_project_files(project_directory)
@@ -195,9 +198,10 @@ def main():
     output: str = ""
     args: Args = parse(Args)
     if not args.input_file.exists():
-        INCLUDE_LOGGER.error(
+        print_error(
             "File {} not found. Aborting operation.".format(args.input_file.as_posix())
         )
+
     with open(args.input_file, "r") as input_file:
         content: str = input_file.read()
         output = process_document(content, args.input_file)

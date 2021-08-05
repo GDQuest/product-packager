@@ -9,6 +9,8 @@ import sys
 from dataclasses import dataclass
 import logging
 
+from scons_helper import print_error
+
 ERROR_COULD_NOT_OPEN_INPUT_FILE: int = 1
 
 LOGGER = logging.getLogger("format_tutorial.py")
@@ -88,7 +90,7 @@ def get_file_content(file_path: str) ->str:
     with open(file_path, "r") as input_file:
         output = input_file.read()
         if not output:
-            LOGGER.error("Could not read file {}. Aborting.".format(file_path))
+            print_error("Could not read file {}. Aborting.".format(file_path))
             sys.exit(ERROR_COULD_NOT_OPEN_INPUT_FILE)
     return output
 
