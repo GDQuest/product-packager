@@ -1,14 +1,23 @@
 import subprocess
 import sys
 from pathlib import Path
+from typing import List
 
 import colorama
 from SCons.Script import Dir, File
 
 
-def get_godot_project_files(dir: Dir) -> list[File]:
+def get_godot_project_files(dir: Dir, ignore_directories: List[str] = []) -> list[File]:
     """Return a list of all folders containing a project.godot file"""
-    return [File(p) for p in Path(str(dir)).glob("**/project.godot")]
+    directory: Path = Path(str(dir))
+    subdirectories: List[Path] = [
+        Path(str(d))
+        for d in directory.iterdir()
+        if d.is_dir() and not d.name in ignore_directories and not d.name.startswith(".")
+    ]
+    return [
+        File(p) for d in subdirectories for p in d.glob("**/project.godot")
+    ]
 
 
 def validate_git_versions(source_dir: Dir) -> bool:
@@ -36,6 +45,17 @@ def validate_git_versions(source_dir: Dir) -> bool:
         print_error(key + " : " + value)
 
     return ret
+
+
+def calculate_target_file_paths(
+    destination: Dir, relative_dir: Dir, source_files: list[File]
+) -> list[File]:
+    """Returns the list of files taking their path from relative_dir and
+    appending it to destination."""
+    return [
+        File(Path(str(sf)).relative_to(str(relative_dir)), directory=destination)
+        for sf in source_files
+    ]
 
 
 def print_success(*args, **kwargs):

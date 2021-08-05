@@ -5,7 +5,7 @@ import highlight_code as highlighter
 import include
 import link
 import table_of_contents
-from scons_helper import print_success, print_error
+from scons_helper import print_success, print_error, calculate_target_file_paths
 from SCons.Script import Dir, File, Environment, Import, Return
 
 # BEGIN - auto-completion
@@ -18,17 +18,6 @@ env.VariantDir(env["BUILD_DIR"], env["SRC_DIR"], duplicate=False)
 env.VariantDir(env["DIST_DIR"], env["SRC_DIR"], duplicate=False)
 
 env.Clean("", [env["DIST_DIR"], env["BUILD_DIR"]])
-
-
-def calculate_target_file_paths(
-    destination: Dir, relative_dir: Dir, source_files: list[File]
-) -> list[File]:
-    """Returns the list of files taking their path from relative_dir and
-    appending it to destination."""
-    return [
-        env.File(Path(str(sf)).relative_to(str(relative_dir)), directory=destination)
-        for sf in source_files
-    ]
 
 
 def process_markdown_file_in_place(

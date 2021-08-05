@@ -1,8 +1,13 @@
 from pathlib import Path
 from enum import Enum
-from typing import Iterator
+from typing import Iterator, List
 
-import scons_helper as sh
+from scons_helper import (
+    calculate_target_file_paths,
+    print_error,
+    get_godot_project_files,
+    validate_git_versions,
+)
 from SCons.Script import Dir, Environment, Export, File, Import, AddOption, Return
 
 # BEGIN - auto-completion
@@ -26,7 +31,7 @@ def validate_source_directory() -> None:
     """Ensures the source directory contains a content folder."""
     is_source_directory_valid: bool = env["SRC_DIR"].Dir("content").exists()
     if not is_source_directory_valid:
-        sh.print_error(f"ERROR: {env['SRC_DIR']} is not a valid source directory!")
+        print_error(f"ERROR: {env['SRC_DIR']} is not a valid source directory!")
         env.Exit(Error.SOURCE_DIR_INVALID)
 
 
@@ -34,28 +39,81 @@ def try_package_godot_projects() -> None:
     def get_godot_project_name(project_file: File) -> str:
         """Return the project name from a directory with a project.godot file."""
         prefix = "config/name="
-        godot_project_name = ""
+        name = ""
 
         with open(str(project_file), "r") as pf:
             for line in pf:
                 if line.startswith(prefix):
-                    godot_project_name = (
+                    name = (
                         line.lstrip(prefix).replace(" ", "_").replace('"', "").strip()
                     )
-        return godot_project_name
+        return name
 
-    for godot_project_file in sh.get_godot_project_files(env["SRC_DIR"]):
-        godot_project_name = get_godot_project_name(godot_project_file)
+    def flatten(list_of_lists: List[list]) -> list:
+        """Flattens a list of lists."""
+        return [item for sublist in list_of_lists for item in sublist]
 
-        if godot_project_name == "":
-            sh.print_error(
-                f"ERROR: Missing Godot project name in {godot_project_file}!"
-            )
+    # Find all Godot projects and GDScript files to search and replace.
+    IGNORE_DIRECTORIES = ["build", "dist", "releases", "sprites"]
+    godot_project_files: List[File] = get_godot_project_files(env["SRC_DIR"], ignore_directories=IGNORE_DIRECTORIES)
+    godot_project_dirs: List[Dir] = [f.dir for f in godot_project_files]
+    project_dirs_as_paths = [Path(str(d)) for d in godot_project_dirs]
+
+    all_source_filepaths = flatten([pd.rglob("*") for pd in project_dirs_as_paths])
+    gdscript_files: List[File] = [
+        File(str(f)) for f in all_source_filepaths if f.suffix == ".gd"
+    ]
+    other_source_files: List[File] = [
+        File(str(f)) for f in all_source_filepaths if f.suffix != ".gd" and f.name != ".import" and f.is_file()
+    ]
+
+    godot_build_dir: Dir = env["BUILD_DIR"].Dir("godot")
+    godot_build_files = calculate_target_file_paths(
+        godot_build_dir, env["SRC_DIR"], godot_project_files
+    )
+    godot_build_dirs: List[Dir] = [f.dir for f in godot_build_files]
+    gdscript_build_files: List[File] = calculate_target_file_paths(
+        godot_build_dir, env["SRC_DIR"], gdscript_files
+    )
+    other_build_files: List[File] = calculate_target_file_paths(
+        godot_build_dir, env["SRC_DIR"], other_source_files
+    )
+    
+    # Copy all Godot projects to the build directory
+    for source_file, build_file in zip(other_source_files, other_build_files):
+        env.Depends(build_file,source_file)
+    env.InstallAs(other_build_files, other_source_files)
+
+    # Process GDScript files to remove anchor comments
+    for build_file, source_file in zip(gdscript_build_files, gdscript_files):
+        env.Depends(build_file, source_file)
+        env.Command(
+            target=build_file,
+            source=source_file,
+            action=[
+                ["sed", "-E", "/# ?(ANCHOR|END)/d", "$SOURCE", ">", "$TARGET"],
+            ],
+        )
+
+    env.Depends(godot_build_files, godot_project_files)
+
+    for godot_source_file, godot_project_file in zip(
+        godot_project_files, godot_build_files
+    ):
+        project_name = get_godot_project_name(godot_source_file)
+
+        if project_name == "":
+            print_error(f"ERROR: Missing Godot project name in {godot_source_file}!")
             env.Exit(Error.MISSING_GODOT_PROJECT_NAME)
 
+        zip_file_path = env["DIST_DIR"].File(project_name + ".zip")
+        source_directory = godot_project_file.Dir(".")
+        env.Depends(zip_file_path, source_directory)
+        env.Depends(zip_file_path, godot_project_file)
+        env.Depends(zip_file_path, godot_project_file)
         env.Command(
-            target=env["DIST_DIR"].File(godot_project_name + ".zip"),
-            source=godot_project_file.Dir("."),
+            target=zip_file_path,
+            source=source_directory,
             action=[
                 [
                     env.File("package_godot_project.py"),
@@ -63,23 +121,23 @@ def try_package_godot_projects() -> None:
                     "--output",
                     "${TARGET.dir}",
                     "--title",
-                    godot_project_name,
+                    project_name,
                 ],
             ],
         )
 
 
 def make_strict_mode_checks():
-    if not sh.validate_git_versions(env["SRC_DIR"]):
-        sh.print_error(
+    if not validate_git_versions(env["SRC_DIR"]):
+        print_error(
             "ERROR: The Git version of submodules does not match the required version!"
         )
         env.Exit(Error.GIT_VERSIONS_DONT_MATCH)
 
 
-def glob_extensions(dir: Dir, extensions: list[str]) -> Iterator[File]:
+def glob_extensions(directory: Dir, extensions: list[str]) -> Iterator[File]:
     """Return all files in the given path with an extension in the extension list."""
-    return (File(f) for e in extensions for f in Path(str(dir)).glob("**/" + e))
+    return (File(f) for e in extensions for f in Path(str(directory)).glob("**/" + e))
 
 
 def find_subdirectories(content_dir: Dir) -> list[Dir]:
