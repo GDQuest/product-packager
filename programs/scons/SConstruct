@@ -1,14 +1,13 @@
-from pathlib import Path
+import re
 from enum import Enum
+from pathlib import Path
 from typing import Iterator, List
 
-from scons_helper import (
-    calculate_target_file_paths,
-    print_error,
-    get_godot_project_files,
-    validate_git_versions,
-)
-from SCons.Script import Dir, Environment, Export, File, Import, AddOption, Return
+from SCons.Script import (AddOption, Dir, Environment, Export, File, Import,
+                          Return)
+
+from scons_helper import (calculate_target_file_paths, get_godot_project_files,
+                          print_error, validate_git_versions)
 
 # BEGIN - auto-completion
 env = Environment()
@@ -45,9 +44,10 @@ def try_package_godot_projects() -> None:
             for line in pf:
                 if line.startswith(prefix):
                     name = (
-                        line.lstrip(prefix).replace(" ", "_").replace('"', "").strip()
+                        re.sub("[()\[\] \":]", "_", line.lstrip(prefix))
                     )
-        return name
+                    name = re.sub("_+", "_", name)
+        return name.strip("_\n ")
 
     def flatten(list_of_lists: List[list]) -> list:
         """Flattens a list of lists."""
