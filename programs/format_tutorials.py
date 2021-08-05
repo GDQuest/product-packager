@@ -19,8 +19,8 @@ import textwrap
 from dataclasses import dataclass
 from typing import List
 
+import colorama
 from lib.gdscript_classes import BUILT_IN_CLASSES
-from scons_helper import print_error
 
 TAB_WIDTH: int = 4
 
@@ -46,6 +46,7 @@ WORDS_TO_KEEP_UNFORMATTED: List[str] = [
 RE_SPLIT_CODE_BLOCK: re.Pattern = re.compile(r"(```[a-z]*.*?```)", flags=re.DOTALL)
 RE_SPLIT_HTML: re.Pattern = re.compile(r"(<.+?>.*?<\/.+?>)", flags=re.DOTALL)
 RE_SPLIT_TEMPLATE: re.Pattern = re.compile(r"({%.+?%})")
+RE_SPLIT_FRONT_MATTER: re.Pattern = re.compile(r"(---.*?---\n)", flags=re.DOTALL)
 RE_BUILT_IN_CLASSES: re.Pattern = re.compile(
     r"\b(?<!`)({})\b".format(r"|".join(BUILT_IN_CLASSES))
 )
@@ -53,11 +54,20 @@ RE_BUILT_IN_CLASSES: re.Pattern = re.compile(
 PATTERN_DIR_PATH: str = r"\b((res|user)://)?/?(([\w]+/)+(\w*\.\w+)?\b)"
 PATTERN_FILE_AT_ROOT: str = r"(res|user)://\w+\.\w+"
 SUPPORTED_EXTENSIONS: List[str] = [
-    "png", "jpe?g", "mp4", "mkv", "t?res", "t?scn", "gd", "py", "shader"
+    "png",
+    "jpe?g",
+    "mp4",
+    "mkv",
+    "t?res",
+    "t?scn",
+    "gd",
+    "py",
+    "shader",
 ]
 PATTERN_FILENAME_ONLY: str = r"(\w+\.({}))".format("|".join(SUPPORTED_EXTENSIONS))
 RE_FILE_PATH: re.Pattern = re.compile(
-    "|".join([PATTERN_DIR_PATH, PATTERN_FILE_AT_ROOT, PATTERN_FILENAME_ONLY]))
+    "|".join([PATTERN_DIR_PATH, PATTERN_FILE_AT_ROOT, PATTERN_FILENAME_ONLY])
+)
 # Matches directory paths without a filename at the end. Group 1 targets the path.
 #
 # Known limitations:
@@ -75,7 +85,8 @@ RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(
 )
 # Sequence of multiple words with an optional "->" separator, to italicize.
 RE_TO_ITALICIZE_SEQUENCE: re.Pattern = re.compile(
-    r"(?<![\-\.] )(?<!^)[A-Z0-9]+[a-zA-Z0-9]*( (-> )?[A-Z][a-zA-Z0-9]+(\.\.\.)?)+", flags=re.MULTILINE
+    r"(?<![\-\.] )(?<!^)[A-Z0-9]+[a-zA-Z0-9]*( (-> )?[A-Z][a-zA-Z0-9]+(\.\.\.)?)+",
+    flags=re.MULTILINE,
 )
 # Capitalized words and PascalCase that are not at the start of a sentence or a line.
 RE_TO_ITALICIZE_ONE_WORD: re.Pattern = re.compile(
@@ -120,7 +131,8 @@ def inline_code_hex_values(text: str) -> str:
 
 def inline_code_numeric_values(text: str) -> str:
     return RE_NUMERIC_VALUES_AND_RANGES.sub(
-        lambda match: "`{}`".format(match.group(0)), text,
+        lambda match: "`{}`".format(match.group(0)),
+        text,
     )
 
 
@@ -154,7 +166,8 @@ def add_keyboard_tags(text: str) -> str:
         if expression.strip() == "I":
             return expression
         return RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT.sub(
-            lambda m: "<kbd>{}</kbd>".format(m.group(0)), expression,
+            lambda m: "<kbd>{}</kbd>".format(m.group(0)),
+            expression,
         )
 
     return RE_KEYBOARD_SHORTCUTS.sub(add_one_keyboard_tag, text)
@@ -173,7 +186,6 @@ FORMATTERS = [
 
 
 def format_line(line: str) -> str:
-
     def split_formatted_words(text: str) -> List[str]:
         return [s for s in re.split(r"([`*].+?[`*])", text) if s != ""]
 
@@ -248,7 +260,9 @@ def format_code_block(text: str):
 
 def parse_command_line_arguments(args) -> argparse.Namespace:
     """Parses the command line arguments"""
-    parser = argparse.ArgumentParser(description=__doc__,)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+    )
     parser.add_argument(
         "files",
         type=str,
@@ -257,7 +271,11 @@ def parse_command_line_arguments(args) -> argparse.Namespace:
         help="A list of paths to markdown files.",
     )
     parser.add_argument(
-        "-o", "--output", type=str, default="", help="Path to the output directory.",
+        "-o",
+        "--output",
+        type=str,
+        default="",
+        help="Path to the output directory.",
     )
     parser.add_argument(
         "-i", "--in-place", action="store_true", help="Overwrite the source files."
@@ -293,10 +311,17 @@ def process_content(content: str) -> str:
             return [text]
         return RE_SPLIT_TEMPLATE.split(text)
 
+    def split_front_matter(text: str) -> List[str]:
+        if is_code_block(text):
+            return [text]
+        return RE_SPLIT_FRONT_MATTER.split(text)
+
     sections: List[str] = RE_SPLIT_CODE_BLOCK.split(content)
     sections = map(split_html, sections)
     sections = list(flatten(sections))
     sections = map(split_templates, sections)
+    sections = list(flatten(sections))
+    sections = map(split_front_matter, sections)
     sections = list(flatten(sections))
 
     formatted_sections: List[str] = []
@@ -305,6 +330,8 @@ def process_content(content: str) -> str:
         if is_code_block(block):
             formatted_sections.append(format_code_block(block))
         elif is_unformatted_block(block):
+            formatted_sections.append(block)
+        elif block.startswith("---"):
             formatted_sections.append(block)
         else:
             chunks: List[str] = re.split(RE_TO_IGNORE, block)
@@ -338,6 +365,12 @@ def output_result(args: argparse.Namespace, document: ProcessedDocument) -> None
             os.makedirs(args.output)
         with open(output_path, "w") as output_file:
             output_file.write(document.content)
+
+
+def print_error(*args, **kwargs):
+    print(colorama.Fore.RED, end="", flush=True)
+    print(*args, file=sys.stderr, **kwargs)
+    print(colorama.Fore.RESET, end="", flush=True)
 
 
 def main():
