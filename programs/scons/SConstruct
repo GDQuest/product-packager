@@ -54,7 +54,7 @@ def try_package_godot_projects() -> None:
         return [item for sublist in list_of_lists for item in sublist]
 
     # Find all Godot projects and GDScript files to search and replace.
-    IGNORE_DIRECTORIES = ["build", "dist", "releases", "sprites"] + env["GODOT_IGNORE_DIRECTORIES"]
+    IGNORE_DIRECTORIES = ["build", "dist", "releases", "sprites", "content"] + env["GODOT_IGNORE_DIRECTORIES"]
     godot_project_files: List[File] = get_godot_project_files(env["SRC_DIR"], ignore_directories=IGNORE_DIRECTORIES)
     godot_project_dirs: List[Dir] = [f.dir for f in godot_project_files]
     project_dirs_as_paths = [Path(str(d)) for d in godot_project_dirs]
