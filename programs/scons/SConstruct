@@ -170,6 +170,7 @@ env["OTHER_GODOT_SOURCE_FILES"] = [
     if f.suffix != ".gd" and f.name != ".import" and f.is_file()
 ]
 env["GDSCRIPT_FILES"] = [f for f in all_godot_files if f.suffix == ".gd"]
+env["SHADER_FILES"] = [f for f in all_godot_files if f.suffix == ".shader"]
 
 # Make environment variables available to subscripts
 Export("env")

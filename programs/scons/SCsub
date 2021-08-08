@@ -18,7 +18,9 @@ env.VariantDir(env["BUILD_DIR"], env["SRC_DIR"], duplicate=False)
 env.VariantDir(env["DIST_DIR"], env["SRC_DIR"], duplicate=False)
 
 env.Clean("", [env["DIST_DIR"], env["BUILD_DIR"]])
-env["GDSCRIPT_FILES_MAP"], env["DUPLICATE_GDSCRIPT_FILES"] = include.find_duplicate_files(env["GDSCRIPT_FILES"])
+env["INCLUDE_FILES_MAP"], env["DUPLICATE_INCLUDE_FILES"] = include.find_duplicate_files(
+    env["GDSCRIPT_FILES"] + env["SHADER_FILES"]
+)
 
 
 def process_markdown_file_in_place(
@@ -36,8 +38,8 @@ def process_markdown_file_in_place(
     content = include.process_document(
         content,
         source_file,
-        files_map=env["GDSCRIPT_FILES_MAP"],
-        duplicate_files=env["DUPLICATE_GDSCRIPT_FILES"],
+        files_map=env["INCLUDE_FILES_MAP"],
+        duplicate_files=env["DUPLICATE_INCLUDE_FILES"],
     )
     content = link.process_document(content, source_file)
     content = table_of_contents.replace_contents_template(content)
