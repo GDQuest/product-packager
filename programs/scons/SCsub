@@ -18,6 +18,7 @@ env.VariantDir(env["BUILD_DIR"], env["SRC_DIR"], duplicate=False)
 env.VariantDir(env["DIST_DIR"], env["SRC_DIR"], duplicate=False)
 
 env.Clean("", [env["DIST_DIR"], env["BUILD_DIR"]])
+env["GDSCRIPT_FILES_MAP"], env["DUPLICATE_GDSCRIPT_FILES"] = include.find_duplicate_files(env["GDSCRIPT_FILES"])
 
 
 def process_markdown_file_in_place(
@@ -32,7 +33,12 @@ def process_markdown_file_in_place(
     if content == "":
         print_error(f"WARNING: Couldn't open file {source_file}")
 
-    content = include.process_document(content, source_file)
+    content = include.process_document(
+        content,
+        source_file,
+        files_map=env["GDSCRIPT_FILES_MAP"],
+        duplicate_files=env["DUPLICATE_GDSCRIPT_FILES"],
+    )
     content = link.process_document(content, source_file)
     content = table_of_contents.replace_contents_template(content)
     content = add_node_icons.add_built_in_icons(content)
@@ -63,7 +69,9 @@ def prepare_html_dependencies(media_files: list[File]) -> list[File]:
     # TODO: depend only on specific `media_files` instead of everything.
     env.Depends(build_html_files, media_files)
     return env.InstallAs(
-        calculate_target_file_paths(env["DIST_DIR"], env["BUILD_DIR"], build_html_files),
+        calculate_target_file_paths(
+            env["DIST_DIR"], env["BUILD_DIR"], build_html_files
+        ),
         build_html_files,
     )
 
@@ -79,7 +87,9 @@ HTMLBuilder = env.Builder(
 env["BUILDERS"]["HTMLBuilder"] = HTMLBuilder
 
 media_files = env.InstallAs(
-    calculate_target_file_paths(env["BUILD_DIR"], env["CONTENT_DIR"], env["MEDIA_FILES"]),
+    calculate_target_file_paths(
+        env["BUILD_DIR"], env["CONTENT_DIR"], env["MEDIA_FILES"]
+    ),
     env["MEDIA_FILES"],
 )
 html_files = prepare_html_dependencies(media_files)

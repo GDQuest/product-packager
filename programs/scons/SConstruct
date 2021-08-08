@@ -3,11 +3,14 @@ from enum import Enum
 from pathlib import Path
 from typing import Iterator, List
 
-from SCons.Script import (AddOption, Dir, Environment, Export, File, Import,
-                          Return)
+from SCons.Script import AddOption, Dir, Environment, Export, File, Import, Return
 
-from scons_helper import (calculate_target_file_paths, get_godot_project_files,
-                          print_error, validate_git_versions)
+from scons_helper import (
+    calculate_target_file_paths,
+    get_godot_project_files,
+    print_error,
+    validate_git_versions,
+)
 
 # BEGIN - auto-completion
 env = Environment()
@@ -24,6 +27,11 @@ class Error(Enum):
     SOURCE_DIR_INVALID = 1
     GIT_VERSIONS_DONT_MATCH = 2
     MISSING_GODOT_PROJECT_NAME = 3
+
+
+def flatten(list_of_lists: List[list]) -> list:
+    """Flattens a list of lists."""
+    return [item for sublist in list_of_lists for item in sublist]
 
 
 def validate_source_directory() -> None:
@@ -43,45 +51,31 @@ def try_package_godot_projects() -> None:
         with open(str(project_file), "r") as pf:
             for line in pf:
                 if line.startswith(prefix):
-                    name = (
-                        re.sub("[()\[\] \":]", "_", line.lstrip(prefix))
-                    )
+                    name = re.sub('[()\[\] ":]', "_", line.lstrip(prefix))
                     name = re.sub("_+", "_", name)
         return name.strip("_\n ")
 
-    def flatten(list_of_lists: List[list]) -> list:
-        """Flattens a list of lists."""
-        return [item for sublist in list_of_lists for item in sublist]
-
     # Find all Godot projects and GDScript files to search and replace.
-    IGNORE_DIRECTORIES = ["build", "dist", "releases", "sprites", "content"] + env["GODOT_IGNORE_DIRECTORIES"]
-    godot_project_files: List[File] = get_godot_project_files(env["SRC_DIR"], ignore_directories=IGNORE_DIRECTORIES)
-    godot_project_dirs: List[Dir] = [f.dir for f in godot_project_files]
-    project_dirs_as_paths = [Path(str(d)) for d in godot_project_dirs]
 
-    all_source_filepaths = flatten([pd.rglob("*") for pd in project_dirs_as_paths])
-    gdscript_files: List[File] = [
-        File(str(f)) for f in all_source_filepaths if f.suffix == ".gd"
-    ]
+    godot_project_files: list[File] = [File(str(f)) for f in env["GODOT_PROJECT_FILES"]]
+    gdscript_files: List[File] = [File(str(p)) for p in env["GDSCRIPT_FILES"]]
     other_source_files: List[File] = [
-        File(str(f)) for f in all_source_filepaths if f.suffix != ".gd" and f.name != ".import" and f.is_file()
+        File(str(p)) for p in env["OTHER_GODOT_SOURCE_FILES"]
     ]
-
     godot_build_dir: Dir = env["BUILD_DIR"].Dir("godot")
     godot_build_files = calculate_target_file_paths(
         godot_build_dir, env["SRC_DIR"], godot_project_files
     )
-    godot_build_dirs: List[Dir] = [f.dir for f in godot_build_files]
     gdscript_build_files: List[File] = calculate_target_file_paths(
         godot_build_dir, env["SRC_DIR"], gdscript_files
     )
     other_build_files: List[File] = calculate_target_file_paths(
         godot_build_dir, env["SRC_DIR"], other_source_files
     )
-    
+
     # Copy all Godot projects to the build directory
     for source_file, build_file in zip(other_source_files, other_build_files):
-        env.Depends(build_file,source_file)
+        env.Depends(build_file, source_file)
     env.InstallAs(other_build_files, other_source_files)
 
     # Process GDScript files to remove anchor comments
@@ -160,6 +154,22 @@ env["MEDIA_FILES"] = [
 env["MARKDOWN_FILES"] = [
     f for d in env["CONTENT_DIRS"] for f in glob_extensions(d, ["*.md"])
 ]
+# We store Godot project files and GDScript files in the environment to cache
+# them for the include filter.
+GODOT_IGNORE_DIRECTORIES = ["build", "dist", "releases", "sprites", "content"] + env[
+    "GODOT_IGNORE_DIRECTORIES"
+]
+env["GODOT_PROJECT_FILES"] = get_godot_project_files(
+    env["SRC_DIR"], ignore_directories=GODOT_IGNORE_DIRECTORIES
+)
+godot_project_dirs: List[Path] = [f.parent for f in env["GODOT_PROJECT_FILES"]]
+all_godot_files = flatten([pd.rglob("*") for pd in godot_project_dirs])
+env["OTHER_GODOT_SOURCE_FILES"] = [
+    f
+    for f in all_godot_files
+    if f.suffix != ".gd" and f.name != ".import" and f.is_file()
+]
+env["GDSCRIPT_FILES"] = [f for f in all_godot_files if f.suffix == ".gd"]
 
 # Make environment variables available to subscripts
 Export("env")

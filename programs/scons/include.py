@@ -40,6 +40,8 @@ REGEX_INCLUDE: re.Pattern = re.compile(
     r"^{% *include [\"']?(?P<file>.+?\.[a-zA-Z0-9]+)[\"']? *[\"']?(?P<anchor>\w+)?[\"']? *%}$",
     flags=re.MULTILINE,
 )
+INCLUDE_EXTENSIONS: set = {".gd", ".shader"}
+
 
 @dataclass
 class Args:
@@ -48,11 +50,13 @@ class Args:
     )
 
 
-def find_godot_project_files(project_directory: str) -> Tuple[dict, set]:
-    """Maps the name of files in the project to their full path."""
-    files: dict = {}
-    duplicate_files: set = set()
-    include_extensions: set = {".gd", ".shader"}
+def find_godot_project_files(file_path: Path) -> List[Path]:
+    files: List[Path] = []
+
+    project_directory: Path = find_git_root_directory(file_path)
+    if not project_directory:
+        print_error("Project directory not found, aborting.")
+        sys.exit(ERROR_PROJECT_DIRECTORY_NOT_FOUND)
 
     godot_directories: List[str] = list(
         filter(
@@ -61,21 +65,41 @@ def find_godot_project_files(project_directory: str) -> Tuple[dict, set]:
             os.listdir(project_directory),
         )
     )
+    if not godot_directories:
+        INCLUDE_LOGGER.warning(
+            "No Godot project folder found, include patterns will need complete file paths."
+        )
 
     for directory_name in godot_directories:
         godot_directory = os.path.join(project_directory, directory_name)
 
         for dirpath, dirnames, filenames in os.walk(godot_directory):
+            directory_path: Path = Path(dirpath)
             dirnames = [d for d in dirnames if not d.startswith(".")]
             for filename in filenames:
-                if os.path.splitext(filename)[-1].lower() not in include_extensions:
+                if os.path.splitext(filename)[-1].lower() not in INCLUDE_EXTENSIONS:
                     continue
+                files.append(directory_path / filename)
+    return files
 
-                if filename in files:
-                    duplicate_files.add(filename)
-                else:
-                    files[filename] = {"path": os.path.join(dirpath, filename)}
-    return files, duplicate_files
+
+def find_duplicate_files(files: List[Path]) -> Tuple[dict, set]:
+    """Maps the name of files in the project to their full path and finds duplicate filenames."""
+    files_map: dict = {}
+    duplicate_files: set = set()
+
+    for f in files:
+        filename = f.name
+        if filename in files_map:
+            duplicate_files.add(filename)
+        else:
+            files_map[filename] = {"path": str(f)}
+
+    if duplicate_files:
+        print_error(
+            "Found duplicate files in the project: " + str(duplicate_files)
+        )
+    return files_map, duplicate_files
 
 
 def get_file_content(file_path: str, files: dict, duplicate_files: list) -> str:
@@ -117,11 +141,7 @@ def find_all_file_anchors(content: str) -> dict:
         )
         match: re.Match = regex_anchor.search(content)
         if not match:
-            print_error(
-                'Malformed anchor pattern for anchor "{}"'.format(
-                    anchor
-                )
-            )
+            print_error('Malformed anchor pattern for anchor "{}"'.format(anchor))
             sys.exit(ERROR_ATTEMPT_TO_FIND_DUPLICATE_FILE)
         anchor_content = re.sub(
             r"^\s*# *(ANCHOR|END): *\w+\s*$", "", match.group(1), flags=re.MULTILINE
@@ -173,24 +193,25 @@ def find_git_root_directory(file_path: Path) -> Path:
     return path
 
 
-def process_document(content: str, file_path: Path) -> str:
+def process_document(
+    content: str,
+    document_path: Path,
+    project_files: List[Path] = [],
+    files_map: dict = {},
+    duplicate_files: set = set(),
+) -> str:
     output: str = ""
-    project_directory: Path = find_git_root_directory(file_path)
-    if not project_directory:
-        print_error("Project directory not found, aborting.")
-        sys.exit(ERROR_PROJECT_DIRECTORY_NOT_FOUND)
 
-    files, duplicate_files = find_godot_project_files(project_directory)
-    if not files:
-        INCLUDE_LOGGER.warning(
-            "No Godot project folder found, include patterns will need complete file paths."
-        )
-    if duplicate_files:
-        INCLUDE_LOGGER.warning(
-            "Found duplicate files in the project: " + str(duplicate_files)
-        )
+    # We allow external programs like a build system to probe and cache the
+    # project files once. This is why we check for the arguments passed, to
+    # distinguish this case from a standalone run of the program.
+    # That way, in a build system, you'll only get file warnings once.
+    if project_files == [] and files_map == {}:
+        project_files = find_godot_project_files(document_path)
+    if files_map == {}:
+        files_map, duplicate_files = find_duplicate_files(project_files)
 
-    output = replace_includes(content, files, duplicate_files)
+    output = replace_includes(content, files_map, duplicate_files)
     return output
 
 

@@ -7,7 +7,7 @@ import colorama
 from SCons.Script import Dir, File
 
 
-def get_godot_project_files(dir: Dir, ignore_directories: List[str] = []) -> list[File]:
+def get_godot_project_files(dir: Dir, ignore_directories: List[str] = []) -> list[Path]:
     """Return a list of all folders containing a project.godot file"""
     directory: Path = Path(str(dir))
     subdirectories: List[Path] = [
@@ -16,7 +16,7 @@ def get_godot_project_files(dir: Dir, ignore_directories: List[str] = []) -> lis
         if d.is_dir() and not d.name in ignore_directories and not d.name.startswith(".")
     ]
     return [
-        File(p) for d in subdirectories for p in d.glob("**/project.godot")
+        p for d in subdirectories for p in d.glob("**/project.godot")
     ]
 
 
