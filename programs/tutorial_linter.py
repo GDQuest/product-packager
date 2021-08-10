@@ -99,7 +99,7 @@ def check_yaml_frontmatter(document: Document) -> List[Issue]:
     if not match or not match.group(1):
         issues.append(
             Issue(
-                line=document.lines[0],
+                line=0,
                 column_start=0,
                 column_end=0,
                 message=f"Missing frontmatter",
@@ -218,6 +218,8 @@ def check_includes(document: Document) -> List[Issue]:
         file_exists = False
         found_files = document.git_directory.rglob(match.group("file"))
         for f in found_files:
+            nonlocal include_file_path
+            nonlocal include_anchor
             include_file_path = document.git_directory.joinpath(f)
             include_anchor = match.group("anchor")
             file_exists = include_file_path.exists()
@@ -235,7 +237,10 @@ def check_includes(document: Document) -> List[Issue]:
         return issue
 
     def check_include_anchor_exists(line: str, index: int) -> Issue:
+        if include_anchor == "":
+            return None
         if include_file_path is None:
+            print(document.path)
             raise Exception(
                 "include_file_path must be a valid file to run this function."
             )
@@ -252,8 +257,8 @@ def check_includes(document: Document) -> List[Issue]:
             if not match:
                 issue = Issue(
                     line=index,
-                    column_start=anchor_re.search(content).start(),
-                    column_end=anchor_re.search(content).end(),
+                    column_start=0,
+                    column_end=0,
                     message=f"Include anchor {include_anchor} not found in {include_file_path}.",
                     rule=Rules.include_anchor_not_found,
                 )
@@ -420,6 +425,7 @@ def get_all_functions_in_module() -> List[Function]:
 
 def main():
     args = parse(Args)
+    issues_found: bool = False
     for path in args.input_files:
         if not path.is_file():
             print(f"{path} does not exist. Exiting.")
@@ -427,6 +433,7 @@ def main():
 
         issues = lint(path)
         if issues:
+            issues_found = True
             print(f"Found {len(issues)} issues in{path}.\n")
             for issue in sorted(issues, key=lambda i: i.line):
                 print(
@@ -434,7 +441,8 @@ def main():
                 )
                 if args.print_errors and issue.error:
                     print(f"\nError message:\n\n{issue.error}")
-            exit(ERROR_ISSUES_FOUND)
+    if issues_found:
+        exit(ERROR_ISSUES_FOUND)
 
 
 if __name__ == "__main__":
