@@ -2,14 +2,16 @@
 
 Each function handles one linter rule."""
 
-import dataclasses
-from dataclasses import dataclass
-from typing import List, Sequence
+import inspect
 import re
-from pathlib import Path
-from datargs import arg, parse
+import sys
+from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
+from typing import Callable, Dict, List, Sequence
+
 import yaml
+from datargs import arg, parse
 
 from lib.gdscript_classes import BUILT_IN_CLASSES
 
@@ -42,9 +44,20 @@ class Args:
     input_files: Sequence[Path] = arg(
         positional=True, help="One or more markdown files to lint."
     )
+    print_errors: bool = arg(
+        default=False,
+        help="Prints extra error messages.",
+        aliases=["-e"],
+    )
 
 
-@dataclasses
+@dataclass
+class Function:
+    name: str
+    function: Callable
+
+
+@dataclass
 class Document:
     """A document to be checked."""
 
@@ -74,6 +87,7 @@ class Issue:
     column_end: int
     message: str
     rule: str
+    error: str = ""
 
 
 def check_yaml_frontmatter(document: Document) -> List[Issue]:
@@ -88,20 +102,24 @@ def check_yaml_frontmatter(document: Document) -> List[Issue]:
                 line=document.lines[0],
                 column_start=0,
                 column_end=0,
-                message=f"Missing frontmatter in {document.path}",
+                message=f"Missing frontmatter",
                 rule=Rules.yaml_frontmatter_missing,
             )
         )
-    elif not yaml.safe_load(match.group(1)):
-        issues.append(
-            Issue(
-                line=document.lines[0],
-                column_start=0,
-                column_end=match.end(),
-                message=f"Invalid frontmatter in {document.path}",
-                rule=Rules.yaml_frontmatter_invalid_syntax,
+    else:
+        try:
+            yaml.safe_load(match.group(1))
+        except yaml.scanner.ScannerError as e:
+            issues.append(
+                Issue(
+                    line=0,
+                    column_start=0,
+                    column_end=match.end(),
+                    message=f"Invalid frontmatter",
+                    rule=Rules.yaml_frontmatter_invalid_syntax,
+                    error=e,
+                )
             )
-        )
     return issues
 
 
@@ -111,7 +129,7 @@ def check_tutorial_formatting(document: Document) -> List[Issue]:
 
     def check_title_exists(document: Document) -> Issue:
         issue = None
-        title_re = re.compile(r"^# (?P<title>[^#]+)")
+        title_re = re.compile(r"# (?P<title>[^#]+)")
         if not title_re.search(document.content):
             issue = Issue(
                 line=0,
@@ -128,19 +146,34 @@ def check_tutorial_formatting(document: Document) -> List[Issue]:
         built_in_classes_re = re.compile(
             r"\b(?<!`)({})\b".format(r"|".join(BUILT_IN_CLASSES))
         )
-        if built_in_classes_re.search(document.content):
-            issue = Issue(
-                line=0,
-                column_start=0,
-                column_end=0,
-                message="Found built-in class without code fence. Did you run the tutorial formatter?",
-                rule=Rules.missing_formatting,
-            )
+        inside_code_block = False
+        for number, line in enumerate(document.lines):
+            if line.startswith("```"):
+                inside_code_block = not inside_code_block
+                continue
+            if line.startswith("#") or inside_code_block:
+                continue
+
+            match = built_in_classes_re.search(line)
+            # We ignore capitalized names at the start of a sentence as they can
+            # be plain words like Animation, which match the built-in classes.
+            if match and match.start() != 0:
+                issue = Issue(
+                    line=number + 1,
+                    column_start=match.start(1),
+                    column_end=match.end(1),
+                    message=(
+                        f"Found built-in class without code fences: {match.group(1)}. "
+                        "Did you run the tutorial formatter?"
+                    ),
+                    rule=Rules.missing_formatting,
+                )
+                break
         return issue
 
     for function in [check_title_exists, check_built_in_classes]:
         issue = function(document)
-        if issue:
+        if issue is not None:
             issues.append(issue)
 
     return issues
@@ -171,8 +204,8 @@ def check_includes(document: Document) -> List[Issue]:
         if not match:
             issue = Issue(
                 line=index,
-                column_start=match.start(),
-                column_end=match.end(),
+                column_start=0,
+                column_end=len(line) - 1,
                 message="Include syntax is incorrect.",
                 rule=Rules.include_syntax,
             )
@@ -202,9 +235,10 @@ def check_includes(document: Document) -> List[Issue]:
         return issue
 
     def check_include_anchor_exists(line: str, index: int) -> Issue:
-        assert (
-            include_file_path is not None
-        ), "include_file_path must be a valid file to run this function."
+        if include_file_path is None:
+            raise Exception(
+                "include_file_path must be a valid file to run this function."
+            )
         issue = None
         anchor_re = re.compile(
             r"^\s*# ?ANCHOR: ?{}\s*\n(.+)\n\s*# ?END: ?{}".format(
@@ -237,7 +271,7 @@ def check_includes(document: Document) -> List[Issue]:
             check_include_anchor_exists,
         ]:
             issue = check_function(line, number)
-            if issue:
+            if issue is not None:
                 issues.append(issue)
                 break
 
@@ -250,9 +284,9 @@ def check_links(document: Document) -> List[Issue]:
     def linked_file_exists(link: str, document: Document) -> bool:
         content_folder = document.git_directory.joinpath("content")
         assert (
-            content_folder.exists(),
-            f"The git repository {document.git_directory} must have a content folder.",
-        )
+            content_folder.exists()
+        ), f"The git repository {document.git_directory} must have a content folder."
+
         found_files = list(content_folder.rglob(link))
         return found_files != []
 
@@ -267,7 +301,7 @@ def check_links(document: Document) -> List[Issue]:
         if not match_arguments:
             issues.append(
                 Issue(
-                    line=number,
+                    line=number + 1,
                     column_start=match.start(),
                     column_end=match.end(),
                     message="Link syntax is incorrect.",
@@ -277,11 +311,11 @@ def check_links(document: Document) -> List[Issue]:
             continue
         link = match_arguments.group("link")
         if not re.match(r"(https?:)?//", link) and not linked_file_exists(
-            link, document.path
+            link, document
         ):
             issues.append(
                 Issue(
-                    line=number,
+                    line=number + 1,
                     column_start=match.start(),
                     column_end=match.end(),
                     message=f"Linked file {match_arguments.group('link')} not found.",
@@ -302,7 +336,7 @@ def check_todos(document: Document) -> List[Issue]:
             continue
         issues.append(
             Issue(
-                line=number,
+                line=number + 1,
                 column_start=match.start(),
                 column_end=match.end(),
                 message="Found leftover TODO item",
@@ -322,11 +356,11 @@ def check_missing_pictures(document: Document) -> List[Issue]:
         if not match:
             continue
 
-        path: Path = document.path / match.group(1)
+        path: Path = document.path.parent / match.group(1)
         if not path.is_file():
             issues.append(
                 Issue(
-                    line=number,
+                    line=number + 1,
                     column_start=match.start(),
                     column_end=match.end(),
                     message=f"Missing picture {match.group(1)}",
@@ -339,7 +373,7 @@ def check_missing_pictures(document: Document) -> List[Issue]:
 def check_empty_lists(document: Document) -> List[Issue]:
     """Check that markdown lists items are not left empty."""
     issues = []
-    markdown_list_re = re.compile(r"\s*(?P<type>- [^\n]*)\n")
+    markdown_list_re = re.compile(r"\s*(?P<type>- \s*)\n")
 
     for number, line in enumerate(document.lines):
         match = markdown_list_re.match(line)
@@ -347,13 +381,14 @@ def check_empty_lists(document: Document) -> List[Issue]:
             continue
         issues.append(
             Issue(
-                line=number,
+                line=number + 1,
                 column_start=match.start(),
                 column_end=match.end(),
                 message=f"Empty list item",
                 rule=Rules.empty_lists,
             )
         )
+    return issues
 
 
 def lint(path: Path) -> List[Issue]:
@@ -363,30 +398,43 @@ def lint(path: Path) -> List[Issue]:
         path: path to the tutorial
     """
     issues = []
-    check_functions = [m for m in dir() if m.startswith("check_")]
-    with open(path) as file:
-        lines = file.readlines()
+    check_functions: List[Function] = [
+        f for f in get_all_functions_in_module() if f.name.startswith("check_")
+    ]
+    with open(path) as input_file:
+        lines = input_file.readlines()
         document = Document(path=path, lines=lines, content="".join(lines))
         for check_function in check_functions:
-            issues += check_function(document)
+            issues += check_function.function(document)
     return issues
+
+
+def get_all_functions_in_module() -> List[Function]:
+    """Get all functions in this module."""
+    return [
+        Function(name, obj)
+        for name, obj in inspect.getmembers(sys.modules[__name__])
+        if inspect.isfunction(obj)
+    ]
 
 
 def main():
     args = parse(Args)
-    issues = []
     for path in args.input_files:
         if not path.is_file():
             print(f"{path} does not exist. Exiting.")
             exit(ERROR_FILE_DOES_NOT_EXIST)
+
         issues = lint(path)
-    if issues:
-        print(f"Found {len(issues)} issues.")
-        for issue in issues:
-            print(
-                f"{issue.rule} {issue.line}:{issue.column_start}-{issue.column_end} {issue.message}"
-            )
-        exit(ERROR_ISSUES_FOUND)
+        if issues:
+            print(f"Found {len(issues)} issues in{path}.\n")
+            for issue in sorted(issues, key=lambda i: i.line):
+                print(
+                    f"{issue.rule.value} {issue.line}:{issue.column_start}-{issue.column_end} {issue.message}"
+                )
+                if args.print_errors and issue.error:
+                    print(f"\nError message:\n\n{issue.error}")
+            exit(ERROR_ISSUES_FOUND)
 
 
 if __name__ == "__main__":
