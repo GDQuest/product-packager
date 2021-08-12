@@ -152,11 +152,7 @@ env["BUILDERS"]["EpubBuilder"] = EpubBuilder
 ChapterBuilder = Builder(action=build_chapter_md, suffix=".md")
 env["BUILDERS"]["ChapterBuilder"] = ChapterBuilder
 
-
-media_files = [
-    Install(env["BUILD_DIR"].Dir("images/"))
-    for path in env["MEDIA_FILES"]
-]
+media_files = Install(env["BUILD_DIR"].Dir("images/"), env["MEDIA_FILES"])
 
 new_list = []
 chapter_tiers = {}
