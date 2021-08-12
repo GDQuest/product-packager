@@ -22,6 +22,8 @@ from scons_helper import print_error, print_success
 # This line allows us to avoid linter warnings and get completion support.
 env = Environment()
 
+ERROR_DUPLICATE_IMAGES_FOUND = 2
+
 Import("env")
 print_success(f"Building project {env['SRC_DIR']} as Epub")
 
@@ -96,7 +98,9 @@ def convert_to_epub(target, source, env):
     """Build epub file from installed sources."""
     md_files = []
     for file in env["INSTALLED_MD_FILES"]:
-        path = Path(file[0].get_abspath()).relative_to(Path(str(env["BUILD_DIR"])).absolute())
+        path = Path(file[0].get_abspath()).relative_to(
+            Path(str(env["BUILD_DIR"])).absolute()
+        )
         md_files.append(path)
     out = subprocess.run(
         ["pandoc", "-o", env["EPUB_NAME"], "metadata.txt"]
@@ -116,6 +120,32 @@ def convert_to_epub(target, source, env):
         raise Exception(out.stderr.decode())
     print_success(out.stdout.decode())
 
+
+def find_duplicate_images(directory: Path) -> List[str]:
+    images_lists = [
+        directory.rglob("*.{}".format(ext)) for ext in ["jpg", "png", "gif"]
+    ]
+    images = [path.name for image_list in images_lists for path in image_list]
+    # Find all images with the same name
+    image_as_set = set(images)
+    duplicate_images_count = len(images) - len(image_as_set)
+    if duplicate_images_count != 0:
+        print_error(
+            f"{duplicate_images_count} duplicate image{'s' if duplicate_images_count > 1 else ''} found.\n"
+        )
+        for image in image_as_set:
+            if images.count(image) > 1:
+                print_error(f"- {image}")
+        print("")
+        print_error("Please rename the images to have unique names.")
+        exit(ERROR_DUPLICATE_IMAGES_FOUND)
+    else:
+        print("No duplicate images found.")
+
+
+# Every picture must have a unique name as we must all place them into one
+# folder to build with epub. So we check that first.
+duplicate_images = find_duplicate_images(Path(str(env["CONTENT_DIR"])))
 
 EpubBuilder = Builder(action=convert_to_epub, suffix=".epub")
 env["BUILDERS"]["EpubBuilder"] = EpubBuilder
