@@ -151,7 +151,11 @@ def check_tutorial_formatting(document: Document) -> List[Issue]:
             if line.startswith("```"):
                 inside_code_block = not inside_code_block
                 continue
+            # Skip headings and code blocks
             if line.startswith("#") or inside_code_block:
+                continue
+            # Skip templates
+            if line.startswith("{%"):
                 continue
 
             match = built_in_classes_re.search(line)
