@@ -52,18 +52,9 @@ def get_epub_metadata(root_path: Dir) -> Tuple[str, str]:
     directory: Path = root / "epub_metadata"
     metadata: Path = directory / "metadata.txt"
     cover: Path = directory / "cover.png"
-    assert (
-        directory.is_dir(),
-        f"Missing epub_metadata/ directory in {root.as_posix()}",
-    )
-    assert (
-        metadata.exists(),
-        f"Missing metadata.txt in {directory.as_posix()}",
-    )
-    assert (
-        cover.exists(),
-        f"Missing cover.png at {directory.as_posix()}",
-    )
+    assert directory.is_dir(), f"Missing epub_metadata/ directory in {root.as_posix()}"
+    assert metadata.exists(), f"Missing metadata.txt in {directory.as_posix()}"
+    assert cover.exists(), f"Missing cover.png at {directory.as_posix()}"
     return metadata.as_posix(), cover.as_posix()
 
 
