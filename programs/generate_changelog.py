@@ -6,10 +6,18 @@ from pathlib import Path
 
 from datargs import arg, parse
 
+# The keys are ordered to output new features first, then improvements, then bug
+# fixes.
+CHANGELOG_COMMIT_TYPES = {
+    "feat": "New features",
+    "improvement": "Improvements",
+    "perf": "Improvements",
+    "fix": "Bug fixes",
+}
+
 PATTERNS_MAP = {
-    r"(Add)|(New):?": "New features",
-    r"(Change)|(Update):?": "Changes",
-    r"(Bug)|(Fix):?": "Bug fixes",
+    re.compile(f"{key}(\([\w ]+\))?:"): value
+    for key, value in CHANGELOG_COMMIT_TYPES.items()
 }
 
 
@@ -20,9 +28,7 @@ class Args:
     path: Path = arg(
         default=Path.cwd(), help="Path to the git repository", positional=True
     )
-    title: str = arg(
-        default="", aliases=["-t"], help="Title of the changelog"
-    )
+    title: str = arg(default="", aliases=["-t"], help="Title of the changelog")
     commit_range: str = arg(
         aliases=["-c"],
         default="",
@@ -63,18 +69,20 @@ def generate_changelog(args: Args) -> str:
         last_version_tag = get_last_version_tag(args)
         commit_range = f"{last_version_tag}..HEAD"
 
-    changelog = f"## {args.title} release {commit_range.split('..')[0]}\n\n".replace("  ", " ")
+    changelog = f"## {args.title} release {commit_range.split('..')[0]}\n\n".replace(
+        "  ", " "
+    )
 
-    git_log_command = f"git log {commit_range} --pretty=format:'%s' --reverse".split()
+    git_log_command = f"git log {commit_range} --pretty=format:%s\n%b --reverse".split(' ')
     log = subprocess.check_output(git_log_command, cwd=args.path).decode()
-    log = log.split("\n")
-    log = [line.strip("'") for line in log]
+    log = [l.strip() for l in log.split("\n") if l and l != "\r"]
+    log = [re.sub("^\* ", "",l) for l in log]
 
     changelog_map = {value: [] for value in PATTERNS_MAP.values()}
     for line in log:
         for pattern, changelog_type in PATTERNS_MAP.items():
-            if re.match(pattern, line):
-                cleaned_line = re.sub(pattern, "", line).strip(" :")
+            if pattern.match(line):
+                cleaned_line = pattern.sub("", line).strip(" :")
                 cleaned_line = cleaned_line[:1].capitalize() + cleaned_line[1:]
                 changelog_map[changelog_type].append(cleaned_line)
 
