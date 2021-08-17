@@ -81,7 +81,7 @@ RE_VARIABLE_OR_FUNCTION: re.Pattern = re.compile(
     "|".join([SINGLE_FUNCTION_CALL, SINGLE_VARIABLE, VARIABLE_AND_PROPERTY])
 )
 RE_NUMERIC_VALUES_AND_RANGES: re.Pattern = re.compile(
-    r"(\[[\d\., ]+\])|(-?\d+\.\d+)|(?<![\nA-Za-z])(-?\d+)(?![A-Za-z])(?!\. )"
+    r"(\d+x\d+)|(\[[\d\., ]+\])|(-?\d+\.\d+)|(?<![\nA-Za-z])(-?\d+)(?![A-Za-z])(?!\. )"
 )
 # Sequence of multiple words with an optional "->" separator, to italicize.
 RE_TO_ITALICIZE_SEQUENCE: re.Pattern = re.compile(
