@@ -46,7 +46,7 @@ WORDS_TO_KEEP_UNFORMATTED: List[str] = [
 RE_SPLIT_CODE_BLOCK: re.Pattern = re.compile(r"(```[a-z]*.*?```)", flags=re.DOTALL)
 RE_SPLIT_HTML: re.Pattern = re.compile(r"(<.+?>.*?<\/.+?>)", flags=re.DOTALL)
 RE_SPLIT_TEMPLATE: re.Pattern = re.compile(r"({%.+?%})")
-RE_SPLIT_FRONT_MATTER: re.Pattern = re.compile(r"(---.*?---\n)", flags=re.DOTALL)
+RE_SPLIT_FRONT_MATTER: re.Pattern = re.compile(r"(---.+?---\n)", flags=re.DOTALL)
 RE_BUILT_IN_CLASSES: re.Pattern = re.compile(
     r"\b(?<!`)({})\b".format(r"|".join(BUILT_IN_CLASSES))
 )
@@ -101,6 +101,9 @@ RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT: re.Pattern = re.compile(
     r"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|[A-Z0-9]+"
 )
 RE_HEX_VALUES: re.Pattern = re.compile(r"#[a-fA-F0-9]{3,8}")
+RE_INSIDE_DOUBLE_QUOTES: re.Pattern = re.compile(r'"([^"]*)"')
+RE_INSIDE_SINGLE_QUOTES: re.Pattern = re.compile(r"'([^']*)'")
+RE_MARKDOWN_BLOCKQUOTE: re.Pattern = re.compile(r"^(> )(.+?)$", flags=re.MULTILINE)
 
 
 @dataclass
@@ -283,46 +286,44 @@ def parse_command_line_arguments(args) -> argparse.Namespace:
     return parser.parse_args(args)
 
 
-def flatten(items):
-    for item in items:
-        if isinstance(item, list) and not isinstance(item, (str, bytes)):
-            yield from flatten(item)
-        else:
-            yield item
-
-
 def process_content(content: str) -> str:
     """Applies formatting rule to a file's content."""
+
+    def flatten(items):
+        for item in items:
+            if isinstance(item, list) and not isinstance(item, (str, bytes)):
+                yield from flatten(item)
+            else:
+                yield item
 
     def is_code_block(text: str) -> bool:
         return text.startswith("```")
 
     def is_unformatted_block(text: str) -> bool:
-        """Returns true if the text starts like HTML or a template element."""
-        return text.startswith("<") or text.startswith("{%")
+        """Returns true if the text starts like HTML, a template element, a
+        blockquote, or a quote symbol."""
+        ignore_patterns = ["<", "{%", "> ", "'", '"', "```"]
+        for pattern in ignore_patterns:
+            if text.startswith(pattern):
+                return True
+        return False
 
-    def split_html(text: str) -> List[str]:
-        if is_code_block(text):
+    def split_by_regex(text: str, regex: str) -> List[str]:
+        if is_unformatted_block(text):
             return [text]
-        return RE_SPLIT_HTML.split(text)
+        return re.split(regex, text)
 
-    def split_templates(text: str) -> List[str]:
-        if is_code_block(text):
-            return [text]
-        return RE_SPLIT_TEMPLATE.split(text)
-
-    def split_front_matter(text: str) -> List[str]:
-        if is_code_block(text):
-            return [text]
-        return RE_SPLIT_FRONT_MATTER.split(text)
-
-    sections: List[str] = RE_SPLIT_CODE_BLOCK.split(content)
-    sections = map(split_html, sections)
-    sections = list(flatten(sections))
-    sections = map(split_templates, sections)
-    sections = list(flatten(sections))
-    sections = map(split_front_matter, sections)
-    sections = list(flatten(sections))
+    sections = RE_SPLIT_CODE_BLOCK.split(content)
+    for regex in [
+        RE_SPLIT_FRONT_MATTER,
+        RE_SPLIT_HTML,
+        RE_SPLIT_TEMPLATE,
+        RE_INSIDE_DOUBLE_QUOTES,
+        RE_INSIDE_SINGLE_QUOTES,
+        RE_MARKDOWN_BLOCKQUOTE,
+    ]:
+        sections = map(split_by_regex, sections, itertools.repeat(regex))
+        sections = list(flatten(sections))
 
     formatted_sections: List[str] = []
 
@@ -330,8 +331,6 @@ def process_content(content: str) -> str:
         if is_code_block(block):
             formatted_sections.append(format_code_block(block))
         elif is_unformatted_block(block):
-            formatted_sections.append(block)
-        elif block.startswith("---"):
             formatted_sections.append(block)
         else:
             chunks: List[str] = re.split(RE_TO_IGNORE, block)
