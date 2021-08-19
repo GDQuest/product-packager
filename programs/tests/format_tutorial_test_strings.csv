@@ -56,5 +56,8 @@ func test():
 "You can expand the tileset editor by pressing Shift+F12","You can expand the tileset editor by pressing <kbd>Shift</kbd>+<kbd>F12</kbd>","Keyboard shortcuts should be in kbd tags."
 "Drag tileset_mining.png into the editor!","Drag `tileset_mining.png` into the editor!","Filenames should be in code with extensions."
 "You can expand the tileset editor by pressing <kbd>Shift</kbd> + <kbd>F12</kbd>.","You can expand the tileset editor by pressing <kbd>Shift</kbd> + <kbd>F12</kbd>.","The formatter should ignore existing HTML."
-
-
+"> This is a blockquote","> This is a blockquote","The formatter should ignore blockquotes."
+'This "is some text inside quotes"','This "is some text inside quotes"',"The formatter should ignore quotes."
+"64x64","`64x64`","Multiplications should be surrounded with backticks."
+"It is great: It lets us keep track of time.","It is great: It lets us keep track of time.","Capitalized words after a colon shouldn't be italicized."
+"It is great; It lets us keep track of time.","It is great; It lets us keep track of time.","Capitalized words after a semicolon shouldn't be italicized."
