@@ -102,7 +102,7 @@ def add_built_in_icons(content: str) -> str:
         )
         if not os.path.exists(icon_filepath):
             LOGGER.warning("File {} not found.".format(icon_filepath))
-            return ""
+            return match.group(0)
 
         return TEMPLATE.format(icon_filepath) + match.group(0)
 
