@@ -446,7 +446,13 @@ def check_headings(document: Document) -> List[Issue]:
     issues = []
     markdown_heading_re = re.compile(r"#+\s*(?P<title>.*)")
 
+    is_code_block = False
     for number, line in enumerate(document.lines):
+        if line.startswith("```"):
+            is_code_block = not is_code_block
+        if is_code_block:
+            continue
+
         match = markdown_heading_re.match(line)
         if not match:
             continue
