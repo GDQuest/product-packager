@@ -403,9 +403,9 @@ def check_lists(document: Document) -> List[Issue]:
         match = markdown_list_re.match(line)
         if not match:
             continue
-        content = match.group(2)
+        content = match.group(2).strip()
         is_pascal_case_sequence = (
-            re.match(r"^\*?[A-Z]\w*\*?( [A-Z]\w*)*\*?$", content.strip()) is not None
+            re.match(r"^\*?[A-Z]\w*\*?( [A-Z]\w*)*\*?$", content) is not None
         )
         if is_pascal_case_sequence and content.endswith("."):
             issues.append(
@@ -417,7 +417,7 @@ def check_lists(document: Document) -> List[Issue]:
                     rule=Rules.list_item_ends_with_period,
                 )
             )
-        elif not is_pascal_case_sequence and not content.endswith("."):
+        elif not is_pascal_case_sequence and not content[-1] in ".?!":
             issues.append(
                 Issue(
                     line=number + 1,
