@@ -39,6 +39,8 @@ class Rules(Enum):
     yaml_frontmatter_invalid_syntax = "yaml_frontmatter_invalid_syntax"
     empty_heading = "empty_heading"
     heading_ends_with_period = "heading_ends_with_period"
+    list_item_ends_with_period = "list_item_ends_with_period"
+    list_item_does_not_end_with_period = "list_item_doesnt_end_with_period"
 
 
 @dataclass
@@ -381,24 +383,60 @@ def check_missing_pictures(document: Document) -> List[Issue]:
     return issues
 
 
-def check_empty_lists(document: Document) -> List[Issue]:
-    """Check that markdown lists items are not left empty."""
-    issues = []
-    markdown_list_re = re.compile(r"\s*(?P<type>- \s*)\n")
+def check_lists(document: Document) -> List[Issue]:
+    """Check that markdown lists items:
 
+    - Are not left empty.
+    - End with a period if they're a list of sentences.
+    - End without a period if they're a list of items."""
+    issues = []
+    markdown_list_re = re.compile(r"\s*(\d+\.|-) \s*(.*)\n")
+
+    is_front_matter = False
     for number, line in enumerate(document.lines):
+        # We skip lines inside the front matter as that's YAML data.
+        if line.startswith("---"):
+            is_front_matter = not is_front_matter
+        if is_front_matter:
+            continue
+        
         match = markdown_list_re.match(line)
         if not match:
             continue
-        issues.append(
-            Issue(
-                line=number + 1,
-                column_start=match.start(),
-                column_end=match.end(),
-                message=f"Empty list item",
-                rule=Rules.empty_lists,
-            )
+        content = match.group(2)
+        is_pascal_case_sequence = (
+            re.match(r"^\*?[A-Z]\w*\*?( [A-Z]\w*)*\*?$", content.strip()) is not None
         )
+        if is_pascal_case_sequence and content.endswith("."):
+            issues.append(
+                Issue(
+                    line=number + 1,
+                    column_start=match.start(2),
+                    column_end=match.end(2),
+                    message="List item ends with a period.",
+                    rule=Rules.list_item_ends_with_period,
+                )
+            )
+        elif not is_pascal_case_sequence and not content.endswith("."):
+            issues.append(
+                Issue(
+                    line=number + 1,
+                    column_start=match.start(2),
+                    column_end=match.end(2),
+                    message="Sentence in list does not end with a period.",
+                    rule=Rules.list_item_does_not_end_with_period,
+                )
+            )
+        elif content.strip() == "":
+            issues.append(
+                Issue(
+                    line=number + 1,
+                    column_start=match.start(),
+                    column_end=match.end(),
+                    message=f"Empty list item",
+                    rule=Rules.empty_lists,
+                )
+            )
     return issues
 
 
