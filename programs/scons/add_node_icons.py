@@ -120,7 +120,7 @@ def add_built_in_icons(content: str) -> str:
 
 
 def main():
-    args: argparse.Namespace = parse_command_line_arguments(sys.argv)
+    args: argparse.Namespace = parse_command_line_arguments(sys.argv[1:])
     logging.basicConfig(level=logging.ERROR)
     filepaths: List[str] = [
         f for f in args.files if f.lower().endswith(".md") and os.path.exists(f)
