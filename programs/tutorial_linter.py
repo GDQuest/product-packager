@@ -37,6 +37,8 @@ class Rules(Enum):
     link_file_not_found = "link_file_not_found"
     yaml_frontmatter_missing = "yaml_frontmatter_missing"
     yaml_frontmatter_invalid_syntax = "yaml_frontmatter_invalid_syntax"
+    empty_heading = "empty_heading"
+    heading_ends_with_period = "heading_ends_with_period"
 
 
 @dataclass
@@ -397,6 +399,42 @@ def check_empty_lists(document: Document) -> List[Issue]:
                 rule=Rules.empty_lists,
             )
         )
+    return issues
+
+
+def check_headings(document: Document) -> List[Issue]:
+    """Checks that markdown headings do not end with any punctuation and they're
+    not empty."""
+    issues = []
+    markdown_heading_re = re.compile(r"#+\s*(?P<title>.*)")
+
+    for number, line in enumerate(document.lines):
+        match = markdown_heading_re.match(line)
+        if not match:
+            continue
+
+        title = match.group("title")
+        if title == "":
+            issues.append(
+                Issue(
+                    line=number + 1,
+                    column_start=match.start(),
+                    column_end=match.end(),
+                    message="Empty heading",
+                    rule=Rules.empty_heading,
+                )
+            )
+        elif title[-1] in ".":
+            issues.append(
+                Issue(
+                    line=number + 1,
+                    column_start=match.start(),
+                    column_end=match.end(),
+                    message="Headings shouldn't end with a period. "
+                    f"Found '{title[-1]}' at the end of the line.",
+                    rule=Rules.heading_ends_with_period,
+                )
+            )
     return issues
 
 
