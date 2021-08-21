@@ -26,7 +26,7 @@ class Heading:
 
 
 RE_HEADING: re.Pattern = re.compile(r"^(#+)(.+)$")
-RE_TEMPLATE_CONTENTS: re.Pattern = re.compile(r"^{% contents %}$")
+RE_TEMPLATE_CONTENTS: re.Pattern = re.compile(r"^{% contents %}")
 RE_SPLIT_CODE_BLOCK: re.Pattern = re.compile(r"(```[a-z]*.*?```)", flags=re.DOTALL)
 
 
