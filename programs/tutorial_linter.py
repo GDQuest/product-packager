@@ -41,6 +41,8 @@ class Rules(Enum):
     heading_ends_with_period = "heading_ends_with_period"
     list_item_ends_with_period = "list_item_ends_with_period"
     list_item_does_not_end_with_period = "list_item_doesnt_end_with_period"
+    slash_between_items = "slash_between_items"
+    missing_blank_line_before_list = "missing_blank_line_before_list"
 
 
 @dataclass
@@ -106,7 +108,7 @@ def check_yaml_frontmatter(document: Document) -> List[Issue]:
                 line=0,
                 column_start=0,
                 column_end=0,
-                message=f"Missing frontmatter",
+                message=f"Missing frontmatter.",
                 rule=Rules.yaml_frontmatter_missing,
             )
         )
@@ -119,7 +121,7 @@ def check_yaml_frontmatter(document: Document) -> List[Issue]:
                     line=0,
                     column_start=0,
                     column_end=match.end(),
-                    message=f"Invalid frontmatter",
+                    message=f"Invalid frontmatter.",
                     rule=Rules.yaml_frontmatter_invalid_syntax,
                     error=e,
                 )
@@ -139,7 +141,7 @@ def check_tutorial_formatting(document: Document) -> List[Issue]:
                 line=0,
                 column_start=0,
                 column_end=0,
-                message="Missing title",
+                message="Missing title.",
                 rule=Rules.missing_title,
             )
         return issue
@@ -352,7 +354,7 @@ def check_todos(document: Document) -> List[Issue]:
                 line=number + 1,
                 column_start=match.start(),
                 column_end=match.end(),
-                message="Found leftover TODO item",
+                message="Found leftover TODO item.",
                 rule=Rules.leftover_todo,
             )
         )
@@ -376,7 +378,7 @@ def check_missing_pictures(document: Document) -> List[Issue]:
                     line=number + 1,
                     column_start=match.start(),
                     column_end=match.end(),
-                    message=f"Missing picture {match.group(1)}",
+                    message=f"Missing picture {match.group(1)}.",
                     rule=Rules.missing_pictures,
                 )
             )
@@ -386,6 +388,7 @@ def check_missing_pictures(document: Document) -> List[Issue]:
 def check_lists(document: Document) -> List[Issue]:
     """Check that markdown lists items:
 
+    - Are preceded by a blank line.
     - Are not left empty.
     - End with a period if they're a list of sentences.
     - End without a period if they're a list of items."""
@@ -393,16 +396,34 @@ def check_lists(document: Document) -> List[Issue]:
     markdown_list_re = re.compile(r"\s*(\d+\.|-) \s*(.*)\n")
 
     is_front_matter = False
+    is_inside_list = False
     for number, line in enumerate(document.lines):
         # We skip lines inside the front matter as that's YAML data.
         if line.startswith("---"):
             is_front_matter = not is_front_matter
         if is_front_matter:
             continue
-        
+
         match = markdown_list_re.match(line)
         if not match:
+            if is_inside_list:
+                is_inside_list = False
             continue
+        # Figure out if this is the first item in the list.
+        # If it is, we need to check that the previous line was blank.
+        if not is_inside_list:
+            is_inside_list = True
+            if document.lines[number - 1].strip() != "":
+                issues.append(
+                    Issue(
+                        line=number + 1,
+                        column_start=0,
+                        column_end=0,
+                        message="Missing blank line before list.",
+                        rule=Rules.missing_blank_line_before_list,
+                    )
+                )
+
         content = match.group(2).strip()
         is_pascal_case_sequence = (
             re.match(r"^\*?[A-Z]\w*\*?( [A-Z]\w*)*\*?$", content) is not None
@@ -433,7 +454,7 @@ def check_lists(document: Document) -> List[Issue]:
                     line=number + 1,
                     column_start=match.start(),
                     column_end=match.end(),
-                    message=f"Empty list item",
+                    message=f"Empty list item.",
                     rule=Rules.empty_lists,
                 )
             )
@@ -464,7 +485,7 @@ def check_headings(document: Document) -> List[Issue]:
                     line=number + 1,
                     column_start=match.start(),
                     column_end=match.end(),
-                    message="Empty heading",
+                    message="Empty heading.",
                     rule=Rules.empty_heading,
                 )
             )
@@ -477,6 +498,38 @@ def check_headings(document: Document) -> List[Issue]:
                     message="Headings shouldn't end with a period. "
                     f"Found '{title[-1]}' at the end of the line.",
                     rule=Rules.heading_ends_with_period,
+                )
+            )
+    return issues
+
+
+def check_statements_with_slashes(document: Document) -> List[Issue]:
+    """Reports issues regarding patterns like and/or."""
+    issues = []
+    markdown_and_or_re = re.compile(r"(and/or)|(or/and)")
+    items_with_slashes_re = re.compile(r"\w+`? / `?\w+")
+
+    for number, line in enumerate(document.lines):
+        match = markdown_and_or_re.search(line)
+        if match:
+            issues.append(
+                Issue(
+                    line=number + 1,
+                    column_start=match.start(),
+                    column_end=match.end(),
+                    message=f"Don't use slashes between two words as in '{match.group(1)}'.",
+                    rule=Rules.slash_between_items,
+                )
+            )
+        match = items_with_slashes_re.search(line)
+        if match:
+            issues.append(
+                Issue(
+                    line=number + 1,
+                    column_start=match.start(),
+                    column_end=match.end(),
+                    message=f"Don't use slashes in items like '{match.group(0)}'.",
+                    rule=Rules.slash_between_items,
                 )
             )
     return issues
