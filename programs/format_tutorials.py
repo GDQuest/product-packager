@@ -302,7 +302,7 @@ def process_content(content: str) -> str:
     def is_unformatted_block(text: str) -> bool:
         """Returns true if the text starts like HTML, a template element, a
         blockquote, or a quote symbol."""
-        ignore_patterns = ["<", "{%", "> ", "'", '"', "```"]
+        ignore_patterns = ["<", "{%", "> ", "'", '"', "```", "---"]
         for pattern in ignore_patterns:
             if text.startswith(pattern):
                 return True

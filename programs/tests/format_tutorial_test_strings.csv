@@ -60,4 +60,16 @@ func test():
 'This "is some text inside quotes"','This "is some text inside quotes"',"The formatter should ignore quotes."
 "64x64","`64x64`","Multiplications should be surrounded with backticks."
 "It is great: It lets us keep track of time.","It is great: It lets us keep track of time.","Capitalized words after a colon shouldn't be italicized."
-"It is great; It lets us keep track of time.","It is great; It lets us keep track of time.","Capitalized words after a semicolon shouldn't be italicized."
+"---
+description: Detects when entities enter stay inside or leave an area.
+learning_order: 1
+category: two_dimensional
+sub_category: physics
+---","---
+description: Detects when entities enter stay inside or leave an area.
+learning_order: 1
+category: two_dimensional
+sub_category: physics
+---","The formatter should ignore YAML front-matter."
+
+
