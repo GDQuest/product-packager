@@ -71,5 +71,6 @@ learning_order: 1
 category: two_dimensional
 sub_category: physics
 ---","The formatter should ignore YAML front-matter."
+"TileFit is a great option","*TileFit* is a great option","PascalCase words at the start of sentences should be italicized."
 
 
