@@ -113,7 +113,7 @@ def get_file_content(file_path: str, files: dict, duplicate_files: list) -> str:
     if is_filename(file_path):
         assert (
             file_path not in duplicate_files
-        ), "The requested file to include has duplicates with the same name in the project."
+        ), f"The requested file to include has duplicates with the same name in the project: {file_path}"
         file_path = files[file_path]["path"]
     else:
         assert os.path.exists(file_path), "File not found: {}".format(file_path)
