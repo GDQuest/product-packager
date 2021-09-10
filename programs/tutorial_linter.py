@@ -43,6 +43,7 @@ class Rules(Enum):
     list_item_does_not_end_with_period = "list_item_doesnt_end_with_period"
     slash_between_items = "slash_between_items"
     missing_blank_line_before_list = "missing_blank_line_before_list"
+    link_not_found = "link_not_found"
 
 
 @dataclass
@@ -306,13 +307,14 @@ def check_links(document: Document) -> List[Issue]:
         return found_files != []
 
     issues = []
-    link_base_re = re.compile(r"{% *link.+%}")
-    link_re = re.compile(r"{% *link [\"']?(?P<link>.+?)[\"']? *(?P<target>\w+)? *%}")
+    
+    link_base_re = re.compile(r"{% *link .+ *%}")
+    link_re = re.compile(r"{% *link [\"']?(?P<link>\w+)[\"']? ?(?P<target>\w+)? *%}")
     for number, line in enumerate(document.lines):
-        match = link_base_re.match(line)
+        match = link_base_re.search(line)
         if not match:
             continue
-        match_arguments = link_re.match(line)
+        match_arguments = link_re.search(line)
         if not match_arguments:
             issues.append(
                 Issue(
