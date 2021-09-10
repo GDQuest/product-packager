@@ -101,8 +101,8 @@ RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT: re.Pattern = re.compile(
     r"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|[A-Z0-9]+"
 )
 RE_HEX_VALUES: re.Pattern = re.compile(r"#[a-fA-F0-9]{3,8}")
-RE_INSIDE_DOUBLE_QUOTES: re.Pattern = re.compile(r'"([^"]*)"')
-RE_INSIDE_SINGLE_QUOTES: re.Pattern = re.compile(r"'([^']*)'")
+RE_INSIDE_DOUBLE_QUOTES: re.Pattern = re.compile(r'[^\w]("[^"]*")[^\w]')
+RE_INSIDE_SINGLE_QUOTES: re.Pattern = re.compile(r"[^\w]('[^']*')[^\w]")
 RE_MARKDOWN_BLOCKQUOTE: re.Pattern = re.compile(r"^(> )(.+?)$", flags=re.MULTILINE)
 
 

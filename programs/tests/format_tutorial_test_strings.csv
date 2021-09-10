@@ -72,5 +72,5 @@ category: two_dimensional
 sub_category: physics
 ---","The formatter should ignore YAML front-matter."
 "TileFit is a great option","*TileFit* is a great option","PascalCase words at the start of sentences should be italicized."
-
-
+'Spinning the "gun" to show reloading if out of ammo.','Spinning the "gun" to show reloading if out of ammo.',"The formatter should preserve quotes."
+"Spinning the gun to show it's reloading if we're out of ammo.","Spinning the gun to show it's reloading if we're out of ammo.","The formatter should preserve quotes."
