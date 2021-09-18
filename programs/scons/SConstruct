@@ -130,7 +130,7 @@ def make_strict_mode_checks():
 
 
 def glob_extensions(directory: Dir, extensions: list[str]) -> Iterator[File]:
-    """Return all files in the given path with an extension in the extension list."""
+    """Return all files in the given path wit an extension in the extension list."""
     return (File(f) for e in extensions for f in Path(str(directory)).glob("**/" + e))
 
 
@@ -149,7 +149,7 @@ env["CONTENT_DIRS"] = find_subdirectories(env["CONTENT_DIR"])
 env["MEDIA_FILES"] = [
     f
     for d in env["CONTENT_DIRS"]
-    for f in glob_extensions(d, ["*.png", "*.jpg", "*.jpeg", "*.svg", "*.gif", "*.mp4"])
+    for f in glob_extensions(d, ["*.png", "*.jpg", "*.jpeg", "*.svg", "*.gif", "*.mp4", "*.webp"])
 ]
 env["MARKDOWN_FILES"] = [
     f for d in env["CONTENT_DIRS"] for f in glob_extensions(d, ["*.md"])
