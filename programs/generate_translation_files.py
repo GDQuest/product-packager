@@ -30,15 +30,18 @@ class Args:
     )
 
 
-def calculate_target_file_paths(
-    destination: Path, relative_to: Path, source_files: list[Path]
-) -> list[Path]:
-    """Returns the list of files taking their path from relative_to and
-    appending it to destination."""
-    return
-
-
 def main():
+    if shutil.which("po4a-gettextize") is None:
+        print(
+            "ERROR: po4a-gettextize is not installed. You need it to run this script. "
+            "On Linux, you can install it from your package manager. On Debian-based distributions: `sudo apt install po4a`.\n\n"
+            "On other sytems, you need to install it using the PERL language:\n\n"
+            "- Download a release on GitHub https://github.com/mquinson/po4a/releases\n"
+            "- Unpack the tarball\n"
+            "- Read the README https://github.com/mquinson/po4a\n"
+        )
+        sys.exit(1)
+
     args = parse(Args)
     content_directory: Path = args.project_path / args.content_dirname
     translation_directory: Path = args.project_path / args.translation_dirname
@@ -57,19 +60,13 @@ def main():
     print(f"Found {len(markdown_files)} markdown files to translate.")
     print(f"Generating {len(translation_files)} translation files.")
 
-    if shutil.which("gettext-md") is None:
-        print(
-            "ERROR: gettext-md is not installed. You need it to run this script. "
-            "See install instructions here: https://www.npmjs.com/package/gettext-markdown"
-        )
-        sys.exit(1)
-
     for file in translation_files:
         if not file.parent.exists():
             file.parent.mkdir(parents=True)
 
     for input_file, output_file in zip(markdown_files, translation_files):
-        command = ["gettext-md", "-o", str(output_file), "--pot", str(input_file)]
+        # "text" is the po4a format that supports markdown.
+        command = ["po4a-gettextize", "--format", "text", "--master", str(input_file), "--po", str(output_file)]
         subprocess.run(command)
 
 
