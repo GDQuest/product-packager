@@ -3,7 +3,7 @@
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+from typing import List, overload
 import subprocess
 import shutil
 
@@ -27,6 +27,10 @@ class Args:
     translation_dirname: str = arg(
         default=DEFAULT_TRANSLATION_DIRNAME,
         help="Name of the directory to output translation files.",
+    )
+    overwrite: bool = arg(
+        default=False,
+        help="Whether to overwrite existing translation files.",
     )
 
 
@@ -64,7 +68,16 @@ def main():
         if not file.parent.exists():
             file.parent.mkdir(parents=True)
 
+    do_overwrite = args.overwrite
     for input_file, output_file in zip(markdown_files, translation_files):
+        if output_file.exists() and not do_overwrite:
+            print(f"Translation file {output_file} exists. Overwrite? (y/n/A)")
+            answer = input()
+            if answer.lower() == "n":
+                continue
+            elif answer.lower() == "A":
+                do_overwrite = True
+            
         # "text" is the po4a format that supports markdown.
         command = ["po4a-gettextize", "--format", "text", "--master", str(input_file), "--po", str(output_file)]
         subprocess.run(command)
