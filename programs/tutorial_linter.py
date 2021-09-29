@@ -309,7 +309,7 @@ def check_links(document: Document) -> List[Issue]:
     issues = []
     
     link_base_re = re.compile(r"{% *link .+ *%}")
-    link_re = re.compile(r"{% *link [\"']?(?P<link>\w+)[\"']? ?(?P<target>\w+)? *%}")
+    link_re = re.compile(r"{% *link [\"']?(?P<link>\w+)[\"']? ?(?P<target>[\w-]+)? *%}")
     for number, line in enumerate(document.lines):
         match = link_base_re.search(line)
         if not match:
