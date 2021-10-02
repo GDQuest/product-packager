@@ -249,7 +249,7 @@ def format_code_block(text: str):
         ]
         return "\n".join(output)
 
-    match = re.match("```([a-z]*)\n(.*?)```", text, flags=re.DOTALL)
+    match = re.match("```([a-z]+)?(.*?)```", text, flags=re.DOTALL)
 
     language = match.group(1) or "gdscript"
 
@@ -302,9 +302,15 @@ def process_content(content: str) -> str:
     def is_unformatted_block(text: str) -> bool:
         """Returns true if the text starts like HTML, a template element, a
         blockquote, or a quote symbol."""
-        ignore_patterns = ["<", "{%", "> ", "'", '"', "```", "---"]
-        for pattern in ignore_patterns:
-            if text.startswith(pattern):
+        ignore_pairs = [
+            ("<", ">"),
+            ("---", "---"),
+            ("{%", "%}"),
+            ("'", "'"),
+            ('"', '"'),
+        ]
+        for opening, closing in ignore_pairs:
+            if text.lstrip().startswith(opening) and text.rstrip().endswith(closing):
                 return True
         return False
 
@@ -324,6 +330,7 @@ def process_content(content: str) -> str:
     ]:
         sections = map(split_by_regex, sections, itertools.repeat(regex))
         sections = list(flatten(sections))
+    sections = list(filter(lambda text: bool(text), sections))
 
     formatted_sections: List[str] = []
 
