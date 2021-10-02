@@ -136,12 +136,14 @@ def find_all_file_anchors(content: str) -> dict:
     anchors = find_all_anchors_in_file(content)
 
     for anchor in anchors:
+        regex_pattern = ANCHOR_REGEX_TEMPLATE.format(anchor, anchor)
         regex_anchor: re.Pattern = re.compile(
-            ANCHOR_REGEX_TEMPLATE.format(anchor, anchor), flags=re.DOTALL | re.MULTILINE
+            regex_pattern, flags=re.DOTALL | re.MULTILINE
         )
         match: re.Match = regex_anchor.search(content)
         if not match:
-            print_error('Malformed anchor pattern for anchor "{}"'.format(anchor))
+            print_error(f'Malformed anchor pattern for anchor "{anchor}". '
+            f'The following anchor regex failed to find a match: {regex_pattern}')
             sys.exit(ERROR_ATTEMPT_TO_FIND_DUPLICATE_FILE)
         anchor_content = re.sub(
             r"^\s*# *(ANCHOR|END): *\w+\s*$", "", match.group(1), flags=re.MULTILINE
