@@ -249,7 +249,7 @@ def format_code_block(text: str):
         ]
         return "\n".join(output)
 
-    match = re.match("```([a-z]+)?(.*?)```", text, flags=re.DOTALL)
+    match = re.match("```([a-z]+)?\n(.*?)```", text, flags=re.DOTALL)
 
     language = match.group(1) or "gdscript"
 
@@ -303,6 +303,7 @@ def process_content(content: str) -> str:
         """Returns true if the text starts like HTML, a template element, a
         blockquote, or a quote symbol."""
         ignore_pairs = [
+            ("```", "```"),
             ("<", ">"),
             ("---", "---"),
             ("{%", "%}"),
