@@ -56,6 +56,11 @@ class Args:
         help="Prints extra error messages.",
         aliases=["-e"],
     )
+    ignore_folders: Sequence[Path] = arg(
+        default=tuple(),
+        help="Ignore those folders passed by relative or absolute path.",
+        aliases=["-i"],
+    )
 
 
 @dataclass
@@ -93,11 +98,11 @@ class Issue:
     column_start: int
     column_end: int
     message: str
-    rule: str
+    rule: Rules
     error: str = ""
 
 
-def check_yaml_frontmatter(document: Document) -> List[Issue]:
+def check_yaml_frontmatter(document: Document, args: Args) -> List[Issue]:
     """Check that the frontmatter is valid."""
     issues = []
 
@@ -130,11 +135,11 @@ def check_yaml_frontmatter(document: Document) -> List[Issue]:
     return issues
 
 
-def check_tutorial_formatting(document: Document) -> List[Issue]:
+def check_tutorial_formatting(document: Document, args: Args) -> List[Issue]:
     """Check that the tutorial is formatted correctly."""
     issues = []
 
-    def check_title_exists(document: Document) -> Issue:
+    def check_title_exists(document: Document, args: Args) -> Issue:
         issue = None
         title_re = re.compile(r"# (?P<title>[^#]+)")
         if not title_re.search(document.content):
@@ -147,7 +152,7 @@ def check_tutorial_formatting(document: Document) -> List[Issue]:
             )
         return issue
 
-    def check_built_in_classes(document: Document) -> Issue:
+    def check_built_in_classes(document: Document, args: Args) -> Issue:
         """Checks that there are no built-in classes without a code mark."""
         issue = None
         built_in_classes_re = re.compile(
@@ -183,14 +188,14 @@ def check_tutorial_formatting(document: Document) -> List[Issue]:
         return issue
 
     for function in [check_title_exists, check_built_in_classes]:
-        issue = function(document)
+        issue = function(document, args)
         if issue is not None:
             issues.append(issue)
 
     return issues
 
 
-def check_includes(document: Document) -> List[Issue]:
+def check_includes(document: Document, args: Args) -> List[Issue]:
     """Finds all includes in the document and for each, checks that:
 
     - The include template have the correct syntax.
@@ -208,6 +213,7 @@ def check_includes(document: Document) -> List[Issue]:
     )
     include_file_path: Path = None
     include_anchor = ""
+    ignore_folders = args.ignore_folders
 
     def check_include_syntax(line: str, index: int) -> Issue:
         issue = None
@@ -223,11 +229,20 @@ def check_includes(document: Document) -> List[Issue]:
         return issue
 
     def check_include_file_exists(line: str, index: int) -> Issue:
+
+        def should_keep_file(file_path: Path) -> bool:
+            for folder in ignore_folders:
+                for path in file_path.parents:
+                    if folder == path:
+                        return False
+            return True
+
         issue = None
         match = include_syntax_re.match(line)
 
         file_exists = False
         found_files = document.git_directory.rglob(match.group("file"))
+        found_files = list(filter(should_keep_file, found_files))
         for f in found_files:
             nonlocal include_file_path
             nonlocal include_anchor
@@ -287,63 +302,15 @@ def check_includes(document: Document) -> List[Issue]:
             check_include_anchor_exists,
         ]:
             issue = check_function(line, number)
-            if issue is not None:
+            if issue:
                 issues.append(issue)
                 break
 
     return issues
 
 
-def check_links(document: Document) -> List[Issue]:
-    """Check that the link templates have the correct syntax."""
 
-    def linked_file_exists(link: str, document: Document) -> bool:
-        content_folder = document.git_directory.joinpath("content")
-        assert (
-            content_folder.exists()
-        ), f"The git repository {document.git_directory} must have a content folder."
-
-        found_files = list(content_folder.rglob(link))
-        return found_files != []
-
-    issues = []
-    
-    link_base_re = re.compile(r"{% *link .+ *%}")
-    link_re = re.compile(r"{% *link [\"']?(?P<link>\w+)[\"']? ?(?P<target>[\w-]+)? *%}")
-    for number, line in enumerate(document.lines):
-        match = link_base_re.search(line)
-        if not match:
-            continue
-        match_arguments = link_re.search(line)
-        if not match_arguments:
-            issues.append(
-                Issue(
-                    line=number + 1,
-                    column_start=match.start(),
-                    column_end=match.end(),
-                    message="Link syntax is incorrect.",
-                    rule=Rules.link_syntax,
-                )
-            )
-            continue
-        link = match_arguments.group("link")
-        if not re.match(r"(https?:)?//", link) and not linked_file_exists(
-            link, document
-        ):
-            issues.append(
-                Issue(
-                    line=number + 1,
-                    column_start=match.start(),
-                    column_end=match.end(),
-                    message=f"Linked file {match_arguments.group('link')} not found.",
-                    rule=Rules.link_not_found,
-                )
-            )
-
-    return issues
-
-
-def check_todos(document: Document) -> List[Issue]:
+def check_todos(document: Document, args: Args) -> List[Issue]:
     """Check that there are no TODO items left inside the document."""
     issues = []
     todo_re = re.compile(r"\s*TODO\s*", re.IGNORECASE)
@@ -355,6 +322,7 @@ def check_todos(document: Document) -> List[Issue]:
             Issue(
                 line=number + 1,
                 column_start=match.start(),
+
                 column_end=match.end(),
                 message="Found leftover TODO item.",
                 rule=Rules.leftover_todo,
@@ -363,7 +331,7 @@ def check_todos(document: Document) -> List[Issue]:
     return issues
 
 
-def check_missing_pictures(document: Document) -> List[Issue]:
+def check_missing_pictures(document: Document, args: Args) -> List[Issue]:
     """Check that all pictures files linked in the document exist."""
     issues = []
     markdown_picture_re = re.compile(r"\s*\!\[.*\]\((.*)\)")
@@ -387,7 +355,7 @@ def check_missing_pictures(document: Document) -> List[Issue]:
     return issues
 
 
-def check_lists(document: Document) -> List[Issue]:
+def check_lists(document: Document, args: Args) -> List[Issue]:
     """Check that markdown lists items:
 
     - Are preceded by a blank line.
@@ -463,7 +431,7 @@ def check_lists(document: Document) -> List[Issue]:
     return issues
 
 
-def check_headings(document: Document) -> List[Issue]:
+def check_headings(document: Document, args: Args) -> List[Issue]:
     """Checks that markdown headings do not end with any punctuation and they're
     not empty."""
     issues = []
@@ -505,7 +473,7 @@ def check_headings(document: Document) -> List[Issue]:
     return issues
 
 
-def check_statements_with_slashes(document: Document) -> List[Issue]:
+def check_statements_with_slashes(document: Document, args: Args) -> List[Issue]:
     """Reports issues regarding patterns like and/or."""
     issues = []
     markdown_and_or_re = re.compile(r"(and/or)|(or/and)")
@@ -537,7 +505,7 @@ def check_statements_with_slashes(document: Document) -> List[Issue]:
     return issues
 
 
-def lint(path: Path) -> List[Issue]:
+def lint(path: Path, args: Args) -> List[Issue]:
     """Lint a tutorial.
 
     Arguments:
@@ -551,7 +519,7 @@ def lint(path: Path) -> List[Issue]:
         lines = input_file.readlines()
         document = Document(path=path, lines=lines, content="".join(lines))
         for check_function in check_functions:
-            issues += check_function.function(document)
+            issues += check_function.function(document, args)
     return issues
 
 
@@ -572,7 +540,7 @@ def main():
             print(f"{path} does not exist. Exiting.")
             exit(ERROR_FILE_DOES_NOT_EXIST)
 
-        issues = lint(path)
+        issues = lint(path, args)
         if issues:
             issues_found = True
             print(f"Found {len(issues)} issues in{path}.\n")
