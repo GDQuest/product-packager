@@ -74,3 +74,4 @@ sub_category: physics
 "TileFit is a great option","*TileFit* is a great option","PascalCase words at the start of sentences should be italicized."
 'Spinning the "gun" to show reloading if out of ammo.','Spinning the "gun" to show reloading if out of ammo.',"The formatter should preserve quotes."
 "Spinning the gun to show it's reloading if we're out of ammo.","Spinning the gun to show it's reloading if we're out of ammo.","The formatter should preserve quotes."
+"Press Ctrl+Alt+M","Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>M</kbd>","Modifier keys should be properly wrapped into keyboard tags."

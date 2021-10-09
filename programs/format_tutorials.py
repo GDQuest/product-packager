@@ -95,7 +95,7 @@ RE_TO_ITALICIZE_ONE_WORD: re.Pattern = re.compile(
 )
 RE_TO_IGNORE: re.Pattern = re.compile(r"(!?\[.*\]\(.+\)|^#+ .+$)", flags=re.MULTILINE)
 RE_KEYBOARD_SHORTCUTS: re.Pattern = re.compile(
-    r"(?<!\d\. ) +((Ctrl|Alt|Shift|CTRL|ALT|SHIFT) ?\+ ?)(F\d{1,2}|[A-Z0-9])"
+    r"(?<!\d\. ) +((Ctrl|Alt|Shift|CTRL|ALT|SHIFT) ?\+ ?)+(F\d{1,2}|[A-Z0-9])"
 )
 RE_KEYBOARD_SHORTCUTS_ONE_ELEMENT: re.Pattern = re.compile(
     r"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|[A-Z0-9]+"
