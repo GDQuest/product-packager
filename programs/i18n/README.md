@@ -97,3 +97,15 @@ Using the programs above, we should be able to generate a copy of the repository
 The translated repository should not include untranslated lessons/guides. However, it should always include the Godot project(s) with all GDScript files, whether code comment translations are complete or not.
 
 You can use `po4a-translate` to automatically detect if a .po file has enough translations completed to output a translated document with the `--keep` option.
+
+---
+
+### `i18n` instructions
+
+1. Add `export PERL5LIB=path_to_perl5_repo_folder:$PERL5LIB` to your `$HOME/.profile` and logout-login to take effect.
+2. Run `i18n path_to_gdquest_godot_repo` prepared with guides. This creates a new folder with an `-es` suffix along side the given path.
+3. Move into the new folder with `cd path_to_gdquest_godot_repo-es`.
+4. Run `po4a po4a.conf`. You can run `po4a --keep=0 po4a.conf` to generate `*.md` and `*.gd` files even if they're untranslated.
+5. Profit!
+
+The translation files (`*.po` and `*.pot`) get generated in `path_to_gdquest_godot_repo-es/i18n`.
