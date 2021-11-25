@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from ast import copy_location
 import re
 import shutil
 from itertools import chain
@@ -17,59 +18,85 @@ PATHS_TO_COPY = [".env", "content", "epub_metadata", "SConstruct"]
 
 @dataclass
 class Args:
-  project_path: Path = arg(positional=True, help="Path to the project's repository.")
+    project_path: Path = arg(positional=True, help="Path to the project's repository.")
 
 
 def get_godot_project_folder(repo: Path) -> Path:
-  return [p.parent.relative_to(repo) for p in repo.rglob("project.godot")][0]
+    godot_project_directories = [
+        p.parent.relative_to(repo) for p in repo.rglob("project.godot") if "free-samples" not in p.parent.parts and "build" not in p.parent.parts
+    ]
+    print(f"Found {len(godot_project_directories)} godot project directories to copy.")
+    for project in godot_project_directories:
+        print(f"\t{project}")
+    return godot_project_directories[0]
 
 
 def filter_gd(path: Path) -> bool:
-  out = True
-  if path.suffix.lower() == ".gd":
-    with open(path, "r") as f:
-      out = re.search(GD_COMMENT_LINE, f.read()) != None
-  return out
+    out = True
+    if path.suffix.lower() == ".gd":
+        with open(path, "r") as f:
+            out = re.search(GD_COMMENT_LINE, f.read()) != None
+    return out
 
 
 def main():
-  args = parse(Args)
+    args = parse(Args)
 
-  project_path = args.project_path
-  project_path_i18n = Path("{}-{}".format(project_path, LANG))
-  po4a_conf_template: dict = {
-    "header": (
-      "[po4a_langs] {lang}\n"
-      "[po4a_paths] {dir}/$master.pot $lang:{dir}/$master.po\n"
-    ),
-    "entry": {
-      ".md": f"[type:text] {PO4A_CONF_TEMPLATE_ENTRY}",
-      ".gd": f"[type:gdscriptcomments] {PO4A_CONF_TEMPLATE_ENTRY}"
-    },
-    "dirs": {
-      ".md": "content",
-      ".gd": get_godot_project_folder(project_path)
+    project_path = args.project_path
+    project_path_i18n = Path("{}-{}".format(project_path, LANG))
+    po4a_conf_template: dict = {
+        "header": (
+            "[po4a_langs] {lang}\n"
+            "[po4a_paths] {dir}/$master.pot $lang:{dir}/$master.po\n"
+        ),
+        "entry": {
+            ".md": f"[type:text] {PO4A_CONF_TEMPLATE_ENTRY}",
+            ".gd": f"[type:gdscriptcomments] {PO4A_CONF_TEMPLATE_ENTRY}",
+        },
+        "dirs": {".md": "content", ".gd": get_godot_project_folder(project_path)},
     }
-  }
 
-  for path_to_copy in PATHS_TO_COPY + [po4a_conf_template["dirs"][".gd"]]:
-    src: Path = project_path / path_to_copy
-    dst: Path = project_path_i18n / path_to_copy
-    try:
-      if src.is_dir():
-        shutil.copytree(src, dst, ignore=shutil.ignore_patterns(*map(lambda e: f"*{e}", po4a_conf_template["entry"])), dirs_exist_ok=True)
-      else:
-        shutil.copy(src, dst)
-    except FileNotFoundError:
-      pass
+    paths_to_copy = PATHS_TO_COPY + [po4a_conf_template["dirs"][".gd"]]
+    copy_paths = [
+        (project_path.joinpath(p), project_path_i18n.joinpath(p))
+        for p in paths_to_copy
+        if project_path.joinpath(p).exists()
+    ]
+    print(f"Copying {len(copy_paths)} files and directories from {project_path} to {project_path_i18n}")
+    for src, dst in copy_paths:
+        if src.is_dir():
+            shutil.copytree(
+                src,
+                dst,
+                ignore=shutil.ignore_patterns(
+                    *map(lambda e: f"*{e}", po4a_conf_template["entry"])
+                ),
+                dirs_exist_ok=True,
+            )
+        else:
+            shutil.copy(src, dst)
 
-  po4a_strs = map(lambda d: (project_path / po4a_conf_template["dirs"][d]).rglob(f"*{d}"), po4a_conf_template["dirs"])
-  po4a_strs = chain(*po4a_strs)
-  po4a_strs = filter(filter_gd, po4a_strs)
-  po4a_strs = map(lambda p: po4a_conf_template["entry"][p.suffix].format(*p.parts[::-1], file_path=p.resolve(), relative_path=p.relative_to(project_path)), po4a_strs)
-  with open(project_path_i18n / PO4A_CONF_FILE, "w") as po4a_conf:
-    po4a_conf.write(po4a_conf_template["header"].format(dir=I18N_DIR, lang=LANG) + "\n".join(po4a_strs))
+    print("Generating and writing po4a.conf file")
+    po4a_strs = map(
+        lambda d: (project_path / po4a_conf_template["dirs"][d]).rglob(f"*{d}"),
+        po4a_conf_template["dirs"],
+    )
+    po4a_strs = chain(*po4a_strs)
+    po4a_strs = filter(filter_gd, po4a_strs)
+    po4a_strs = map(
+        lambda p: po4a_conf_template["entry"][p.suffix].format(
+            *p.parts[::-1],
+            file_path=p.resolve(),
+            relative_path=p.relative_to(project_path),
+        ),
+        po4a_strs,
+    )
+    with open(project_path_i18n / PO4A_CONF_FILE, "w") as po4a_conf:
+        po4a_conf.write(
+            po4a_conf_template["header"].format(dir=I18N_DIR, lang=LANG)
+            + "\n".join(po4a_strs)
+        )
 
 
 if __name__ == "__main__":
-  main()
+    main()
