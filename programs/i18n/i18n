@@ -10,7 +10,7 @@ from pathlib import Path
 
 I18N_DIR: Path = Path("i18n")
 LANG: str = "es"
-GD_COMMENT_LINE = re.compile(r"^\s*#.*")
+GD_COMMENT_LINE = re.compile(r"^\s*#(?:(?!(?:ANCHOR|END)).)+$", re.MULTILINE)
 PO4A_CONF_FILE: Path = Path("po4a.conf")
 PO4A_CONF_TEMPLATE_ENTRY: str = "{file_path} $lang:{relative_path} master:file={1}-{0}"
 PATHS_TO_COPY = [".env", "content", "epub_metadata", "SConstruct"]
@@ -35,7 +35,7 @@ def filter_gd(path: Path) -> bool:
     out = True
     if path.suffix.lower() == ".gd":
         with open(path, "r") as f:
-            out = re.search(GD_COMMENT_LINE, f.read()) != None
+            out = len(re.findall(GD_COMMENT_LINE, f.read())) != 0
     return out
 
 
@@ -63,6 +63,8 @@ def main():
         if project_path.joinpath(p).exists()
     ]
     print(f"Copying {len(copy_paths)} files and directories from {project_path} to {project_path_i18n}")
+
+    project_path_i18n.mkdir(exist_ok=True)
     for src, dst in copy_paths:
         if src.is_dir():
             shutil.copytree(
@@ -87,7 +89,7 @@ def main():
         lambda p: po4a_conf_template["entry"][p.suffix].format(
             *p.parts[::-1],
             file_path=p.resolve(),
-            relative_path=p.relative_to(project_path),
+            relative_path=p.relative_to(project_path)
         ),
         po4a_strs,
     )

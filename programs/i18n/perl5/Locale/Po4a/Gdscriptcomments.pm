@@ -61,16 +61,8 @@ sub parse {
     # construct `s///` like in `sed`.
     $line =~ s/\s+$//;
 
-    # We have a comment line if we match (`m//`):
-    # (    : start the capture group
-    #   ^  : match the beginning of the line
-    #   \s*: match 0-or-more whitespace characters
-    #   #+ : followed by 1-or-more  pound (#) characters
-    #   \s*: match 0-or-more whitespace characters again
-    # )    : end the capture group
-    # \b.+$: match the boundary of a word or construct that's followed
-    #        by 1-or-more characters up to the end of the line
-    if ($line =~ m/(^\s*#+\s*)\b.+$/) {
+    # We check for comment lines that don't include ANCHOR|END tags.
+    if ($line =~ /^(\s*#.+)$/ && !($line =~ /^\s*#+\s*(?:ANCHOR|END).*$/)) {
       # Save the capture group which represents the comment indentation level.
       $pre_paragraph = $1;
       $consecutive_comments++;
