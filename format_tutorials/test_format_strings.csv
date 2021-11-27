@@ -1,4 +1,4 @@
-"input","expected_output","error_message"
+"input","expected","error_message"
 "It is because I did this.","It is because I did this.","I shouldn't get treated as a keyboard shortcut"
 "- A cat.
 1. A boy.

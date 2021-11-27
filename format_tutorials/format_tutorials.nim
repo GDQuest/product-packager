@@ -7,10 +7,11 @@
 # - Marks code blocks without a language as using `gdscript`.
 # - Add <kbd> tags around keyboard shortcuts (the form needs to be Ctrl+F1).
 
-import os
-import strutils
-import parseopt
-import re
+import std/os
+import std/strutils
+import std/parseopt
+import std/re
+import std/wordwrap
 
 
 const HelpMessage = """Auto-formats markdown documents, saving manual formatting work:
@@ -51,11 +52,76 @@ type
         Heading,
         EmptyLine,
         Reference,
+        Html,
         GDQuestShortcode
 
     Block = ref object
         kind: BlockKind
         text: string
+
+
+
+const
+    SupportedExtensions = @["png", "jpe?g", "mp4", "mkv", "t?res",
+        "t?scn", "gd", "py", "shader", ]
+    PatternFilenameOnly = r"(\w+\.(" & SupportedExtensions.join("|") & "))"
+    PatternDirPath = r"((res|user)://)?/?([\w]+/)+(\w*\.\w+)?"
+    PatternFileAtRoot = r"(res|user)://\w+\.\w+"
+
+let
+    RegexFilePath = re(@[PatternDirPath, PatternFileAtRoot,
+            PatternFilenameOnly].join("|"))
+    RegexStartOfList = re"^(-|\d+\.) "
+    RegexCodeCommentLine = re"\s*#"
+    RegexOnePascalCaseWord = re"[A-Z0-9]\w+[A-Z]\w+|[A-Z][a-zA-Z0-9]+(\.\.\.)?"
+    RegexCapitalWordSequence = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )?[A-Z][a-zA-Z0-9]+(\.\.\.)?)+"
+    RegexKeyboardShortcut = re"((Ctrl|Alt|Shift|CTRL|ALT|SHIFT) ?\+ ?)+(F\d{1,2}|[A-Z0-9])"
+    RegexOneKeyboardKey = re"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|[A-Z0-9]+"
+    RegexHexValue = re"(0x|#)[0-9a-fA-F]+"
+
+proc formatSentence(text: string): string =
+    # Idea for algorithm:
+    # Jump to the first non-whitespace character
+    # For each formatter function
+    #   - Try to format the shortest portion of string possible starting from the current position (first non-whitespace character)
+    #       - If formatting works, return the result + position where the formatting ends
+    #       - If formatting doesn't work, continue
+    # Jump to the next non-whitespace character and repeat
+    #
+    # We can use nongreedy regexes to find the shortest possible match.
+    #
+    # Patterns to skip:
+    # - inside quotes
+    result = text
+
+
+proc formatList(listText: string): string =
+    ## Formats the text of a list markdown block (ordered or unordered) and
+    ## returns the formatted string.
+    ##
+    ## For each list item:
+    ##
+    ## - Italicizes a single capital word with nothing after it.
+    ## - Italicizes a sequence of capital words at the start.
+    ## - Formats the rest of the text like a regular sentence.
+    for line in listText.splitLines():
+        let (listStartIndex, lineStart) = re.findBounds(line, RegexStartOfList)
+        if listStartIndex == -1:
+            result &= formatSentence(line)
+            continue
+
+        let listStart = line.substr(0, lineStart)
+        var text = line.substr(lineStart).strip()
+        let isSingleWord = text.count(" ") == 0
+        if isSingleWord:
+            text = "_" & text & "_"
+        else:
+            let (matchStart, matchEnd) = re.findBounds(text, RegexCapitalWordSequence)
+            if matchStart == 0:
+                let match = text.substr(0, matchEnd)
+                text = "_" & match & "_" & formatSentence(text.substr(matchEnd))
+
+        result &= listStart & text
 
 
 proc getFormattedText(text: string): string =
@@ -64,27 +130,39 @@ proc getFormattedText(text: string): string =
 
 
 proc getFormattedCodeBlock(text: string): string =
+    ## Formats the content of a markdown code block:
+    ##
+    ## - Converts space-based indentations to tabs in code blocks.
+    ## - Fills GDScript code comments as paragraphs with a max line length of 80.
+    ## - If the block has no language set, sets it to "gdscript".
+    ##
+    ## `text` should be the text of the code block with the triple backtick
+    ## lines>.
     let lines = text.splitLines()
     result &= (if lines[0].strip() == "```": "```gdscript" else: lines[0])
     for line in lines[1 .. ^1]:
-        if not line.match(re"\s*#"):
-            result &= line
+        var processedLine = line.replace("    ", "\t")
+        if not line.match(RegexCodeCommentLine):
+            result &= processedLine
             continue
 
-        const TabWidth = 4
-        var indentLevel = 0
-        for character in line:
-            if character notin @[' ', '\t']: break
-            indentLevel += 1
-        if line[0] == '\t':
-            indentLevel *= TabWidth
+        var indentCount = 0
+        while text[indentCount] == '\t':
+            indentCount += 1
+        let indentSize = indentCount * 4
 
-        # TODO: wrap comments at 80 characters
-        result &= line
+        let hashCount = processedLine[indentCount .. indentCount + 2].count("#")
+        let margin = indentSize + hashCount
+        let content = wrapWords(line[margin .. ^1], 80 - margin)
+        for line in splitLines(content):
+            result &= repeat("\t", indentCount) & repeat("#", hashCount) & line
+
+        result &= processedLine
 
 
-# Takes a sequence of blocks from a parsed markdown file and outputs a formatted document.
 proc convertBlocksToFormattedMarkdown(blocks: seq[Block]): string =
+    ## Takes a sequence of blocks from a parsed markdown file and returns a
+    ## formatted document.
     const IgnoredBlockKinds = [EmptyLine, YamlFrontMatter, Blockquote, Heading,
             Table, GDQuestShortcode, Reference]
     for mdBlock in blocks:
@@ -97,19 +175,24 @@ proc convertBlocksToFormattedMarkdown(blocks: seq[Block]): string =
                 result &= getFormattedText(mdBlock.text)
 
 
-proc parseBlocks(content: seq[string]): seq[Block] =
-
+proc parseBlocks(content: string): seq[Block] =
+    ## Parses a markdown document into a sequence of blocks.
+    ##
+    ## This is a limited block parser that ignores many markdown features.
+    ## For example, it doesn't parse recursive blocks.
+    ##
+    ## It's designed specifically to parse the markdown content of the tutorials
+    ## for formatting.
     proc createDefaultBlock(): Block =
         return Block(
             kind: TextParagraph,
             text: "",
         )
 
-    let regexListStart = re"- |\d+\. "
-
+    # Make the sequence big enough to avoid resizing too many times.
     var currentBlock = createDefaultBlock()
     var previousLine = ""
-    for line in content:
+    for line in splitLines(content):
         let
             isEmptyLine = line.strip() == ""
             isClosingParagraph = currentBlock.kind == TextParagraph and
@@ -141,30 +224,37 @@ proc parseBlocks(content: seq[string]): seq[Block] =
             elif currentBlock.kind == YamlFrontMatter:
                 result.add(currentBlock)
                 currentBlock = createDefaultBlock()
-        elif line.startsWith("{%"):
-            if currentBlock.kind == TextParagraph:
-                currentBlock.kind = GDQuestShortcode
+        elif line.startsWith("{%") and currentBlock.kind == TextParagraph:
+            currentBlock.kind = GDQuestShortcode
         elif line.startsWith("["):
             currentBlock.kind = Reference
             currentBlock = createDefaultBlock()
-        elif line.match(regexListStart):
+        elif line.startsWith("<") and currentBlock.kind != Html:
+            currentBlock.kind = Html
+        elif line.match(RegexStartOfList):
             currentBlock.kind = List
-
-        if currentBlock.kind == List and isEmptyLine:
-            result.add(currentBlock)
-            currentBlock = createDefaultBlock()
-
-        if currentBlock.kind == GDQuestShortcode and line.strip().endsWith("%}"):
-            result.add(currentBlock)
-            currentBlock = createDefaultBlock()
+        elif line.startsWith("|"):
+            currentBlock.kind = Table
 
         if isEmptyLine:
+            let isClosingBlock = currentBlock.kind in @[List, Html, Table] or (
+                    currentBlock.kind == GDQuestShortcode and
+                    previousLine.strip().endsWith("%}"))
+            if isClosingBlock:
+                result.add(currentBlock)
+                currentBlock = createDefaultBlock()
+
             currentBlock.kind = EmptyLine
             currentBlock.text = "\n"
             result.add(currentBlock)
             currentBlock = createDefaultBlock()
 
         previousLine = line
+
+
+proc formatContent*(content: string): string =
+    let blocks = parseBlocks(content)
+    return convertBlocksToFormattedMarkdown(blocks)
 
 
 proc parseCommandLineArguments(): CommandLineArgs =
@@ -198,16 +288,11 @@ proc parseCommandLineArguments(): CommandLineArgs =
         quit(1)
 
 
-if isMainModule:
+when isMainModule:
     var args = parseCommandLineArguments()
     for file in args.inputFiles:
         let content = readFile(file)
-        let blocks = parseBlocks(content.splitLines())
-        for b in blocks:
-            echo b.kind
-        quit()
-
-        let formattedContent = convertBlocksToFormattedMarkdown(blocks)
+        let formattedContent = formatContent(content)
         if args.inPlace:
             writeFile(file, formattedContent)
         else:
