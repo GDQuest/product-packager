@@ -60,13 +60,15 @@ type
         text: string
 
 
-
 const
     SupportedExtensions = @["png", "jpe?g", "mp4", "mkv", "t?res",
         "t?scn", "gd", "py", "shader", ]
     PatternFilenameOnly = r"(\w+\.(" & SupportedExtensions.join("|") & "))"
     PatternDirPath = r"((res|user)://)?/?([\w]+/)+(\w*\.\w+)?"
     PatternFileAtRoot = r"(res|user)://\w+\.\w+"
+    PatternModifierKeys = r"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|Super|SUPER"
+    PatternKeyboardSingleCharacterKey = r"[A-Z0-9!@#$%^&*()_+\-{}|\[\]\\;':,\./<>?]"
+    PatternOtherKeys = r"Tab|Up|Down|Left|Right|LMB|MMB|RMB|Backspace|Delete"
 
 let
     RegexFilePath = re(@[PatternDirPath, PatternFileAtRoot,
@@ -75,15 +77,64 @@ let
     RegexCodeCommentLine = re"\s*#"
     RegexOnePascalCaseWord = re"[A-Z0-9]\w+[A-Z]\w+|[A-Z][a-zA-Z0-9]+(\.\.\.)?"
     RegexCapitalWordSequence = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )?[A-Z][a-zA-Z0-9]+(\.\.\.)?)+"
-    RegexKeyboardShortcut = re"((Ctrl|Alt|Shift|CTRL|ALT|SHIFT) ?\+ ?)+(F\d{1,2}|[A-Z0-9])"
-    RegexOneKeyboardKey = re"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|[A-Z0-9]+"
+    RegexKeyboardShortcut = re("((" & PatternModifierKeys &
+            r") ?\+ ?)+(F\d{1,2}|" & PatternKeyboardSingleCharacterKey & "|" &
+            PatternOtherKeys & ")")
+    RegexOneKeyboardKey = re("(" & PatternModifierKeys & "|" &
+            PatternKeyboardSingleCharacterKey & "|" & PatternOtherKeys & ")")
+    RegexNumber = re"\d+"
     RegexHexValue = re"(0x|#)[0-9a-fA-F]+"
+    RegexCodeIdentifier = re""
 
 
-proc formatTest(text: string, position: int): (string, int) =
-    result = (text, -1)
+proc regexWrap(text: string, startPosition: int, regexes: seq[Regex],
+        wrapPair: (string, string)): (string, int) =
+    ## Applies a series of regexes to the text starting at `startPosition`,
+    ## wrapping the matches with the given `wrapPair`.
+    ##
+    ## If a regex matches the text, returns the new text and the end position of
+    ## the formatted portion in the original `text`.
+    ##
+    ## If no regex matches the text, returns the input `text` and `-1`.
+    for regex in regexes:
+        let (matchStart, matchEnd) = findBounds(text, regex, startPosition)
+        if matchStart != -1:
+            let outputText = text[0 .. matchStart] & wrapPair[0] &
+                text[matchStart .. matchEnd] & wrapPair[1] & text[matchEnd .. ^1]
+            return (outputText, matchEnd)
+    return (text, -1)
 
-proc formatTextLines(text: string): string =
+
+proc formatKeyboardShortcuts(text: string, position: int): (string, int) =
+    let (matchStart, matchEnd) = findBounds(text, RegexKeyboardShortcut, position)
+    if matchStart != -1:
+        let toFormat = text[matchStart .. matchEnd]
+        let outputText = re.replacef(toFormat, RegexOneKeyboardKey, "<kbd>$1</kbd>")
+        return (outputText, matchEnd)
+    return (text, -1)
+
+
+proc formatCode(text: string, position: int): (string, int) =
+    let regexes = @[RegexCodeIdentifier]
+    regexWrap(text, position, regexes, ("`", "`"))
+
+
+proc formatNumbers(text: string, position: int): (string, int) =
+    let regexes = @[RegexNumber, RegexHexValue]
+    regexWrap(text, position, regexes, ("`", "`"))
+
+
+proc formatFilePaths(text: string, position: int): (string, int) =
+    let regexes = @[RegexFilePath]
+    regexWrap(text, position, regexes, ("`", "`"))
+
+
+proc formatCapitalWords(text: string, position: int): (string, int) =
+    let regexes = @[RegexCapitalWordSequence, RegexOnePascalCaseWord]
+    regexWrap(text, position, regexes, ("*", "*"))
+
+
+proc formatMarkdownTextLines(text: string): string =
     ## Formats regular lines of text, running them through multiple formatting
     ## functions.
     ##
@@ -91,13 +142,20 @@ proc formatTextLines(text: string): string =
     const FormatPairs = [ ("*", "*"), ("**", "**"), ("_", "_"), ("`", "`"),
         ("\"", "\""), ("'", "'"), ("[", "]"), ("[", ")"), ("![", ")")]
     const Formatters = [
-        formatTest
+        formatCode,
+        formatCapitalWords,
+        formatKeyboardShortcuts,
+        formatFilePaths,
+        formatNumbers,
     ]
     for line in text.splitLines():
+        # We check to apply formatters from the first non-whitespace character.
+        # We walk forward in the string and track the position IN THE INPUT
+        # `text`. This is simpler than constantly updating the output string
+        # length and calculate new positions as we format regions.
         var
             position = 0
             lastPosition = 0
-        # We check to apply formatters from the first non-whitespace character.
         let endPosition = line.len()
         while position != endPosition:
             while line[position] == ' ':
@@ -130,7 +188,7 @@ proc formatTextLines(text: string): string =
     result = text
 
 
-proc formatList(listText: string): string =
+proc formatMarkdownList(listText: string): string =
     ## Formats the text of a list markdown block (ordered or unordered) and
     ## returns the formatted string.
     ##
@@ -142,7 +200,7 @@ proc formatList(listText: string): string =
     for line in listText.splitLines():
         let (listStartIndex, lineStart) = re.findBounds(line, RegexStartOfList)
         if listStartIndex == -1:
-            result &= formatTextLines(line)
+            result &= formatMarkdownTextLines(line)
             continue
 
         let listStart = line.substr(0, lineStart)
@@ -154,7 +212,7 @@ proc formatList(listText: string): string =
             let (matchStart, matchEnd) = re.findBounds(text, RegexCapitalWordSequence)
             if matchStart == 0:
                 let match = text.substr(0, matchEnd)
-                text = "_" & match & "_" & formatTextLines(text.substr(matchEnd))
+                text = "_" & match & "_" & formatMarkdownTextLines(text.substr(matchEnd))
 
         result &= listStart & text
 
@@ -202,9 +260,9 @@ proc convertBlocksToFormattedMarkdown(blocks: seq[Block]): string =
             of CodeBlock:
                 result &= formatCodeBlock(mdBlock.text)
             of List:
-                result &= formatList(mdBlock.text)
+                result &= formatMarkdownList(mdBlock.text)
             else:
-                result &= formatTextLines(mdBlock.text)
+                result &= formatMarkdownTextLines(mdBlock.text)
 
 
 proc parseBlocks(content: string): seq[Block] =
