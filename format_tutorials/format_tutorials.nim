@@ -73,7 +73,7 @@ const
 let
     RegexFilePath = re(@[PatternDirPath, PatternFileAtRoot,
             PatternFilenameOnly].join("|"))
-    RegexStartOfList = re"^(-|\d+\.) "
+    RegexStartOfList = re"- |\d+\. "
     RegexCodeCommentLine = re"\s*#"
     RegexOnePascalCaseWord = re"[A-Z0-9]\w+[A-Z]\w+|[A-Z][a-zA-Z0-9]+(\.\.\.)?"
     RegexCapitalWordSequence = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )?[A-Z][a-zA-Z0-9]+(\.\.\.)?)+"
@@ -84,10 +84,10 @@ let
             PatternKeyboardSingleCharacterKey & "|" & PatternOtherKeys & ")")
     RegexNumber = re"\d+"
     RegexHexValue = re"(0x|#)[0-9a-fA-F]+"
-    RegexCodeIdentifier = re""
+    RegexCodeIdentifier = re"TEMPSTRING"
 
 
-proc regexWrap(text: string, startPosition: int, regexes: seq[Regex],
+proc regexWrapAtPosition(text: string, startPosition: int, regexes: seq[Regex],
         wrapPair: (string, string)): (string, int) =
     ## Applies a series of regexes to the text starting at `startPosition`,
     ## wrapping the matches with the given `wrapPair`.
@@ -96,13 +96,21 @@ proc regexWrap(text: string, startPosition: int, regexes: seq[Regex],
     ## the formatted portion in the original `text`.
     ##
     ## If no regex matches the text, returns the input `text` and `-1`.
+    var 
+        outText = ""
+        outPosition = -1
+        previousPosition = startPosition
     for regex in regexes:
-        let (matchStart, matchEnd) = findBounds(text, regex, startPosition)
-        if matchStart != -1:
-            let outputText = text[0 .. matchStart] & wrapPair[0] &
-                text[matchStart .. matchEnd] & wrapPair[1] & text[matchEnd .. ^1]
-            return (outputText, matchEnd)
-    return (text, -1)
+        var (first, last) = findBounds(text, regex, previousPosition)
+        if first < 0: continue
+        outText.add(substr(text, previousPosition, first-1))
+        let wrappedText = wrapPair[0] & text[first .. last] & wrapPair[1]
+        outText.add(wrappedText)
+        previousPosition = last + 1
+        outPosition = previousPosition
+        break
+    add(outText, substr(text, previousPosition))
+    return (outText, outPosition)
 
 
 proc formatKeyboardShortcuts(text: string, position: int): (string, int) =
@@ -116,22 +124,22 @@ proc formatKeyboardShortcuts(text: string, position: int): (string, int) =
 
 proc formatCode(text: string, position: int): (string, int) =
     let regexes = @[RegexCodeIdentifier]
-    regexWrap(text, position, regexes, ("`", "`"))
+    regexWrapAtPosition(text, position, regexes, ("`", "`"))
 
 
 proc formatNumbers(text: string, position: int): (string, int) =
     let regexes = @[RegexNumber, RegexHexValue]
-    regexWrap(text, position, regexes, ("`", "`"))
+    regexWrapAtPosition(text, position, regexes, ("`", "`"))
 
 
 proc formatFilePaths(text: string, position: int): (string, int) =
     let regexes = @[RegexFilePath]
-    regexWrap(text, position, regexes, ("`", "`"))
+    regexWrapAtPosition(text, position, regexes, ("`", "`"))
 
 
 proc formatCapitalWords(text: string, position: int): (string, int) =
     let regexes = @[RegexCapitalWordSequence, RegexOnePascalCaseWord]
-    regexWrap(text, position, regexes, ("*", "*"))
+    regexWrapAtPosition(text, position, regexes, ("*", "*"))
 
 
 proc formatMarkdownTextLines(text: string): string =
@@ -149,42 +157,49 @@ proc formatMarkdownTextLines(text: string): string =
         formatNumbers,
     ]
     for line in text.splitLines():
-        # We check to apply formatters from the first non-whitespace character.
-        # We walk forward in the string and track the position IN THE INPUT
-        # `text`. This is simpler than constantly updating the output string
-        # length and calculate new positions as we format regions.
-        var
-            position = 0
-            lastPosition = 0
-        let endPosition = line.len()
-        while position != endPosition:
-            while line[position] == ' ':
-                position += 1
+        block outerLoop:
+            # We check to apply formatters from the first non-whitespace character.
+            # We walk forward in the string and track the position IN THE INPUT
+            # `text`. This is simpler than constantly updating the output string
+            # length and calculate new positions as we format regions.
+            var
+                position = 0
+                previousPosition = 0
+            let endPosition = line.len()
+            while position != endPosition:
+                block innerLoop:
+                    if position == endPosition: break outerLoop
+                    while line[position] == ' ':
+                        position += 1
 
-            # We don't want to parse already formatted parts or text inside quotes.
-            for (formatStart, formatEnd) in FormatPairs:
-                if line.find(formatStart, position) == position:
-                    let endPosition = line.find(formatEnd, position + 1)
-                    if endPosition != -1:
-                        position = endPosition + formatEnd.len()
-                        break
+                    # We want to skip already formatted parts or text inside quotes.
+                    for (first, last) in FormatPairs:
+                        if line.find(first, position) == position:
+                            let endPosition = line.find(last, position + 1)
+                            if endPosition != -1:
+                                position = endPosition + last.len()
+                                result &= line[previousPosition .. position-1]
+                                previousPosition = position
+                                break innerLoop
 
-            if position != lastPosition:
-                result &= line[lastPosition .. position]
-                lastPosition = position
-                continue
+                    for formatter in Formatters:
+                        let (formattedText, endPosition) = formatter(line, position)
+                        if endPosition != -1:
+                            result &= formattedText[0 .. endPosition - position-1]
+                            #echo "Previous: ", previousPosition, " Position: ", position, " End: ", endPosition, " Length:", line.len()
+                            previousPosition = position
+                            position = endPosition
+                            break innerLoop
 
-            for formatter in Formatters:
-                var (formattedText, endPosition) = formatter(line, position)
-                if endPosition != -1:
-                    result &= formattedText[lastPosition .. position]
-                    lastPosition = position
-                    position = endPosition
-                    break
-
-            result &= line[lastPosition .. position]
-            lastPosition = position
-
+                    let nextSpace = find(line, ' ', position)
+                    if nextSpace == -1:
+                        result &= line[position .. ^1]
+                        break outerLoop
+                    else:
+                        result &= line[previousPosition .. position-1]
+                        previousPosition = position
+                        position = nextSpace + 1
+                
     result = text
 
 
@@ -197,10 +212,11 @@ proc formatMarkdownList(listText: string): string =
     ## - Italicizes a single capital word with nothing after it.
     ## - Italicizes a sequence of capital words at the start.
     ## - Formats the rest of the text like a regular sentence.
+    var formattedLines: seq[string]
     for line in listText.splitLines():
         let (listStartIndex, lineStart) = re.findBounds(line, RegexStartOfList)
         if listStartIndex == -1:
-            result &= formatMarkdownTextLines(line)
+            formattedLines.add(formatMarkdownTextLines(line))
             continue
 
         let listStart = line.substr(0, lineStart)
@@ -214,7 +230,8 @@ proc formatMarkdownList(listText: string): string =
                 let match = text.substr(0, matchEnd)
                 text = "_" & match & "_" & formatMarkdownTextLines(text.substr(matchEnd))
 
-        result &= listStart & text
+        formattedLines.add(listStart & text)
+    result = formattedLines.join("\n")
 
 
 proc formatCodeBlock(text: string): string =
@@ -226,12 +243,15 @@ proc formatCodeBlock(text: string): string =
     ##
     ## `text` should be the text of the code block with the triple backtick
     ## lines>.
+    var formattedStrings: seq[string]
     let lines = text.splitLines()
-    result &= (if lines[0].strip() == "```": "```gdscript" else: lines[0])
+
+    let firstLine = (if lines[0].strip() == "```": "```gdscript" else: lines[0])
+    formattedStrings.add(firstLine)
     for line in lines[1 .. ^1]:
         var processedLine = line.replace("    ", "\t")
         if not line.match(RegexCodeCommentLine):
-            result &= processedLine
+            formattedStrings.add(processedLine)
             continue
 
         var indentCount = 0
@@ -243,9 +263,11 @@ proc formatCodeBlock(text: string): string =
         let margin = indentSize + hashCount
         let content = wrapWords(line[margin .. ^1], 80 - margin)
         for line in splitLines(content):
-            result &= repeat("\t", indentCount) & repeat("#", hashCount) & line
+            formattedStrings.add(repeat("\t", indentCount) & repeat("#", hashCount) & line)
 
-        result &= processedLine
+        formattedStrings.add(processedLine)
+
+    result = formattedStrings.join("\n")
 
 
 proc convertBlocksToFormattedMarkdown(blocks: seq[Block]): string =
@@ -253,16 +275,18 @@ proc convertBlocksToFormattedMarkdown(blocks: seq[Block]): string =
     ## formatted document.
     const IgnoredBlockKinds = [EmptyLine, YamlFrontMatter, Blockquote, Heading,
             Table, GDQuestShortcode, Reference]
+    var formattedStrings: seq[string]
     for mdBlock in blocks:
         case mdBlock.kind:
             of IgnoredBlockKinds:
-                result &= mdBlock.text
+                formattedStrings.add(mdBlock.text)
             of CodeBlock:
-                result &= formatCodeBlock(mdBlock.text)
+                formattedStrings.add(formatCodeBlock(mdBlock.text))
             of List:
-                result &= formatMarkdownList(mdBlock.text)
+                formattedStrings.add(formatMarkdownList(mdBlock.text))
             else:
-                result &= formatMarkdownTextLines(mdBlock.text)
+                formattedStrings.add(formatMarkdownTextLines(mdBlock.text))
+    result = formattedStrings.join("\n")
 
 
 proc parseBlocks(content: string): seq[Block] =
@@ -288,8 +312,9 @@ proc parseBlocks(content: string): seq[Block] =
             isClosingParagraph = currentBlock.kind == TextParagraph and
                     not currentBlock.text.isEmptyOrWhitespace()
 
+        # TODO: fix all strings having a trailing newline
         if not isEmptyLine:
-            currentBlock.text &= line
+            currentBlock.text &= line & "\n"
 
         if isEmptyLine and isClosingParagraph:
             result.add(currentBlock)
@@ -340,6 +365,8 @@ proc parseBlocks(content: string): seq[Block] =
             currentBlock = createDefaultBlock()
 
         previousLine = line
+    # When the file ends, we need to close the last block.
+    result.add(currentBlock)
 
 
 proc formatContent*(content: string): string =
@@ -386,5 +413,7 @@ when isMainModule:
         if args.inPlace:
             writeFile(file, formattedContent)
         else:
-            var outputFile = args.outputDirectory / file.lastPathPart()
-            writeFile(outputFile, formattedContent)
+            echo formattedContent
+            assert formattedContent == content, "Formatted content doesn't match original content:\n\n" & content
+            #var outputFile = args.outputDirectory / file.lastPathPart()
+            #writeFile(outputFile, formattedContent)
