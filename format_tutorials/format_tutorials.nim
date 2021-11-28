@@ -79,19 +79,54 @@ let
     RegexOneKeyboardKey = re"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|[A-Z0-9]+"
     RegexHexValue = re"(0x|#)[0-9a-fA-F]+"
 
-proc formatSentence(text: string): string =
-    # Idea for algorithm:
-    # Jump to the first non-whitespace character
-    # For each formatter function
-    #   - Try to format the shortest portion of string possible starting from the current position (first non-whitespace character)
-    #       - If formatting works, return the result + position where the formatting ends
-    #       - If formatting doesn't work, continue
-    # Jump to the next non-whitespace character and repeat
-    #
-    # We can use nongreedy regexes to find the shortest possible match.
-    #
-    # Patterns to skip:
-    # - inside quotes
+
+proc formatTest(text: string, position: int): (string, int) =
+    result = (text, -1)
+
+proc formatTextLines(text: string): string =
+    ## Formats regular lines of text, running them through multiple formatting
+    ## functions.
+    ##
+    ## Returns the formatted text.
+    const FormatPairs = [ ("*", "*"), ("**", "**"), ("_", "_"), ("`", "`"),
+        ("\"", "\""), ("'", "'"), ("[", "]"), ("[", ")"), ("![", ")")]
+    const Formatters = [
+        formatTest
+    ]
+    for line in text.splitLines():
+        var
+            position = 0
+            lastPosition = 0
+        # We check to apply formatters from the first non-whitespace character.
+        let endPosition = line.len()
+        while position != endPosition:
+            while line[position] == ' ':
+                position += 1
+
+            # We don't want to parse already formatted parts or text inside quotes.
+            for (formatStart, formatEnd) in FormatPairs:
+                if line.find(formatStart, position) == position:
+                    let endPosition = line.find(formatEnd, position + 1)
+                    if endPosition != -1:
+                        position = endPosition + formatEnd.len()
+                        break
+
+            if position != lastPosition:
+                result &= line[lastPosition .. position]
+                lastPosition = position
+                continue
+
+            for formatter in Formatters:
+                var (formattedText, endPosition) = formatter(line, position)
+                if endPosition != -1:
+                    result &= formattedText[lastPosition .. position]
+                    lastPosition = position
+                    position = endPosition
+                    break
+
+            result &= line[lastPosition .. position]
+            lastPosition = position
+
     result = text
 
 
@@ -107,7 +142,7 @@ proc formatList(listText: string): string =
     for line in listText.splitLines():
         let (listStartIndex, lineStart) = re.findBounds(line, RegexStartOfList)
         if listStartIndex == -1:
-            result &= formatSentence(line)
+            result &= formatTextLines(line)
             continue
 
         let listStart = line.substr(0, lineStart)
@@ -119,17 +154,12 @@ proc formatList(listText: string): string =
             let (matchStart, matchEnd) = re.findBounds(text, RegexCapitalWordSequence)
             if matchStart == 0:
                 let match = text.substr(0, matchEnd)
-                text = "_" & match & "_" & formatSentence(text.substr(matchEnd))
+                text = "_" & match & "_" & formatTextLines(text.substr(matchEnd))
 
         result &= listStart & text
 
 
-proc getFormattedText(text: string): string =
-    # Formats to skip: **a**, *a*, _a_, `a`, [a][a] (reference) ![a](a), [a](a)
-    result = ""
-
-
-proc getFormattedCodeBlock(text: string): string =
+proc formatCodeBlock(text: string): string =
     ## Formats the content of a markdown code block:
     ##
     ## - Converts space-based indentations to tabs in code blocks.
@@ -170,9 +200,11 @@ proc convertBlocksToFormattedMarkdown(blocks: seq[Block]): string =
             of IgnoredBlockKinds:
                 result &= mdBlock.text
             of CodeBlock:
-                result &= getFormattedCodeBlock(mdBlock.text)
+                result &= formatCodeBlock(mdBlock.text)
+            of List:
+                result &= formatList(mdBlock.text)
             else:
-                result &= getFormattedText(mdBlock.text)
+                result &= formatTextLines(mdBlock.text)
 
 
 proc parseBlocks(content: string): seq[Block] =
