@@ -92,25 +92,16 @@ proc regexWrapAtPosition(text: string, startPosition: int, regexes: seq[Regex],
     ## Applies a series of regexes to the text starting at `startPosition`,
     ## wrapping the matches with the given `wrapPair`.
     ##
-    ## If a regex matches the text, returns the new text and the end position of
-    ## the formatted portion in the original `text`.
+    ## If a regex matches the text, returns the wrapped portion of the text and
+    ## the end position of the formatted portion in the original `text`.
     ##
-    ## If no regex matches the text, returns the input `text` and `-1`.
-    var
-        outText = ""
-        outPosition = -1
-        previousPosition = startPosition
+    ## If no regex matches the text, returns an empty string and `-1`.
     for regex in regexes:
-        var (first, last) = findBounds(text, regex, previousPosition)
+        var (first, last) = findBounds(text, regex, startPosition)
         if first < 0: continue
-        outText.add(substr(text, previousPosition, first-1))
         let wrappedText = wrapPair[0] & text[first .. last] & wrapPair[1]
-        outText.add(wrappedText)
-        previousPosition = last + 1
-        outPosition = previousPosition
-        break
-    add(outText, substr(text, previousPosition))
-    return (outText, outPosition)
+        return (wrappedText, last + 1)
+    return ("", -1)
 
 
 proc formatKeyboardShortcuts(text: string, position: int): (string, int) =
@@ -156,7 +147,6 @@ proc formatMarkdownTextLines(lines: seq[string]): string =
         formatFilePaths,
         formatNumbers,
     ]
-    return lines.join("\n")
     for line in lines:
         block outerLoop:
             # We check to apply formatters from the first non-whitespace character.
@@ -184,17 +174,16 @@ proc formatMarkdownTextLines(lines: seq[string]): string =
                                 break innerLoop
 
                     for formatter in Formatters:
-                        let (formattedText, endPosition) = formatter(line, position)
+                        let (formattedPortion, endPosition) = formatter(line, position)
                         if endPosition != -1:
-                            result &= formattedText[0 .. endPosition - position-1]
-                            #echo "Previous: ", previousPosition, " Position: ", position, " End: ", endPosition, " Length:", line.len()
-                            previousPosition = position
+                            result &= formattedPortion
+                            previousPosition = endPosition
                             position = endPosition
-                            break innerLoop
+                            break
 
                     let nextSpace = find(line, ' ', position)
                     if nextSpace == -1:
-                        result &= line[position .. ^1]
+                        result &= line[previousPosition .. ^1]
                         break outerLoop
                     else:
                         result &= line[previousPosition .. position-1]
@@ -227,7 +216,8 @@ proc formatMarkdownList(lines: seq[string]): string =
             let (matchStart, matchEnd) = re.findBounds(text, RegexCapitalWordSequence)
             if matchStart == 0:
                 let match = text.substr(0, matchEnd)
-                text = "_" & match & "_" & formatMarkdownTextLines(@[text.substr(matchEnd)])
+                text = "_" & match & "_" & formatMarkdownTextLines(@[
+                        text.substr(matchEnd)])
 
         formattedLines.add(listStart & text)
     result = formattedLines.join("\n")
@@ -412,5 +402,9 @@ when isMainModule:
             writeFile(file, formattedContent)
         else:
             echo formattedContent
+            #assert formattedContent == content, "content mismatch: \n" &
+                    #"expected: \n" & content & "\n" &
+                    #"actual: \n" & formattedContent
+
             #var outputFile = args.outputDirectory / file.lastPathPart()
             #writeFile(outputFile, formattedContent)
