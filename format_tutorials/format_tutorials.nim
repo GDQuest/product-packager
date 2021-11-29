@@ -57,7 +57,7 @@ type
 
     Block = ref object
         kind: BlockKind
-        text: string
+        text: seq[string]
 
 
 const
@@ -96,7 +96,7 @@ proc regexWrapAtPosition(text: string, startPosition: int, regexes: seq[Regex],
     ## the formatted portion in the original `text`.
     ##
     ## If no regex matches the text, returns the input `text` and `-1`.
-    var 
+    var
         outText = ""
         outPosition = -1
         previousPosition = startPosition
@@ -142,7 +142,7 @@ proc formatCapitalWords(text: string, position: int): (string, int) =
     regexWrapAtPosition(text, position, regexes, ("*", "*"))
 
 
-proc formatMarkdownTextLines(text: string): string =
+proc formatMarkdownTextLines(lines: seq[string]): string =
     ## Formats regular lines of text, running them through multiple formatting
     ## functions.
     ##
@@ -156,7 +156,8 @@ proc formatMarkdownTextLines(text: string): string =
         formatFilePaths,
         formatNumbers,
     ]
-    for line in text.splitLines():
+    return lines.join("\n")
+    for line in lines:
         block outerLoop:
             # We check to apply formatters from the first non-whitespace character.
             # We walk forward in the string and track the position IN THE INPUT
@@ -199,11 +200,9 @@ proc formatMarkdownTextLines(text: string): string =
                         result &= line[previousPosition .. position-1]
                         previousPosition = position
                         position = nextSpace + 1
-                
-    result = text
 
 
-proc formatMarkdownList(listText: string): string =
+proc formatMarkdownList(lines: seq[string]): string =
     ## Formats the text of a list markdown block (ordered or unordered) and
     ## returns the formatted string.
     ##
@@ -213,10 +212,10 @@ proc formatMarkdownList(listText: string): string =
     ## - Italicizes a sequence of capital words at the start.
     ## - Formats the rest of the text like a regular sentence.
     var formattedLines: seq[string]
-    for line in listText.splitLines():
+    for line in lines:
         let (listStartIndex, lineStart) = re.findBounds(line, RegexStartOfList)
         if listStartIndex == -1:
-            formattedLines.add(formatMarkdownTextLines(line))
+            formattedLines.add(formatMarkdownTextLines(@[line]))
             continue
 
         let listStart = line.substr(0, lineStart)
@@ -228,13 +227,13 @@ proc formatMarkdownList(listText: string): string =
             let (matchStart, matchEnd) = re.findBounds(text, RegexCapitalWordSequence)
             if matchStart == 0:
                 let match = text.substr(0, matchEnd)
-                text = "_" & match & "_" & formatMarkdownTextLines(text.substr(matchEnd))
+                text = "_" & match & "_" & formatMarkdownTextLines(@[text.substr(matchEnd)])
 
         formattedLines.add(listStart & text)
     result = formattedLines.join("\n")
 
 
-proc formatCodeBlock(text: string): string =
+proc formatCodeBlock(lines: seq[string]): string =
     ## Formats the content of a markdown code block:
     ##
     ## - Converts space-based indentations to tabs in code blocks.
@@ -244,18 +243,17 @@ proc formatCodeBlock(text: string): string =
     ## `text` should be the text of the code block with the triple backtick
     ## lines>.
     var formattedStrings: seq[string]
-    let lines = text.splitLines()
 
     let firstLine = (if lines[0].strip() == "```": "```gdscript" else: lines[0])
     formattedStrings.add(firstLine)
-    for line in lines[1 .. ^1]:
+    for line in lines:
         var processedLine = line.replace("    ", "\t")
         if not line.match(RegexCodeCommentLine):
             formattedStrings.add(processedLine)
             continue
 
         var indentCount = 0
-        while text[indentCount] == '\t':
+        while line[indentCount] == '\t':
             indentCount += 1
         let indentSize = indentCount * 4
 
@@ -263,7 +261,8 @@ proc formatCodeBlock(text: string): string =
         let margin = indentSize + hashCount
         let content = wrapWords(line[margin .. ^1], 80 - margin)
         for line in splitLines(content):
-            formattedStrings.add(repeat("\t", indentCount) & repeat("#", hashCount) & line)
+            formattedStrings.add(repeat("\t", indentCount) & repeat("#",
+                    hashCount) & line)
 
         formattedStrings.add(processedLine)
 
@@ -300,7 +299,7 @@ proc parseBlocks(content: string): seq[Block] =
     proc createDefaultBlock(): Block =
         return Block(
             kind: TextParagraph,
-            text: "",
+            text: @[],
         )
 
     # Make the sequence big enough to avoid resizing too many times.
@@ -310,11 +309,10 @@ proc parseBlocks(content: string): seq[Block] =
         let
             isEmptyLine = line.strip() == ""
             isClosingParagraph = currentBlock.kind == TextParagraph and
-                    not currentBlock.text.isEmptyOrWhitespace()
+                    currentBlock.text.len() != 0
 
-        # TODO: fix all strings having a trailing newline
         if not isEmptyLine:
-            currentBlock.text &= line & "\n"
+            currentBlock.text.add(line)
 
         if isEmptyLine and isClosingParagraph:
             result.add(currentBlock)
@@ -360,7 +358,7 @@ proc parseBlocks(content: string): seq[Block] =
                 currentBlock = createDefaultBlock()
 
             currentBlock.kind = EmptyLine
-            currentBlock.text = "\n"
+            currentBlock.text = @[""]
             result.add(currentBlock)
             currentBlock = createDefaultBlock()
 
@@ -414,6 +412,5 @@ when isMainModule:
             writeFile(file, formattedContent)
         else:
             echo formattedContent
-            assert formattedContent == content, "Formatted content doesn't match original content:\n\n" & content
             #var outputFile = args.outputDirectory / file.lastPathPart()
             #writeFile(outputFile, formattedContent)
