@@ -13,6 +13,7 @@ import std/parseopt
 import std/re
 import std/wordwrap
 
+import godot_built_ins
 
 const HelpMessage = """Auto-formats markdown documents, saving manual formatting work:
 
@@ -67,8 +68,11 @@ const
     PatternDirPath = r"((res|user)://)?/?([\w]+/)+(\w*\.\w+)?"
     PatternFileAtRoot = r"(res|user)://\w+\.\w+"
     PatternModifierKeys = r"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|Super|SUPER"
-    PatternKeyboardSingleCharacterKey = r"[A-Z0-9!@#$%^&*()_+\-{}|\[\]\\;':,\./<>?]"
+    PatternKeyboardSingleCharacterKey = r"[A-Z0-9!@#$%^&*()_\-{}|\[\]\\;':,\./<>?]"
     PatternOtherKeys = r"Tab|Up|Down|Left|Right|LMB|MMB|RMB|Backspace|Delete"
+    PatternFunctionOrConstructorCall = r"\w+(\.\w+)*\(.*?\)"
+    PatternVariablesAndProperties = r"_\w+|[a-zA-Z0-9]+([\._]\w+)+"
+    PatternGodotBuiltIns = GodotBuiltInClassesByLength.join("|")
 
 let
     RegexFilePath = re(@[PatternDirPath, PatternFileAtRoot,
@@ -84,7 +88,9 @@ let
             PatternKeyboardSingleCharacterKey & "|" & PatternOtherKeys & ")")
     RegexNumber = re"\d+"
     RegexHexValue = re"(0x|#)[0-9a-fA-F]+"
-    RegexCodeIdentifier = re"TEMPSTRING"
+    RegexCodeIdentifier = re(join(@[PatternFunctionOrConstructorCall,
+            PatternVariablesAndProperties], "|"))
+    RegexGodotBuiltIns = re(PatternGodotBuiltIns)
 
 
 proc regexWrapAtPosition(text: string, startPosition: int, regexes: seq[Regex],
@@ -105,16 +111,27 @@ proc regexWrapAtPosition(text: string, startPosition: int, regexes: seq[Regex],
 
 
 proc formatKeyboardShortcuts(text: string, position: int): (string, int) =
+    # Finds keyboard shortcuts with the for Ctrl+Shift+F1, Ctrl+A, etc. and
+    # wraps them in HTML keyboard tags.
     let (matchStart, matchEnd) = findBounds(text, RegexKeyboardShortcut, position)
     if matchStart != -1:
-        let toFormat = text[matchStart .. matchEnd]
-        let outputText = re.replacef(toFormat, RegexOneKeyboardKey, "<kbd>$1</kbd>")
-        return (outputText, matchEnd)
+        let
+            toFormat = text[matchStart .. matchEnd]
+            replaced = re.replacef(toFormat, RegexOneKeyboardKey, "<kbd>$1</kbd>")
+            formatStart = replaced.find("<kbd>", max(position - 1, 0))
+            formatEnd = replaced.find("</kbd>", matchEnd - 1)
+        echo replaced
+        return (replaced, matchEnd)
     return (text, -1)
 
 
 proc formatCode(text: string, position: int): (string, int) =
-    let regexes = @[RegexCodeIdentifier]
+    # To match:
+    # - Built-in classes
+    # - Function calls and function call chains like a() or _a() or some_a() or
+    #   a.b() or SomeClass.some_method(arg, arg2)
+    #   -
+    let regexes = @[RegexGodotBuiltIns, RegexCodeIdentifier]
     regexWrapAtPosition(text, position, regexes, ("`", "`"))
 
 
@@ -141,11 +158,11 @@ proc formatMarkdownTextLines(lines: seq[string]): string =
     const FormatPairs = [ ("*", "*"), ("**", "**"), ("_", "_"), ("`", "`"),
         ("\"", "\""), ("'", "'"), ("[", "]"), ("[", ")"), ("![", ")")]
     const Formatters = [
-        formatCode,
-        formatCapitalWords,
         formatKeyboardShortcuts,
         formatFilePaths,
+        formatCode,
         formatNumbers,
+        formatCapitalWords,
     ]
     for line in lines:
         block outerLoop:
@@ -403,8 +420,8 @@ when isMainModule:
         else:
             echo formattedContent
             #assert formattedContent == content, "content mismatch: \n" &
-                    #"expected: \n" & content & "\n" &
-                    #"actual: \n" & formattedContent
+                #"expected: \n" & content & "\n" &
+                #"actual: \n" & formattedContent
 
             #var outputFile = args.outputDirectory / file.lastPathPart()
             #writeFile(outputFile, formattedContent)

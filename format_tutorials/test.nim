@@ -1,6 +1,6 @@
 import std/unittest
 import std/parsecsv
-import std/os
+import std/strutils
 
 import format_tutorials
 
@@ -20,6 +20,16 @@ suite "formatter":
             let
                 input = parser.rowEntry("input")
                 expected = parser.rowEntry("expected")
-                isExpectedOutput = formatContent(input) == expected
+                formatted = formatContent(input)
+                isExpectedOutput = formatted == expected
             check(isExpectedOutput)
-            if not isExpectedOutput: echo(parser.rowEntry("error_message"))
+            if not isExpectedOutput:
+                let errorMessage = @[
+                    "\n",
+                    "Error: ", parser.rowEntry("error_message"),
+                    "\n",
+                    "Input: ", input,
+                    "Expected: ", expected,
+                    "But instead got: ", formatted, "\n",
+                ]
+                echo errorMessage.join("\n")
