@@ -28,14 +28,13 @@ suite "formatter":
                 continue
             check(isExpectedOutput)
             if not isExpectedOutput:
+                echo "\nDiff between expected and formatted text:\n"
                 for item in diffText(expected, formatted):
-                    echo item
+                    echo "- ", item
                 let errorMessage = @[
-                    "\n",
-                    "Error: " & parser.rowEntry("error_message"),
-                    "\n",
+                    "", "Error: " & parser.rowEntry("error_message"), "",
                     "Input: ", input,
                     "Expected: ", expected,
-                    "But instead got: ", formatted, "\n",
+                    "But instead got: ", formatted
                 ]
                 echo errorMessage.join("\n")
