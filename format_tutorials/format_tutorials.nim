@@ -259,11 +259,12 @@ proc formatCodeBlock(lines: seq[string]): string =
         var indentCount = 0
         while line[indentCount] == '\t':
             indentCount += 1
-        let indentSize = indentCount * 4
+        const tabWidth = 4
 
         let hashCount = processedLine[indentCount .. indentCount + 2].count("#")
-        let margin = indentSize + hashCount
-        let content = wrapWords(line[margin .. ^1], 80 - margin)
+        let margin = indentCount + hashCount + 1
+        let desiredTextLength = 80 - indentCount * tabWidth - hashCount
+        let content = wrapWords(line[margin .. ^1], desiredTextLength, newline="\n")
         for line in splitLines(content):
             let optionalSpace = if not line.startswith(" "): " " else: ""
             formattedStrings.add(repeat("\t", indentCount) & repeat("#",
