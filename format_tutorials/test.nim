@@ -1,6 +1,8 @@
 import std/unittest
 import std/parsecsv
 import std/strutils
+import std/os
+import experimental/diff
 
 import format_tutorials
 
@@ -22,11 +24,15 @@ suite "formatter":
                 expected = parser.rowEntry("expected")
                 formatted = formatContent(input)
                 isExpectedOutput = formatted == expected
+            if not input.contains("```"):
+                continue
             check(isExpectedOutput)
             if not isExpectedOutput:
+                for item in diffText(expected, formatted):
+                    echo item
                 let errorMessage = @[
                     "\n",
-                    "Error: ", parser.rowEntry("error_message"),
+                    "Error: " & parser.rowEntry("error_message"),
                     "\n",
                     "Input: ", input,
                     "Expected: ", expected,

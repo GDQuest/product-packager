@@ -118,9 +118,6 @@ proc formatKeyboardShortcuts(text: string, position: int): (string, int) =
         let
             toFormat = text[matchStart .. matchEnd]
             replaced = re.replacef(toFormat, RegexOneKeyboardKey, "<kbd>$1</kbd>")
-            formatStart = replaced.find("<kbd>", max(position - 1, 0))
-            formatEnd = replaced.find("</kbd>", matchEnd - 1)
-        echo replaced
         return (replaced, matchEnd)
     return (text, -1)
 
@@ -253,7 +250,7 @@ proc formatCodeBlock(lines: seq[string]): string =
 
     let firstLine = (if lines[0].strip() == "```": "```gdscript" else: lines[0])
     formattedStrings.add(firstLine)
-    for line in lines:
+    for line in lines[1 .. ^1]:
         var processedLine = line.replace("    ", "\t")
         if not line.match(RegexCodeCommentLine):
             formattedStrings.add(processedLine)
@@ -268,11 +265,9 @@ proc formatCodeBlock(lines: seq[string]): string =
         let margin = indentSize + hashCount
         let content = wrapWords(line[margin .. ^1], 80 - margin)
         for line in splitLines(content):
+            let optionalSpace = if not line.startswith(" "): " " else: ""
             formattedStrings.add(repeat("\t", indentCount) & repeat("#",
-                    hashCount) & line)
-
-        formattedStrings.add(processedLine)
-
+                    hashCount) & optionalSpace & line.strip())
     result = formattedStrings.join("\n")
 
 
