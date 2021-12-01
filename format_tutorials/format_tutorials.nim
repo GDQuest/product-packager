@@ -160,21 +160,45 @@ proc formatMarkdownTextLines(lines: seq[string]): string =
         formatNumbers,
         formatCapitalWords,
     ]
+    const StartOfSentenceFormatters = [
+        formatKeyboardShortcuts,
+        formatFilePaths,
+        formatCode,
+        formatNumbers,
+    ]
     for line in lines:
         # We check to apply formatters from the first non-whitespace character.
         # We walk forward in the string and track the position IN THE INPUT
         # `text`. This is simpler than constantly updating the output string
         # length and calculate new positions as we format regions.
         block outerLoop:
-            # TODO: We don't want to format the first word of a line or of a sentence.
             var
-                position = find(line, " ")
-                previousPosition = position
-            if position == -1:
-                result &= line
-                continue
+                position = 0
+                previousPosition = 0
 
-            result &= line[0 .. position]
+            # At the start of a line, we don't want to run the Capital Word
+            # formatter because most lines will start with a capitalized plain
+            # word.
+            #
+            # TODO: Do this at the start of every sentence
+            for formatter in StartOfSentenceFormatters:
+                let (formattedPortion, endPosition) = formatter(line, 0)
+                if endPosition != -1:
+                    result &= formattedPortion
+                    previousPosition = endPosition
+                    position = endPosition
+                    break
+
+            # None of the formatters matched.
+            if position == 0:
+                position = line.find(" ")
+                if position == -1:
+                    result &= line
+                    break outerLoop
+                else:
+                    result &= line[0 .. position]
+                    previousPosition = position
+
             let endPosition = line.len()
             while position != endPosition:
                 block innerLoop:
