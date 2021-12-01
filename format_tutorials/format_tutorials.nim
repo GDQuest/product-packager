@@ -113,11 +113,10 @@ proc formatKeyboardShortcuts(text: string, position: int): (string, int) =
     # Finds keyboard shortcuts with the for Ctrl+Shift+F1, Ctrl+A, etc. and
     # wraps them in HTML keyboard tags.
     let (matchStart, matchEnd) = findBounds(text, RegexKeyboardShortcut, position)
-    if matchStart != -1:
+    if matchStart == position:
         let
             toFormat = text[matchStart .. matchEnd]
             replaced = re.replacef(toFormat, RegexOneKeyboardKey, "<kbd>$1</kbd>")
-        echo replaced
         return (replaced, matchEnd)
     return (text, -1)
 
@@ -162,14 +161,20 @@ proc formatMarkdownTextLines(lines: seq[string]): string =
         formatCapitalWords,
     ]
     for line in lines:
+        # We check to apply formatters from the first non-whitespace character.
+        # We walk forward in the string and track the position IN THE INPUT
+        # `text`. This is simpler than constantly updating the output string
+        # length and calculate new positions as we format regions.
         block outerLoop:
-            # We check to apply formatters from the first non-whitespace character.
-            # We walk forward in the string and track the position IN THE INPUT
-            # `text`. This is simpler than constantly updating the output string
-            # length and calculate new positions as we format regions.
+            # TODO: We don't want to format the first word of a line or of a sentence.
             var
-                position = 0
-                previousPosition = 0
+                position = find(line, " ")
+                previousPosition = position
+            if position == -1:
+                result &= line
+                continue
+
+            result &= line[0 .. position]
             let endPosition = line.len()
             while position != endPosition:
                 block innerLoop:
@@ -197,7 +202,8 @@ proc formatMarkdownTextLines(lines: seq[string]): string =
 
                     let nextSpace = find(line, ' ', position)
                     if nextSpace == -1:
-                        result &= line[previousPosition .. ^1]
+                        if previousPosition != position:
+                            result &= line[previousPosition .. position]
                         break outerLoop
                     else:
                         result &= line[previousPosition .. position-1]
