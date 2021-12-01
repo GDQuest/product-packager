@@ -69,7 +69,7 @@ const
     PatternFileAtRoot = r"(res|user)://\w+\.\w+"
     PatternModifierKeys = r"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|Super|SUPER"
     PatternKeyboardSingleCharacterKey = r"[A-Z0-9!@#$%^&*()_\-{}|\[\]\\;':,\./<>?]"
-    PatternOtherKeys = r"Tab|Up|Down|Left|Right|LMB|MMB|RMB|Backspace|Delete"
+    PatternOtherKeys = r"F\d{1,2}|Tab|Up|Down|Left|Right|LMB|MMB|RMB|Backspace|Delete"
     PatternFunctionOrConstructorCall = r"\w+(\.\w+)*\(.*?\)"
     PatternVariablesAndProperties = r"_\w+|[a-zA-Z0-9]+([\._]\w+)+"
     PatternGodotBuiltIns = GodotBuiltInClassesByLength.join("|")
@@ -81,11 +81,10 @@ let
     RegexCodeCommentLine = re"\s*#"
     RegexOnePascalCaseWord = re"[A-Z0-9]\w+[A-Z]\w+|[A-Z][a-zA-Z0-9]+(\.\.\.)?"
     RegexCapitalWordSequence = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )?[A-Z][a-zA-Z0-9]+(\.\.\.)?)+"
-    RegexKeyboardShortcut = re("((" & PatternModifierKeys &
-            r") ?\+ ?)+(F\d{1,2}|" & PatternKeyboardSingleCharacterKey & "|" &
-            PatternOtherKeys & ")")
+    RegexKeyboardShortcut = re("((" & PatternModifierKeys & r") ?\+ ?)+(" &
+            PatternOtherKeys & "|" & PatternKeyboardSingleCharacterKey & ")")
     RegexOneKeyboardKey = re("(" & PatternModifierKeys & "|" &
-            PatternKeyboardSingleCharacterKey & "|" & PatternOtherKeys & ")")
+            PatternOtherKeys & "|" & PatternKeyboardSingleCharacterKey & ")")
     RegexNumber = re"\d+"
     RegexHexValue = re"(0x|#)[0-9a-fA-F]+"
     RegexCodeIdentifier = re(join(@[PatternFunctionOrConstructorCall,
@@ -118,6 +117,7 @@ proc formatKeyboardShortcuts(text: string, position: int): (string, int) =
         let
             toFormat = text[matchStart .. matchEnd]
             replaced = re.replacef(toFormat, RegexOneKeyboardKey, "<kbd>$1</kbd>")
+        echo replaced
         return (replaced, matchEnd)
     return (text, -1)
 
@@ -264,7 +264,8 @@ proc formatCodeBlock(lines: seq[string]): string =
         let hashCount = processedLine[indentCount .. indentCount + 2].count("#")
         let margin = indentCount + hashCount + 1
         let desiredTextLength = 80 - indentCount * tabWidth - hashCount
-        let content = wrapWords(line[margin .. ^1], desiredTextLength, newline="\n")
+        let content = wrapWords(line[margin .. ^1], desiredTextLength,
+                newline = "\n")
         for line in splitLines(content):
             let optionalSpace = if not line.startswith(" "): " " else: ""
             formattedStrings.add(repeat("\t", indentCount) & repeat("#",
