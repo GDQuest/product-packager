@@ -329,9 +329,6 @@ proc parseBlocks(content: string): seq[Block] =
         if isEmptyLine and isClosingParagraph:
             result.add(currentBlock)
             currentBlock = createDefaultBlock()
-        elif isEmptyLine and currentBlock.kind == Blockquote:
-            result.add(currentBlock)
-            currentBlock = createDefaultBlock()
         # Lines starting with a hash could be comments inside a code block
         elif line.startswith("#") and currentBlock.kind != CodeBlock:
             currentBlock.kind = Heading
@@ -356,13 +353,15 @@ proc parseBlocks(content: string): seq[Block] =
             currentBlock = createDefaultBlock()
         elif line.startsWith("<") and currentBlock.kind != Html:
             currentBlock.kind = Html
+        elif line.startsWith(">") and currentBlock.kind != Blockquote:
+            currentBlock.kind = Blockquote
         elif line.match(RegexStartOfList):
             currentBlock.kind = List
         elif line.startsWith("|"):
             currentBlock.kind = Table
 
         if isEmptyLine:
-            let isClosingBlock = currentBlock.kind in @[List, Html, Table] or (
+            let isClosingBlock = currentBlock.kind in @[List, Html, Table, Blockquote] or (
                     currentBlock.kind == GDQuestShortcode and
                     previousLine.strip().endsWith("%}"))
             if isClosingBlock:
