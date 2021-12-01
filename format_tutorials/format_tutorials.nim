@@ -283,12 +283,14 @@ proc convertBlocksToFormattedMarkdown(blocks: seq[Block]): string =
             of IgnoredBlockKinds:
                 formattedStrings.add(mdBlock.text)
             of CodeBlock:
-                formattedStrings.add(formatCodeBlock(mdBlock.text))
+                let formatted = formatCodeBlock(mdBlock.text)
+                formattedStrings.add(formatted)
             of List:
                 formattedStrings.add(formatMarkdownList(mdBlock.text))
             else:
                 formattedStrings.add(formatMarkdownTextLines(mdBlock.text))
     result = formattedStrings.join("\n")
+    result.stripLineEnd()
 
 
 proc parseBlocks(content: string): seq[Block] =

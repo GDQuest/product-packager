@@ -34,7 +34,7 @@ suite "formatter":
                 let errorMessage = @[
                     "", "Error: " & parser.rowEntry("error_message"), "",
                     "Input: ", input,
-                    "Expected: ", expected,
-                    "But instead got: ", formatted
+                    "Expected: ", repr(expected),
+                    "But instead got: ", repr(formatted)
                 ]
                 echo errorMessage.join("\n")
