@@ -203,7 +203,7 @@ proc formatMarkdownTextLines(lines: seq[string]): string =
                     let nextSpace = find(line, ' ', position)
                     if nextSpace == -1:
                         if previousPosition != position:
-                            result &= line[previousPosition .. position]
+                            result &= line[previousPosition .. ^1]
                         break outerLoop
                     else:
                         result &= line[previousPosition .. position-1]
