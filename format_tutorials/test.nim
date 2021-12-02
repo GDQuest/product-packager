@@ -18,13 +18,13 @@ suite "formatter":
 
     test "format_strings":
         while parser.readRow():
+            let input = parser.rowEntry("input")
+            # if not input.startsWith("Drag"):
+                # continue
             let
-                input = parser.rowEntry("input")
                 expected = parser.rowEntry("expected")
                 formatted = formatContent(input)
                 isExpectedOutput = formatted == expected
-            if not input.contains("Ctrl+"):
-                continue
             check(isExpectedOutput)
             if not isExpectedOutput:
                 let errorMessage = @[
