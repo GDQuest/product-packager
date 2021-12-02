@@ -45,10 +45,12 @@ def main():
     project_path = args.project_path
     project_path_i18n = Path("{}-{}".format(project_path, LANG))
     po4a_conf_template: dict = {
-        "header": (
-            "[po4a_langs] {lang}\n"
-            "[po4a_paths] {dir}/$master.pot $lang:{dir}/$master.po\n"
-        ),
+        "header": "\n".join([
+            "[po4a_langs] {lang}", 
+            "[po4a_paths] {dir}/$master.pot $lang:{dir}/$master.po",
+            '[po4a_alias:text] text opt:"--option markdown --option neverwrap --option nobullets"',
+            ""
+        ]),
         "entry": {
             ".md": f"[type:text] {PO4A_CONF_TEMPLATE_ENTRY}",
             ".gd": f"[type:gdscriptcomments] {PO4A_CONF_TEMPLATE_ENTRY}",
