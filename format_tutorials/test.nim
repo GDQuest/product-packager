@@ -1,7 +1,6 @@
 import std/unittest
 import std/parsecsv
 import std/strutils
-import std/os
 
 import format_tutorials
 
@@ -18,19 +17,20 @@ suite "formatter":
 
     test "format_strings":
         while parser.readRow():
-            let input = parser.rowEntry("input")
-            # if not input.startsWith("Drag"):
-                # continue
             let
+                input = parser.rowEntry("input")
                 expected = parser.rowEntry("expected")
+                error = parser.rowEntry("error_message")
+            # if not error.startsWith("Directory paths should be in inline code"): continue
+            let
                 formatted = formatContent(input)
                 isExpectedOutput = formatted == expected
             check(isExpectedOutput)
             if not isExpectedOutput:
                 let errorMessage = @[
-                    "", "Error: " & parser.rowEntry("error_message"), "",
+                    "", "Error: " & error, "",
                     "Input: ", input,
-                    "Expected: ", repr(expected),
-                    "But instead got: ", repr(formatted)
+                    "Expected: ", expected,
+                    "But instead got: ", formatted
                 ]
                 echo errorMessage.join("\n")

@@ -7,10 +7,11 @@
 # - Marks code blocks without a language as using `gdscript`.
 # - Add <kbd> tags around keyboard shortcuts (the form needs to be Ctrl+F1).
 
-import std/os
-import std/strutils
 import std/parseopt
 import std/re
+import std/os
+import std/strutils
+import std/sequtils
 import std/wordwrap
 
 import godot_built_ins
@@ -62,8 +63,7 @@ type
 
 
 const
-    SupportedExtensions = @["png", "jpe?g", "mp4", "mkv", "t?res",
-        "t?scn", "gd", "py", "shader", ]
+    SupportedExtensions = ["png", "jpe?g", "mp4", "mkv", "t?res", "t?scn", "gd", "py", "shader", ]
     PatternFilenameOnly = r"(\w+\.(" & SupportedExtensions.join("|") & "))"
     PatternDirPath = r"((res|user)://)?/?([\w]+/)+(\w*\.\w+)?"
     PatternFileAtRoot = r"(res|user)://\w+\.\w+"
@@ -75,164 +75,78 @@ const
     PatternGodotBuiltIns = GodotBuiltInClassesByLength.join("|")
 
 let
-    RegexFilePath = re(@[PatternDirPath, PatternFileAtRoot,
-            PatternFilenameOnly].join("|"))
+    RegexFilePath = re([PatternDirPath, PatternFileAtRoot, PatternFilenameOnly].join("|"))
     RegexStartOfList = re"- |\d+\. "
     RegexCodeCommentLine = re"\s*#"
     RegexOnePascalCaseWord = re"[A-Z0-9]\w+[A-Z]\w+|[A-Z][a-zA-Z0-9]+(\.\.\.)?"
+    RegexOnePascalCaseWordStrict = re"[A-Z0-9]\w+[A-Z]\w+"
     RegexCapitalWordSequence = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )?[A-Z][a-zA-Z0-9]+(\.\.\.)?)+"
-    RegexKeyboardShortcut = re("((" & PatternModifierKeys & r") ?\+ ?)+(" &
-            PatternOtherKeys & "|" & PatternKeyboardSingleCharacterKey & ")")
-    RegexOneKeyboardKey = re("(" & PatternModifierKeys & "|" &
-            PatternOtherKeys & "|" & PatternKeyboardSingleCharacterKey & ")")
+    RegexKeyboardShortcut = re("((" & PatternModifierKeys & r") ?\+ ?)+(" & PatternOtherKeys & "|" & PatternKeyboardSingleCharacterKey & ")")
+    RegexOneKeyboardKey = re("(" & [PatternModifierKeys, PatternOtherKeys, PatternKeyboardSingleCharacterKey].join("|") & ")")
     RegexNumber = re"\d+"
     RegexHexValue = re"(0x|#)[0-9a-fA-F]+"
-    RegexCodeIdentifier = re(join(@[PatternFunctionOrConstructorCall,
-            PatternVariablesAndProperties], "|"))
+    RegexCodeIdentifier = re([PatternFunctionOrConstructorCall, PatternVariablesAndProperties].join("|"))
     RegexGodotBuiltIns = re(PatternGodotBuiltIns)
 
 
-proc regexWrapAtPosition(text: string, startPosition: int, regexes: seq[Regex],
-        wrapPair: (string, string)): (string, int) =
-    ## Applies a series of regexes to the text starting at `startPosition`,
-    ## wrapping the matches with the given `wrapPair`.
-    ##
-    ## If a regex matches the text, returns the wrapped portion of the text and
-    ## the end position of the formatted portion in the original `text`.
-    ##
-    ## If no regex matches the text, returns an empty string and `-1`.
-    for regex in regexes:
-        var (first, last) = findBounds(text, regex, startPosition)
-        if first < 0: continue
-        let wrappedText = wrapPair[0] & text[first .. last] & wrapPair[1]
-        return (wrappedText, last + 1)
-    return ("", -1)
+func regexWrap(regexes: seq[Regex], pair: (string, string)): auto =
+    return func(text: string): (string, int, int) =
+        for regex in regexes:
+            let bounds = findBounds(text, regex)
+            if bounds == (-1, 0): continue
+            let (first, last) = bounds
+            return (pair[0] & text[first .. last] & pair[1], first, last + 1)
+        return ("", -1, -1)
 
 
-proc formatKeyboardShortcuts(text: string, position: int): (string, int) =
-    # Finds keyboard shortcuts with the for Ctrl+Shift+F1, Ctrl+A, etc. and
-    # wraps them in HTML keyboard tags.
-    let (matchStart, matchEnd) = findBounds(text, RegexKeyboardShortcut, position)
-    if matchStart == position:
-        let
-            toFormat = text[matchStart .. matchEnd]
-            replaced = re.replacef(toFormat, RegexOneKeyboardKey, "<kbd>$1</kbd>")
-        return (replaced, matchEnd)
-    return (text, -1)
+func regexWrapEach(regexAll, regexOne: Regex; pair: (string, string)): auto =
+    return func(text: string): (string, int, int) =
+        let bounds = findBounds(text, regexAll)
+        if bounds != (-1, 0):
+            let
+                (first, last) = bounds
+                toFormat = text[first .. last]
+                replaced = replacef(toFormat, regexOne, pair[0] & "$1" & pair[1])
+            return (replaced, first, last + 1)
+        return ("", -1, -1)
 
 
-proc formatCode(text: string, position: int): (string, int) =
-    # To match:
-    # - Built-in classes
-    # - Function calls and function call chains like a() or _a() or some_a() or
-    #   a.b() or SomeClass.some_method(arg, arg2)
-    #   -
-    let regexes = @[RegexGodotBuiltIns, RegexCodeIdentifier]
-    regexWrapAtPosition(text, position, regexes, ("`", "`"))
 
-
-proc formatNumbers(text: string, position: int): (string, int) =
-    let regexes = @[RegexNumber, RegexHexValue]
-    regexWrapAtPosition(text, position, regexes, ("`", "`"))
-
-
-proc formatFilePaths(text: string, position: int): (string, int) =
-    let regexes = @[RegexFilePath]
-    regexWrapAtPosition(text, position, regexes, ("`", "`"))
-
-
-proc formatCapitalWords(text: string, position: int): (string, int) =
-    let regexes = @[RegexCapitalWordSequence, RegexOnePascalCaseWord]
-    regexWrapAtPosition(text, position, regexes, ("*", "*"))
+func formatMarkdownTextLine(line: string, formatters: openArray[auto]): seq[string] =
+    var
+        line = line
+        index = 0
+    while index < formatters.len:
+        let formatted = formatters[index](line)
+        if formatted == ("", -1, -1):
+            index = index.succ
+            continue
+        let (text, first, last) = formatted
+        result &= @[line[0 ..< first], text]
+        line = line[last .. ^1]
+    result.add(line)
 
 
 proc formatMarkdownTextLines(lines: seq[string]): string =
-    ## Formats regular lines of text, running them through multiple formatting
-    ## functions.
-    ##
-    ## Returns the formatted text.
-    const FormatPairs = [ ("*", "*"), ("**", "**"), ("_", "_"), ("`", "`"),
-        ("\"", "\""), ("'", "'"), ("[", "]"), ("[", ")"), ("![", ")")]
-    const Formatters = [
-        formatKeyboardShortcuts,
-        formatFilePaths,
-        formatCode,
-        formatNumbers,
-        formatCapitalWords,
-    ]
-    const StartOfSentenceFormatters = [
-        formatKeyboardShortcuts,
-        formatFilePaths,
-        formatCode,
-        formatNumbers,
-    ]
+    # Order:
+    # 1. Keyboard shortcuts
+    # 2. Paths
+    # 3. Code
+    # 4. Numbers
+    # 5. Capital words
+    let formatters =
+        [ regexWrapEach(RegexKeyboardShortcut, RegexOneKeyboardKey, ("<kbd>", "</kbd>"))
+        , regexWrap(@[RegexFilePath], ("`", "`"))
+        , regexWrap(@[RegexCodeIdentifier, RegexGodotBuiltIns], ("`", "`"))
+        , regexWrap(@[RegexNumber, RegexHexValue], ("`", "`"))
+        , regexWrap(@[RegexCapitalWordSequence, RegexOnePascalCaseWord], ("*", "*"))
+        ]
+
     for line in lines:
-        # We check to apply formatters from the first non-whitespace character.
-        # We walk forward in the string and track the position IN THE INPUT
-        # `text`. This is simpler than constantly updating the output string
-        # length and calculate new positions as we format regions.
-        block outerLoop:
-            var
-                position = 0
-                previousPosition = 0
-
-            # At the start of a line, we don't want to run the Capital Word
-            # formatter because most lines will start with a capitalized plain
-            # word.
-            #
-            # TODO: Do this at the start of every sentence
-            for formatter in StartOfSentenceFormatters:
-                let (formattedPortion, endPosition) = formatter(line, 0)
-                if endPosition != -1:
-                    result &= formattedPortion
-                    previousPosition = endPosition
-                    position = endPosition
-                    break
-
-            # None of the formatters matched.
-            if position == 0:
-                position = line.find(" ")
-                if position == -1:
-                    result &= line
-                    break outerLoop
-                else:
-                    result &= line[0 .. position]
-                    previousPosition = position
-
-            let endPosition = line.len()
-            while position != endPosition:
-                block innerLoop:
-                    if position == endPosition: break outerLoop
-                    while line[position] == ' ':
-                        position += 1
-
-                    # We want to skip already formatted parts or text inside quotes.
-                    for (first, last) in FormatPairs:
-                        if line.find(first, position) == position:
-                            let endPosition = line.find(last, position + 1)
-                            if endPosition != -1:
-                                position = endPosition + last.len()
-                                result &= line[previousPosition .. position-1]
-                                previousPosition = position
-                                break innerLoop
-
-                    for formatter in Formatters:
-                        let (formattedPortion, endPosition) = formatter(line, position)
-                        if endPosition != -1:
-                            result &= formattedPortion
-                            previousPosition = endPosition
-                            position = endPosition
-                            break
-
-                    let nextSpace = find(line, ' ', position)
-                    if nextSpace == -1:
-                        if previousPosition != position:
-                            result &= line[previousPosition .. ^1]
-                        break outerLoop
-                    else:
-                        result &= line[previousPosition .. position-1]
-                        previousPosition = position
-                        position = nextSpace + 1
+        var formatted = formatMarkdownTextLine(line, formatters).filter(proc(x: string): bool = x != "")
+        if not formatted[0].contains(RegexOnePascalCaseWordStrict):
+            formatted[0] = formatted[0].replace("*")
+        result &= formatted.join & "\n"
 
 
 proc formatMarkdownList(lines: seq[string]): string =
@@ -246,7 +160,7 @@ proc formatMarkdownList(lines: seq[string]): string =
     ## - Formats the rest of the text like a regular sentence.
     var formattedLines: seq[string]
     for line in lines:
-        let (listStartIndex, lineStart) = re.findBounds(line, RegexStartOfList)
+        let (listStartIndex, lineStart) = findBounds(line, RegexStartOfList)
         if listStartIndex == -1:
             formattedLines.add(formatMarkdownTextLines(@[line]))
             continue
@@ -257,7 +171,7 @@ proc formatMarkdownList(lines: seq[string]): string =
         if isSingleWord:
             text = "_" & text & "_"
         else:
-            let (matchStart, matchEnd) = re.findBounds(text, RegexCapitalWordSequence)
+            let (matchStart, matchEnd) = findBounds(text, RegexCapitalWordSequence)
             if matchStart == 0:
                 let match = text.substr(0, matchEnd)
                 text = "_" & match & "_" & formatMarkdownTextLines(@[
@@ -307,15 +221,14 @@ proc convertBlocksToFormattedMarkdown(blocks: seq[Block]): string =
     ## Takes a sequence of blocks from a parsed markdown file and returns a
     ## formatted document.
     const IgnoredBlockKinds = [EmptyLine, YamlFrontMatter, Blockquote, Heading,
-            Table, GDQuestShortcode, Reference]
+            Table, GDQuestShortcode, Reference, Html]
     var formattedStrings: seq[string]
     for mdBlock in blocks:
         case mdBlock.kind:
             of IgnoredBlockKinds:
                 formattedStrings.add(mdBlock.text)
             of CodeBlock:
-                let formatted = formatCodeBlock(mdBlock.text)
-                formattedStrings.add(formatted)
+                formattedStrings.add(formatCodeBlock(mdBlock.text))
             of List:
                 formattedStrings.add(formatMarkdownList(mdBlock.text))
             else:
@@ -441,15 +354,10 @@ proc parseCommandLineArguments(): CommandLineArgs =
 when isMainModule:
     var args = parseCommandLineArguments()
     for file in args.inputFiles:
-        let content = readFile(file)
-        let formattedContent = formatContent(content)
+        let
+            content = readFile(file)
+            formattedContent = formatContent(content)
         if args.inPlace:
             writeFile(file, formattedContent)
         else:
             echo formattedContent
-            #assert formattedContent == content, "content mismatch: \n" &
-                #"expected: \n" & content & "\n" &
-                #"actual: \n" & formattedContent
-
-            #var outputFile = args.outputDirectory / file.lastPathPart()
-            #writeFile(outputFile, formattedContent)
