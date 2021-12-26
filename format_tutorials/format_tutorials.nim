@@ -1,3 +1,7 @@
+# TODO:
+# - fix list formatting
+# - add documentation
+
 # Auto-formats our tutorials, saving manual formatting work:
 # 
 # - Converts space-based indentations to tabs in code blocks.
@@ -79,33 +83,40 @@ let
     RegexCodeCommentLine = re"\s*#"
     RegexOnePascalCaseWord = re"[A-Z0-9]\w+[A-Z]\w+|[A-Z][a-zA-Z0-9]+(\.\.\.)?"
     RegexOnePascalCaseWordStrict = re"[A-Z0-9]\w+[A-Z]\w+"
+    RegexMenuOrPropertyEntry = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )+[A-Z][a-zA-Z0-9]+( [A-Z][a-zA-Z0-9]*)*(\.\.\.)?)+"
     RegexCapitalWordSequence = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )?[A-Z][a-zA-Z0-9]+(\.\.\.)?)+"
     RegexKeyboardShortcut = re("((" & PatternModifierKeys & r") ?\+ ?)+(" & PatternOtherKeys & "|" & PatternKeyboardSingleCharacterKey & ")")
     RegexOneKeyboardKey = re("(" & [PatternModifierKeys, PatternOtherKeys, PatternKeyboardSingleCharacterKey].join("|") & ")")
-    RegexNumber = re"\d+"
+    RegexNumber = re"\d+(D|px)|\d+(x\d+)*"
     RegexHexValue = re"(0x|#)[0-9a-fA-F]+"
     RegexCodeIdentifier = re([PatternFunctionOrConstructorCall, PatternVariablesAndProperties].join("|"))
     RegexGodotBuiltIns = re(PatternGodotBuiltIns)
-    RegexStartOfSentence = re"[.:]\s+"
-    RegexNotStartOfSentence = re"[^\s""'`]"
+    RegexSkip = re"""(_.+?_|\*\*[^*]+?\*\*|\*[^*]+?\*|`.+?`|".+?"|'.+?'|\!?\[.+?\)|\[.+?\])\s*|\s+|$"""
+    RegexStartOfSentence = re"[.!?:]\s+"
+    RegexNotStartOfSentence = re"""\S"""
 
 
 func regexWrap(regexes: seq[Regex], pair: (string, string)): auto =
-    return func(text: string): (string, int) =
+    return func(text: string): (string, string) =
         for regex in regexes:
             let bound = text.matchLen(regex)
             if bound == -1: continue
-            return (pair[0] & text[0 ..< bound] & pair[1], bound)
-        return ("", -1)
+            return (pair[0] & text[0 ..< bound] & pair[1], text[bound .. ^1])
+        return ("", text)
 
 
 func regexWrapEach(regexAll, regexOne: Regex; pair: (string, string)): auto =
-    return func(text: string): (string, int) =
+    return func(text: string): (string, string) =
         let bound = text.matchLen(regexAll)
         if bound != -1:
             let replaced = replacef(text[0 ..< bound], regexOne, pair[0] & "$1" & pair[1])
-            return (replaced, bound)
-        return ("", -1)
+            return (replaced, text[bound .. ^1])
+        return ("", text)
+
+
+proc advanceMarkdownTextLineFormatter(line: string): (string, string) =
+    let (_, last) = line.findBounds(RegexSkip)
+    return (line[0 .. last], line[last + 1 .. ^1])
 
 
 proc formatMarkdownTextLine(line: string, formatters: openArray[(string, auto)]): seq[string] =
@@ -113,42 +124,36 @@ proc formatMarkdownTextLine(line: string, formatters: openArray[(string, auto)])
     block outer:
         var isStartOfSentence = true
         while true:
-            for i, (key, formatter) in formatters:
+            for (applyAt, formatter) in formatters:
                 if line.len <= 0: break outer
-                if (key, isStartOfSentence) == ("skipStartOfSentence", true): continue
-                let formatted = formatter(line)
-                if formatted == ("", -1): continue
-                let (text, bound) = formatted
-                result.add(text)
-                line = line[bound .. ^1]
-                
-            result.add(line[0 .. 0])
-            line = line[1 .. ^1]
+                if (applyAt, isStartOfSentence) == ("skipStartOfSentence", true): continue
 
-            if line.match(RegexStartOfSentence):
+                result.add("")
+                (result[^1], line) = formatter(line)
+
+            result.add("")
+            (result[^1], line) = advanceMarkdownTextLineFormatter(line)
+
+            if result[^1].endsWith(RegexStartOfSentence):
                 isStartOfSentence = true
             elif line.match(RegexNotStartOfSentence):
                 isStartOfSentence = false
 
 
 proc formatMarkdownTextLines(lines: openArray[string]): string =
-    # Order:
-    # 0. Keyboard shortcuts
-    # 1. Paths
-    # 2. Code
-    # 3. Numbers
-    # 4. Capital words
     let formatters =
         { "any": regexWrapEach(RegexKeyboardShortcut, RegexOneKeyboardKey, ("<kbd>", "</kbd>"))
         , "any": regexWrap(@[RegexFilePath], ("`", "`"))
+        , "any": regexWrap(@[RegexMenuOrPropertyEntry], ("*", "*"))
         , "any": regexWrap(@[RegexCodeIdentifier, RegexGodotBuiltIns], ("`", "`"))
         , "any": regexWrap(@[RegexNumber, RegexHexValue], ("`", "`"))
+        , "any": regexWrap(@[RegexOnePascalCaseWordStrict], ("*", "*"))
         , "skipStartOfSentence": regexWrap(@[RegexCapitalWordSequence, RegexOnePascalCaseWord], ("*", "*"))
         }
 
     for line in lines:
         var formatted = formatMarkdownTextLine(line, formatters)
-        result &= formatted.join & "\n"
+        result &= formatted.join
 
 
 proc formatMarkdownList(lines: seq[string]): string =
