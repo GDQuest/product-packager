@@ -1,5 +1,4 @@
 # TODO:
-# - fix list formatting
 # - add documentation
 
 # Auto-formats our tutorials, saving manual formatting work:
@@ -92,8 +91,8 @@ let
     RegexCodeIdentifier = re([PatternFunctionOrConstructorCall, PatternVariablesAndProperties].join("|"))
     RegexGodotBuiltIns = re(PatternGodotBuiltIns)
     RegexSkip = re"""(_.+?_|\*\*[^*]+?\*\*|\*[^*]+?\*|`.+?`|".+?"|'.+?'|\!?\[.+?\)|\[.+?\])\s*|\s+|$"""
-    RegexStartOfSentence = re"[.!?:]\s+"
-    RegexNotStartOfSentence = re"""\S"""
+    RegexStartOfSentence = re"\s*\p{Lu}"
+    RegexEndOfSentence = re"[.!?:]\s+"
 
 
 func regexWrap(regexes: seq[Regex], pair: (string, string)): auto =
@@ -119,28 +118,7 @@ proc advanceMarkdownTextLineFormatter(line: string): (string, string) =
     return (line[0 .. last], line[last + 1 .. ^1])
 
 
-proc formatMarkdownTextLine(line: string, formatters: openArray[(string, auto)]): seq[string] =
-    var line = line
-    block outer:
-        var isStartOfSentence = true
-        while true:
-            for (applyAt, formatter) in formatters:
-                if line.len <= 0: break outer
-                if (applyAt, isStartOfSentence) == ("skipStartOfSentence", true): continue
-
-                result.add("")
-                (result[^1], line) = formatter(line)
-
-            result.add("")
-            (result[^1], line) = advanceMarkdownTextLineFormatter(line)
-
-            if result[^1].endsWith(RegexStartOfSentence):
-                isStartOfSentence = true
-            elif line.match(RegexNotStartOfSentence):
-                isStartOfSentence = false
-
-
-proc formatMarkdownTextLines(lines: openArray[string]): string =
+proc formatMarkdownTextLine(line: string): string =
     let formatters =
         { "any": regexWrapEach(RegexKeyboardShortcut, RegexOneKeyboardKey, ("<kbd>", "</kbd>"))
         , "any": regexWrap(@[RegexFilePath], ("`", "`"))
@@ -150,41 +128,41 @@ proc formatMarkdownTextLines(lines: openArray[string]): string =
         , "any": regexWrap(@[RegexOnePascalCaseWordStrict], ("*", "*"))
         , "skipStartOfSentence": regexWrap(@[RegexCapitalWordSequence, RegexOnePascalCaseWord], ("*", "*"))
         }
+    block outer:
+        var
+            line = line
+            isStartOfSentence = line.startsWith(RegexStartOfSentence)
+        while true:
+            for (applyAt, formatter) in formatters:
+                if line.len <= 0: break outer
+                if (applyAt, isStartOfSentence) == ("skipStartOfSentence", true): continue
+                let (formatted, rest) = formatter(line)
+                result &= formatted
+                line = rest
 
+            let (advanced, rest) = advanceMarkdownTextLineFormatter(line)
+            isStartOfSentence = advanced.endsWith(RegexEndOfSentence) or advanced.endsWith(RegexStartOfList)
+            result &= advanced
+            line = rest
+
+
+proc formatMarkdownTextLines(lines: openArray[string]): string =
+    var partialResult: seq[string] = @[]
     for line in lines:
-        var formatted = formatMarkdownTextLine(line, formatters)
-        result &= formatted.join
+        partialResult.add(line.formatMarkdownTextLine)
+    return partialResult.join("\n")
 
 
 proc formatMarkdownList(lines: seq[string]): string =
-    ## Formats the text of a list markdown block (ordered or unordered) and
-    ## returns the formatted string.
-    ##
-    ## For each list item:
-    ##
-    ## - Italicizes a single capital word with nothing after it.
-    ## - Italicizes a sequence of capital words at the start.
-    ## - Formats the rest of the text like a regular sentence.
-    var formattedLines: seq[string]
-    for line in lines:
-        let (listStartIndex, lineStart) = findBounds(line, RegexStartOfList)
-        if listStartIndex == -1:
-            formattedLines.add(formatMarkdownTextLines([line]))
-            continue
-
-        let listStart = line.substr(0, lineStart)
-        var text = line.substr(lineStart).strip()
-        let isSingleWord = text.count(" ") == 0
-        if isSingleWord:
-            text = "_" & text & "_"
-        else:
-            let (matchStart, matchEnd) = findBounds(text, RegexCapitalWordSequence)
-            if matchStart == 0:
-                let match = text.substr(0, matchEnd)
-                text = "_" & match & "_" & formatMarkdownTextLines([text.substr(matchEnd)])
-
-        formattedLines.add(listStart & text)
-    result = formattedLines.join("\n")
+    var
+        lines = lines
+        i = 0
+    while i < lines.len:
+        if not lines[i].startsWith(RegexStartOfList):
+            lines[i - 1] &= " " & lines[i].strip()
+            lines.delete(i)
+        i.inc
+    return lines.formatMarkdownTextLines
 
 
 proc formatCodeBlock(lines: openArray[string]): string =
@@ -226,19 +204,18 @@ proc formatCodeBlock(lines: openArray[string]): string =
 proc convertBlocksToFormattedMarkdown(blocks: seq[Block]): string =
     ## Takes a sequence of blocks from a parsed markdown file and returns a
     ## formatted document.
-    const IgnoredBlockKinds = [EmptyLine, YamlFrontMatter, Blockquote, Heading,
-            Table, GDQuestShortcode, Reference, Html]
+    const IgnoredBlockKinds = [EmptyLine, YamlFrontMatter, Blockquote, Heading, Table, GDQuestShortcode, Reference, Html]
     var formattedStrings: seq[string]
     for mdBlock in blocks:
-        case mdBlock.kind:
-            of IgnoredBlockKinds:
-                formattedStrings.add(mdBlock.text)
-            of CodeBlock:
-                formattedStrings.add(formatCodeBlock(mdBlock.text))
-            of List:
-                formattedStrings.add(formatMarkdownList(mdBlock.text))
-            else:
-                formattedStrings.add(formatMarkdownTextLines(mdBlock.text))
+        case mdBlock.kind
+        of IgnoredBlockKinds:
+            formattedStrings.add(mdBlock.text)
+        of CodeBlock:
+            formattedStrings.add(formatCodeBlock(mdBlock.text))
+        of List:
+            formattedStrings.add(formatMarkdownList(mdBlock.text))
+        else:
+            formattedStrings.add(formatMarkdownTextLines([mdBlock.text.join(" ")]))
     result = formattedStrings.join("\n")
     result.stripLineEnd()
 
@@ -263,8 +240,7 @@ proc parseBlocks(content: string): seq[Block] =
     for line in splitLines(content):
         let
             isEmptyLine = line.strip() == ""
-            isClosingParagraph = currentBlock.kind == TextParagraph and
-                    currentBlock.text.len() != 0
+            isClosingParagraph = currentBlock.kind == TextParagraph and currentBlock.text.len() != 0
 
         if not isEmptyLine:
             currentBlock.text.add(line)
@@ -304,9 +280,8 @@ proc parseBlocks(content: string): seq[Block] =
             currentBlock.kind = Table
 
         if isEmptyLine:
-            let isClosingBlock = currentBlock.kind in @[List, Html, Table, Blockquote] or (
-                    currentBlock.kind == GDQuestShortcode and
-                    previousLine.strip().endsWith("%}"))
+            let isClosingBlock = currentBlock.kind in @[List, Html, Table, Blockquote] or
+                    (currentBlock.kind == GDQuestShortcode and previousLine.strip().endsWith("%}"))
             if isClosingBlock:
                 result.add(currentBlock)
                 currentBlock = createDefaultBlock()
