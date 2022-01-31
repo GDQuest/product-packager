@@ -188,8 +188,8 @@ proc formatMarkdownList*(lines: seq[string]): string =
             lines.delete(i)
 
     var partialResult: seq[string] = @[]
-    for (lineStart, line) in zip(linesStart, lines.formatMarkdownTextLines.split("\n")):
-        partialResult.add(lineStart & line)
+    for (lineStart, line) in zip(linesStart, lines):
+        partialResult.add(lineStart & line.formatMarkdownTextLine)
     return partialResult.join("\n")
 
 
