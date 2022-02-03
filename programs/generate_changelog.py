@@ -10,6 +10,7 @@ from datargs import arg, parse
 # fixes.
 CHANGELOG_COMMIT_TYPES = {
     "feat": "New features",
+    "content": "Content changes",
     "improvement": "Improvements",
     "perf": "Improvements",
     "fix": "Bug fixes",

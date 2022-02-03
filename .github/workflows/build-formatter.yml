@@ -1,0 +1,25 @@
+name: Build Formatter
+on:
+  push:
+    branches:
+      - release
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: egor-tensin/setup-mingw@v2
+      - uses: jiro4989/setup-nim-action@v1
+        with:
+          nim-version: '1.6.0'
+      - run: |
+          cd format_tutorials
+          nim c -d:release format_tutorials
+          nim c -d:release -d:mingw format_tutorials
+          mkdir -p release
+          mv format_tutorials format_tutorials.exe release
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: format_tutorials
+          path: format_tutorials/release
