@@ -1,6 +1,7 @@
 import algorithm
 
-const GDScriptBuiltInClasses* = @[
+
+const GodotBuiltInClassesByLength* = [
     "AABB",
     "ARVRAnchor",
     "ARVRCamera",
@@ -554,4 +555,6 @@ const GDScriptBuiltInClasses* = @[
     "X509Certificate",
     "XMLParser",
     "YSort",
-].sorted()
+].sorted(proc (a: string, b: string): int =
+    result = if a.len() >= b.len(): 1 else: -1
+).reversed()

@@ -14,7 +14,8 @@ import std/sequtils
 import std/strutils
 import std/wordwrap
 
-import godot_built_ins
+import md/parser as md
+
 
 const HelpMessage = """Auto-formats markdown documents, saving manual formatting work:
 
@@ -43,54 +44,6 @@ type
         inputFiles: seq[string]
         inPlace: bool
         outputDirectory: string
-
-    BlockKind = enum
-        TextParagraph,
-        CodeBlock,
-        YamlFrontMatter,
-        Table,
-        List,
-        Blockquote,
-        Heading,
-        EmptyLine,
-        Reference,
-        Html,
-        GDQuestShortcode
-
-    Block = object
-        kind: BlockKind
-        text: seq[string]
-
-
-const
-    SupportedExtensions = ["png", "jpe?g", "mp4", "mkv", "t?res", "t?scn", "gd", "py", "shader", ]
-    PatternFilenameOnly = r"(\w+\.(" & SupportedExtensions.join("|") & "))"
-    PatternDirPath = r"((res|user)://)?/?([\w]+/)+(\w*\.\w+)?"
-    PatternFileAtRoot = r"(res|user)://\w+\.\w+"
-    PatternModifierKeys = r"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|Super|SUPER"
-    PatternKeyboardSingleCharacterKey = r"[A-Z0-9!@#$%^&*()_\-{}|\[\]\\;':,\./<>?]"
-    PatternOtherKeys = r"F\d{1,2}|Tab|Up|Down|Left|Right|LMB|MMB|RMB|Backspace|Delete"
-    PatternFunctionOrConstructorCall = r"\w+(\.\w+)*\(.*?\)"
-    PatternVariablesAndProperties = r"_\w+|[a-zA-Z0-9]+([\._]\w+)+"
-    PatternGodotBuiltIns = GodotBuiltInClassesByLength.join("|")
-
-let
-    RegexFilePath = re([PatternDirPath, PatternFileAtRoot, PatternFilenameOnly].join("|"))
-    RegexStartOfList = re"- |\d+\. "
-    RegexCodeCommentLine = re"\s*#"
-    RegexOnePascalCaseWord = re"[A-Z0-9]\w+[A-Z]\w+|[A-Z][a-zA-Z0-9]+(\.\.\.)?"
-    RegexOnePascalCaseWordStrict = re"[A-Z0-9]\w+[A-Z]\w+"
-    RegexMenuOrPropertyEntry = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )+[A-Z][a-zA-Z0-9]+( [A-Z][a-zA-Z0-9]*)*(\.\.\.)?)+"
-    RegexCapitalWordSequence = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )?[A-Z][a-zA-Z0-9]+(\.\.\.)?)+"
-    RegexKeyboardShortcut = re("((" & PatternModifierKeys & r") ?\+ ?)+(" & PatternOtherKeys & "|" & PatternKeyboardSingleCharacterKey & ")")
-    RegexOneKeyboardKey = re("(" & [PatternModifierKeys, PatternOtherKeys, PatternKeyboardSingleCharacterKey].join("|") & ")")
-    RegexNumber = re"\d+(D|px)|\d+(x\d+)*"
-    RegexHexValue = re"(0x|#)[0-9a-fA-F]+"
-    RegexCodeIdentifier = re([PatternFunctionOrConstructorCall, PatternVariablesAndProperties].join("|"))
-    RegexGodotBuiltIns = re(PatternGodotBuiltIns)
-    RegexSkip = re"""(_.+?_|\*\*[^*]+?\*\*|\*[^*]+?\*|`.+?`|".+?"|'.+?'|\!?\[.+?\)|\[.+?\])\s*|\s+|$"""
-    RegexStartOfSentence = re"\s*\p{Lu}"
-    RegexEndOfSentence = re"[.!?:]\s+"
 
 
 func regexWrap*(regexes: seq[Regex], pair: (string, string)): auto =
@@ -228,106 +181,25 @@ proc formatCodeBlock*(lines: openArray[string]): string =
     return formattedStrings.join("\n")
 
 
-proc convertBlocksToFormattedMarkdown*(blocks: seq[Block]): string =
+proc convertBlocksToFormattedMarkdown*(blocks: seq[md.Block]): string =
     ## Takes a sequence of `blocks` from a parsed markdown file
     ## and returns a formatted document.
-    const IgnoredBlockKinds = [
-        EmptyLine, YamlFrontMatter, Blockquote, Heading, Table, GDQuestShortcode, Reference, Html
-    ]
     var formattedStrings: seq[string]
     for mdBlock in blocks:
         case mdBlock.kind
-        of IgnoredBlockKinds:
-            formattedStrings.add(mdBlock.text)
-        of CodeBlock:
-            formattedStrings.add(formatCodeBlock(mdBlock.text))
-        of List:
-            formattedStrings.add(formatMarkdownList(mdBlock.text))
-        else:
-            formattedStrings.add(formatMarkdownTextLines([mdBlock.text.join(" ")]))
+            of md.bkCode: formattedStrings.add(mdBlock.render.formatCodeBlock)
+            of md.bkList: formattedStrings.add(mdBlock.render.formatMarkdownList)
+            of md.bkParagraph: formattedStrings.add(mdBlock.render.formatMarkdownTextLines)
+            else: formattedStrings &= mdBlock.render
     result = formattedStrings.join("\n")
     result.stripLineEnd()
-
-
-proc parseBlocks*(content: string): seq[Block] =
-    ## Parses the markdown document `content` and returns a sequence of blocks.
-    ##
-    ## This is a limited block parser that ignores many markdown features.
-    ## For example, it doesn't parse recursive blocks.
-    ##
-    ## It's designed to parse the content of GDQuest tutorials for formatting.
-    proc createDefaultBlock(): Block =
-        return Block(
-            kind: TextParagraph,
-            text: @[],
-        )
-
-    var currentBlock = createDefaultBlock()
-    var previousLine = ""
-    for line in splitLines(content):
-        let
-            isEmptyLine = line.strip() == ""
-            isClosingParagraph = currentBlock.kind == TextParagraph and currentBlock.text.len() != 0
-
-        if not isEmptyLine:
-            currentBlock.text.add(line)
-
-        if isEmptyLine and isClosingParagraph:
-            result.add(currentBlock)
-            currentBlock = createDefaultBlock()
-        # Lines starting with a hash could be comments inside a code block
-        elif line.startswith("#") and currentBlock.kind != CodeBlock:
-            currentBlock.kind = Heading
-            result.add(currentBlock)
-            currentBlock = createDefaultBlock()
-        elif line.startswith("```"):
-            if currentBlock.kind == TextParagraph:
-                currentBlock.kind = CodeBlock
-            elif currentBlock.kind == CodeBlock:
-                result.add(currentBlock)
-                currentBlock = createDefaultBlock()
-        elif line.startswith("---"):
-            if currentBlock.kind == TextParagraph:
-                currentBlock.kind = YamlFrontMatter
-            elif currentBlock.kind == YamlFrontMatter:
-                result.add(currentBlock)
-                currentBlock = createDefaultBlock()
-        elif line.startsWith("{%") and currentBlock.kind == TextParagraph:
-            currentBlock.kind = GDQuestShortcode
-        elif line.startsWith("["):
-            currentBlock.kind = Reference
-            currentBlock = createDefaultBlock()
-        elif line.startsWith("<") and currentBlock.kind != Html:
-            currentBlock.kind = Html
-        elif line.startsWith(">") and currentBlock.kind != Blockquote:
-            currentBlock.kind = Blockquote
-        elif line.match(RegexStartOfList):
-            currentBlock.kind = List
-        elif line.startsWith("|"):
-            currentBlock.kind = Table
-
-        if isEmptyLine:
-            let isClosingBlock = currentBlock.kind in @[List, Html, Table, Blockquote] or
-                    (currentBlock.kind == GDQuestShortcode and previousLine.strip().endsWith("%}"))
-            if isClosingBlock:
-                result.add(currentBlock)
-                currentBlock = createDefaultBlock()
-
-            currentBlock.kind = EmptyLine
-            currentBlock.text = @[""]
-            result.add(currentBlock)
-            currentBlock = createDefaultBlock()
-
-        previousLine = line
-    # When the file ends, we need to add the last block.
-    result.add(currentBlock)
 
 
 proc formatContent*(content: string): string =
     ## Takes the markdown `content` and returns a formatted document using
     ## the GDQuest standard.
-    let blocks = parseBlocks(content)
-    return convertBlocksToFormattedMarkdown(blocks)
+    let parsed = md.parse(content)
+    convertBlocksToFormattedMarkdown(parsed)
 
 
 proc parseCommandLineArguments(): CommandLineArgs =
@@ -364,9 +236,7 @@ proc parseCommandLineArguments(): CommandLineArgs =
 when isMainModule:
     var args = parseCommandLineArguments()
     for file in args.inputFiles:
-        let
-            content = readFile(file)
-            formattedContent = formatContent(content)
+        let formattedContent = readFile(file).formatContent
         if args.inPlace:
             writeFile(file, formattedContent)
         else:
