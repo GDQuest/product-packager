@@ -1,41 +1,9 @@
-import std/re
 import std/sequtils
 import std/strformat
 import std/strutils
 import std/sugar
 import honeycomb
-import godotbuiltins
 
-
-const
-    SupportedExtensions = ["png", "jpe?g", "mp4", "mkv", "t?res", "t?scn", "gd", "py", "shader", ]
-    PatternFilenameOnly = r"(\w+\.(" & SupportedExtensions.join("|") & "))"
-    PatternDirPath = r"((res|user)://)?/?([\w]+/)+(\w*\.\w+)?"
-    PatternFileAtRoot = r"(res|user)://\w+\.\w+"
-    PatternModifierKeys = r"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|Super|SUPER"
-    PatternKeyboardSingleCharacterKey = r"[A-Z0-9!@#$%^&*()_\-{}|\[\]\\;':,\./<>?]"
-    PatternOtherKeys = r"F\d{1,2}|Tab|Up|Down|Left|Right|LMB|MMB|RMB|Backspace|Delete"
-    PatternFunctionOrConstructorCall = r"\w+(\.\w+)*\(.*?\)"
-    PatternVariablesAndProperties = r"_\w+|[a-zA-Z0-9]+([\._]\w+)+"
-    PatternGodotBuiltIns = GodotBuiltInClassesByLength.join("|")
-
-let
-    RegexFilePath* = re([PatternDirPath, PatternFileAtRoot, PatternFilenameOnly].join("|"))
-    RegexStartOfList* = re"- |\d+\. "
-    RegexCodeCommentLine* = re"\s*#"
-    RegexOnePascalCaseWord* = re"[A-Z0-9]\w+[A-Z]\w+|[A-Z][a-zA-Z0-9]+(\.\.\.)?"
-    RegexOnePascalCaseWordStrict* = re"[A-Z0-9]\w+[A-Z]\w+"
-    RegexMenuOrPropertyEntry* = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )+[A-Z][a-zA-Z0-9]+( [A-Z][a-zA-Z0-9]*)*(\.\.\.)?)+"
-    RegexCapitalWordSequence* = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )?[A-Z][a-zA-Z0-9]+(\.\.\.)?)+"
-    RegexKeyboardShortcut* = re("((" & PatternModifierKeys & r") ?\+ ?)+(" & PatternOtherKeys & "|" & PatternKeyboardSingleCharacterKey & ")")
-    RegexOneKeyboardKey* = re("(" & [PatternModifierKeys, PatternOtherKeys, PatternKeyboardSingleCharacterKey].join("|") & ")")
-    RegexNumber* = re"\d+(D|px)|\d+(x\d+)*"
-    RegexHexValue* = re"(0x|#)[0-9a-fA-F]+"
-    RegexCodeIdentifier* = re([PatternFunctionOrConstructorCall, PatternVariablesAndProperties].join("|"))
-    RegexGodotBuiltIns* = re(PatternGodotBuiltIns)
-    RegexSkip* = re"""(_.+?_|\*\*[^*]+?\*\*|\*[^*]+?\*|`.+?`|".+?"|'.+?'|\!?\[.+?\)|\[.+?\])\s*|\s+|$"""
-    RegexStartOfSentence* = re"\s*\p{Lu}"
-    RegexEndOfSentence* = re"[.!?:]\s+"
 
 type
   BlockKind* = enum
@@ -89,7 +57,6 @@ func render*(b: Block): seq[string]
 
 func render*(cl: CodeLine): string =
   case cl.kind
-    # of clkGDQuestShortcode: (@["{%", cl.gdquestShortcode.name] & cl.gdquestShortcode.args & @["%}"]).join(" ")
     of clkGDQuestShortcode: render(cl.gdquestShortcode).join
     of clkRegular: cl.line
 

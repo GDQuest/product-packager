@@ -12,9 +12,55 @@ import std/re
 import std/os
 import std/sequtils
 import std/strutils
+import std/sugar
 import std/wordwrap
-
+import md/godotbuiltins
 import md/parser as md
+
+
+const
+    SupportedExtensions = ["png", "jpe?g", "mp4", "mkv", "t?res", "t?scn", "gd", "py", "shader", ]
+    PatternFilenameOnly = r"(\w+\.(" & SupportedExtensions.join("|") & "))"
+    PatternDirPath = r"((res|user)://)?/?([\w]+/)+(\w*\.\w+)?"
+    PatternFileAtRoot = r"(res|user)://\w+\.\w+"
+    PatternModifierKeys = r"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|Super|SUPER"
+    PatternKeyboardSingleCharacterKey = r"[A-Z0-9!@#$%^&*()_\-{}|\[\]\\;':,\./<>?]"
+    PatternOtherKeys = r"F\d{1,2}|Tab|Up|Down|Left|Right|LMB|MMB|RMB|Backspace|Delete"
+    PatternFunctionOrConstructorCall = r"\w+(\.\w+)*\(.*?\)"
+    PatternVariablesAndProperties = r"_\w+|[a-zA-Z0-9]+([\._]\w+)+"
+    PatternGodotBuiltIns = GodotBuiltInClassesByLength.join("|")
+
+let
+    RegexFilePath = re([PatternDirPath, PatternFileAtRoot, PatternFilenameOnly].join("|"))
+    RegexStartOfList = re"\s*(- |\d+\. )"
+    RegexCodeCommentLine = re"\s*#"
+    RegexOnePascalCaseWord = re"[A-Z0-9]\w+[A-Z]\w+|[A-Z][a-zA-Z0-9]+(\.\.\.)?"
+    RegexOnePascalCaseWordStrict = re"[A-Z0-9]\w+[A-Z]\w+"
+    RegexMenuOrPropertyEntry = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )+[A-Z][a-zA-Z0-9]+( [A-Z][a-zA-Z0-9]*)*(\.\.\.)?)+"
+    RegexCapitalWordSequence = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )?[A-Z][a-zA-Z0-9]+(\.\.\.)?)+"
+    RegexKeyboardShortcut = re("((" & PatternModifierKeys & r") ?\+ ?)+(" & PatternOtherKeys & "|" & PatternKeyboardSingleCharacterKey & ")")
+    RegexOneKeyboardKey = re("(" & [PatternModifierKeys, PatternOtherKeys, PatternKeyboardSingleCharacterKey].join("|") & ")")
+    RegexNumber = re"\d+(D|px)|\d+(x\d+)*"
+    RegexHexValue = re"(0x|#)[0-9a-fA-F]+"
+    RegexCodeIdentifier = re([PatternFunctionOrConstructorCall, PatternVariablesAndProperties].join("|"))
+    RegexGodotBuiltIns = re(PatternGodotBuiltIns)
+    RegexSkip = re"""({%.*?%}|_.+?_|\*\*[^*]+?\*\*|\*[^*]+?\*|`.+?`|".+?"|'.+?'|\!?\[.+?\)|\[.+?\])\s*|\s+|$"""
+    RegexStartOfSentence = re"\s*\p{Lu}"
+    RegexEndOfSentence = re"[.!?:]\s+"
+
+
+func regexWrap*(regexes: seq[Regex], pair: (string, string)): string -> (string, string)
+func regexWrapEach*(regexAll, regexOne: Regex; pair: (string, string)): string -> (string, string)
+
+let formatters =
+    { "any": regexWrapEach(RegexKeyboardShortcut, RegexOneKeyboardKey, ("<kbd>", "</kbd>"))
+    , "any": regexWrap(@[RegexFilePath], ("`", "`"))
+    , "any": regexWrap(@[RegexMenuOrPropertyEntry], ("*", "*"))
+    , "any": regexWrap(@[RegexCodeIdentifier, RegexGodotBuiltIns], ("`", "`"))
+    , "any": regexWrap(@[RegexNumber, RegexHexValue], ("`", "`"))
+    , "any": regexWrap(@[RegexOnePascalCaseWordStrict], ("*", "*"))
+    , "skipStartOfSentence": regexWrap(@[RegexCapitalWordSequence, RegexOnePascalCaseWord], ("*", "*"))
+    }
 
 
 const HelpMessage = """Auto-formats markdown documents, saving manual formatting work:
@@ -46,7 +92,7 @@ type
         outputDirectory: string
 
 
-func regexWrap*(regexes: seq[Regex], pair: (string, string)): auto =
+func regexWrap*(regexes: seq[Regex], pair: (string, string)): string -> (string, string) =
     ## Retruns a function that takes the string `text` and finds the first
     ## regex match from `regexes` only at the beginning of `text`.
     ##
@@ -61,7 +107,7 @@ func regexWrap*(regexes: seq[Regex], pair: (string, string)): auto =
         return ("", text)
 
 
-func regexWrapEach*(regexAll, regexOne: Regex; pair: (string, string)): auto =
+func regexWrapEach*(regexAll, regexOne: Regex; pair: (string, string)): string -> (string, string) =
     ## Returns a function that takes the string `text` and tries to match
     ## `regexAll` only at the beginning of `text`.
     ##
@@ -86,15 +132,6 @@ proc advanceMarkdownTextLineFormatter*(line: string): (string, string) =
 
 proc formatMarkdownTextLine*(line: string): string =
     ## Returns the formatted `line` using the GDQuest standard.
-    let formatters =
-        { "any": regexWrapEach(RegexKeyboardShortcut, RegexOneKeyboardKey, ("<kbd>", "</kbd>"))
-        , "any": regexWrap(@[RegexFilePath], ("`", "`"))
-        , "any": regexWrap(@[RegexMenuOrPropertyEntry], ("*", "*"))
-        , "any": regexWrap(@[RegexCodeIdentifier, RegexGodotBuiltIns], ("`", "`"))
-        , "any": regexWrap(@[RegexNumber, RegexHexValue], ("`", "`"))
-        , "any": regexWrap(@[RegexOnePascalCaseWordStrict], ("*", "*"))
-        , "skipStartOfSentence": regexWrap(@[RegexCapitalWordSequence, RegexOnePascalCaseWord], ("*", "*"))
-        }
     block outer:
         var
             line = line
@@ -115,7 +152,7 @@ proc formatMarkdownTextLine*(line: string): string =
 
 proc formatMarkdownTextLines*(lines: openArray[string]): string =
     ## Returns the formatted sequence of `lines` using the GDQuest standard.
-    var partialResult: seq[string] = @[]
+    var partialResult: seq[string]
     for line in lines:
         partialResult.add(line.formatMarkdownTextLine)
     return partialResult.join("\n")
@@ -128,7 +165,7 @@ proc formatMarkdownList*(lines: seq[string]): string =
     ## multiple lines, in which case they get concatenated before formatting.
     var
         lines = lines
-        linesStart: seq[string] = @[]
+        linesStart: seq[string]
         i = 0
     while i < lines.len:
         var bound = lines[i].matchLen(RegexStartOfList)
@@ -140,7 +177,7 @@ proc formatMarkdownList*(lines: seq[string]): string =
             lines[i - 1] &= " " & lines[i].strip()
             lines.delete(i)
 
-    var partialResult: seq[string] = @[]
+    var partialResult: seq[string]
     for (lineStart, line) in zip(linesStart, lines):
         partialResult.add(lineStart & line.formatMarkdownTextLine)
     return partialResult.join("\n")
@@ -157,7 +194,7 @@ proc formatCodeBlock*(lines: openArray[string]): string =
 
     formattedStrings.add(if lines[0].strip() == "```": "```gdscript" else: lines[0])
     for line in lines[1 .. ^1]:
-        var processedLine = line.replace("    ", "\t")
+        var processedLine = line.replace(' '.repeat(TAB_WIDTH), "\t")
         if not line.match(RegexCodeCommentLine):
             formattedStrings.add(processedLine)
             continue
@@ -198,8 +235,7 @@ proc convertBlocksToFormattedMarkdown*(blocks: seq[md.Block]): string =
 proc formatContent*(content: string): string =
     ## Takes the markdown `content` and returns a formatted document using
     ## the GDQuest standard.
-    let parsed = md.parse(content)
-    convertBlocksToFormattedMarkdown(parsed)
+    md.parse(content).convertBlocksToFormattedMarkdown
 
 
 proc parseCommandLineArguments(): CommandLineArgs =

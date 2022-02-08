@@ -1,6 +1,6 @@
 import os
 import strutils
-import markdown_preprocessors
+import md/preprocess
 
 const
     ContentDirectory = "content"

@@ -6,9 +6,8 @@ import std/strformat
 import std/strutils
 import std/sugar
 import std/tables
-
-import godot_built_ins
-import markdown_parser
+import parser
+import godotbuiltins
 
 
 let
