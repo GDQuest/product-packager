@@ -152,10 +152,7 @@ proc formatMarkdownTextLine*(line: string): string =
 
 proc formatMarkdownTextLines*(lines: openArray[string]): string =
     ## Returns the formatted sequence of `lines` using the GDQuest standard.
-    var partialResult: seq[string]
-    for line in lines:
-        partialResult.add(line.formatMarkdownTextLine)
-    return partialResult.join("\n")
+    lines.map(formatMarkdownTextLine).join("\n")
 
 
 proc formatMarkdownList*(lines: seq[string]): string =
