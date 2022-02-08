@@ -22,7 +22,7 @@ suite "formatter":
                 error = parser.rowEntry("error_message")
             # if not error.startsWith("Directory paths should be in inline code"): continue
             let
-                formatted = formatContent(input)
+                formatted = input.formatContent
                 isExpectedOutput = formatted == expected
             check(isExpectedOutput)
             if not isExpectedOutput:

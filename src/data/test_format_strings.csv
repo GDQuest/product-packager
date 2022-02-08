@@ -39,8 +39,8 @@ func test():
 	pass
 ```","```gdscript
 func test():
-	## This is why we used the generic `Weapon` name for both projectile and
-	## laser specializations.
+	## This is why we used the generic `Weapon` name for both projectile and laser
+	## specializations.
 	pass
 ```","Comments inside blocks should wrap at 80 characters."
 "This is a `test` of *premade* **formatting**.","This is a `test` of *premade* **formatting**.","The formatter should ignore already formatted words."

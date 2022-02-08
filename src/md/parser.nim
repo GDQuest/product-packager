@@ -5,6 +5,8 @@ import std/sugar
 import honeycomb
 
 
+const NL* = "\n"
+
 type
   BlockKind* = enum
     bkBlank = "Blank",
@@ -41,7 +43,7 @@ type
     clkRegular = "Regular",
     clkGDQuestShortcode = "GDQuestShortcode"
 
-  CodeLine = object
+  CodeLine* = object
     case kind*: CodeLineKind
     of clkGDQuestShortcode: gdquestShortcode*: Block
     of clkRegular: line*: string
@@ -53,7 +55,7 @@ func CodeGDQuestShortcode(gdquestShortcode: Block): CodeLine =
     raise newException(ValueError, "Only bkGDQuestShortcode is allowed, but got {gdquestShortcode.kind}".fmt)
   CodeLine(kind: clkGDQuestShortcode, gdquestShortcode: gdquestShortcode)
 
-func render*(b: Block): seq[string]
+func render*(b: Block): string
 
 func render*(cl: CodeLine): string =
   case cl.kind
@@ -63,7 +65,7 @@ func render*(cl: CodeLine): string =
 
 func Blank(): Block = Block(kind: bkBlank)
 func Heading(level: int, heading: string): Block = Block(kind: bkHeading, level: level, heading: heading)
-func Code(language: string, code: seq[CodeLine]): Block = Block(kind: bkCode, language: language, code: code)
+func Code(language: string, code: seq[CodeLine]): Block = Block(kind: bkCode, language: if language.strip == "": "gdscript" else: language, code: code)
 func Image(alt: string, path: string): Block = Block(kind: bkImage, alt: alt, path: path)
 func GDQuestShortcode(name: string, args: seq[string]): Block = Block(kind: bkGDQuestShortcode, name: name, args: args)
 func Paragraph(body: seq[string]): Block = Block(kind: bkParagraph, body: body)
@@ -73,15 +75,15 @@ func YAMLFrontMatter(body: seq[string]): Block = Block(kind: bkYAMLFrontMatter, 
 func Table(body: seq[string]): Block = Block(kind: bkTable, body: body)
 func HTML(body: seq[string]): Block = Block(kind: bkHTML, body: body)
 
-func render*(b: Block): seq[string] =
+func render*(b: Block): string =
   case b.kind
-    of bkBlank: @[""]
-    of bkHeading: @['#'.repeat(b.level) & " " & b.heading]
-    of bkCode: @["```" & b.language] & b.code.map(render) & @["```"]
-    of bkImage: @["![" & b.alt & "](" & b.path & ")"]
-    of bkGDQuestShortcode: @[(@["{%", b.name] & b.args & @["%}"]).join(" ")]
-    of bkYAMLFrontMatter: @["---"] & b.body & @["---"]
-    else: b.body
+    of bkBlank: ""
+    of bkHeading: '#'.repeat(b.level) & " " & b.heading
+    of bkCode: (@["```" & b.language] & b.code.map(render) & @["```"]).join(NL)
+    of bkImage: "![" & b.alt & "](" & b.path & ")"
+    of bkGDQuestShortcode: (@["{%", b.name] & b.args & @["%}"]).join(" ")
+    of bkYAMLFrontMatter: (@["---"] & b.body & @["---"]).join(NL)
+    else: b.body.join(NL)
 
 
 let

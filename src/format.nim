@@ -33,7 +33,7 @@ const
 let
     RegexFilePath = re([PatternDirPath, PatternFileAtRoot, PatternFilenameOnly].join("|"))
     RegexStartOfList = re"\s*(- |\d+\. )"
-    RegexCodeCommentLine = re"\s*#"
+    RegexCodeCommentLine = re"\s*#+"
     RegexOnePascalCaseWord = re"[A-Z0-9]\w+[A-Z]\w+|[A-Z][a-zA-Z0-9]+(\.\.\.)?"
     RegexOnePascalCaseWordStrict = re"[A-Z0-9]\w+[A-Z]\w+"
     RegexMenuOrPropertyEntry = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )+[A-Z][a-zA-Z0-9]+( [A-Z][a-zA-Z0-9]*)*(\.\.\.)?)+"
@@ -47,10 +47,11 @@ let
     RegexSkip = re"""({%.*?%}|_.+?_|\*\*[^*]+?\*\*|\*[^*]+?\*|`.+?`|".+?"|'.+?'|\!?\[.+?\)|\[.+?\])\s*|\s+|$"""
     RegexStartOfSentence = re"\s*\p{Lu}"
     RegexEndOfSentence = re"[.!?:]\s+"
+    RegexFourSpaces = re" {4}"
 
 
-func regexWrap*(regexes: seq[Regex], pair: (string, string)): string -> (string, string)
-func regexWrapEach*(regexAll, regexOne: Regex; pair: (string, string)): string -> (string, string)
+func regexWrap(regexes: seq[Regex], pair: (string, string)): string -> (string, string)
+func regexWrapEach(regexAll, regexOne: Regex; pair: (string, string)): string -> (string, string)
 
 let formatters =
     { "any": regexWrapEach(RegexKeyboardShortcut, RegexOneKeyboardKey, ("<kbd>", "</kbd>"))
@@ -92,7 +93,7 @@ type
         outputDirectory: string
 
 
-func regexWrap*(regexes: seq[Regex], pair: (string, string)): string -> (string, string) =
+func regexWrap(regexes: seq[Regex], pair: (string, string)): string -> (string, string) =
     ## Retruns a function that takes the string `text` and finds the first
     ## regex match from `regexes` only at the beginning of `text`.
     ##
@@ -107,7 +108,7 @@ func regexWrap*(regexes: seq[Regex], pair: (string, string)): string -> (string,
         return ("", text)
 
 
-func regexWrapEach*(regexAll, regexOne: Regex; pair: (string, string)): string -> (string, string) =
+func regexWrapEach(regexAll, regexOne: Regex; pair: (string, string)): string -> (string, string) =
     ## Returns a function that takes the string `text` and tries to match
     ## `regexAll` only at the beginning of `text`.
     ##
@@ -123,19 +124,20 @@ func regexWrapEach*(regexAll, regexOne: Regex; pair: (string, string)): string -
         return ("", text)
 
 
-proc advanceMarkdownTextLineFormatter*(line: string): (string, string) =
-    ## Find the first `RegexSkip` and split `line` into the tuple
-    ## `(line up to RegexSkip, rest of line)`.
-    let (_, last) = line.findBounds(RegexSkip)
-    return (line[0 .. last], line[last + 1 .. ^1])
-
-
-proc formatMarkdownTextLine*(line: string): string =
+proc formatLine(line: string): string =
     ## Returns the formatted `line` using the GDQuest standard.
+
+    proc advance(line: string): (string, string) =
+        ## Find the first `RegexSkip` and split `line` into the tuple
+        ## `(line up to RegexSkip, rest of line)`.
+        let (_, last) = line.findBounds(RegexSkip)
+        (line[0 .. last], line[last + 1 .. ^1])
+
     block outer:
         var
             line = line
             isStartOfSentence = line.startsWith(RegexStartOfSentence)
+
         while true:
             for (applyAt, formatter) in formatters:
                 if line.len <= 0: break outer
@@ -144,18 +146,13 @@ proc formatMarkdownTextLine*(line: string): string =
                 result &= formatted
                 line = rest
 
-            let (advanced, rest) = advanceMarkdownTextLineFormatter(line)
+            let (advanced, rest) = advance(line)
             isStartOfSentence = advanced.endsWith(RegexEndOfSentence)
             result &= advanced
             line = rest
 
 
-proc formatMarkdownTextLines*(lines: openArray[string]): string =
-    ## Returns the formatted sequence of `lines` using the GDQuest standard.
-    lines.map(formatMarkdownTextLine).join("\n")
-
-
-proc formatMarkdownList*(lines: seq[string]): string =
+proc formatList(lines: seq[string]): seq[string] =
     ## Returns the formatted sequence of `lines` using the GDQuest standard.
     ##
     ## `lines` is a sequence representing a markdown list. One item can span
@@ -164,8 +161,9 @@ proc formatMarkdownList*(lines: seq[string]): string =
         lines = lines
         linesStart: seq[string]
         i = 0
+
     while i < lines.len:
-        var bound = lines[i].matchLen(RegexStartOfList)
+        let bound = lines[i].matchLen(RegexStartOfList)
         if bound != -1:
             linesStart.add(lines[i][0 ..< bound])
             lines[i] = lines[i][bound .. ^1]
@@ -174,65 +172,65 @@ proc formatMarkdownList*(lines: seq[string]): string =
             lines[i - 1] &= " " & lines[i].strip()
             lines.delete(i)
 
-    var partialResult: seq[string]
     for (lineStart, line) in zip(linesStart, lines):
-        partialResult.add(lineStart & line.formatMarkdownTextLine)
-    return partialResult.join("\n")
+        result.add(lineStart & line.formatLine)
 
 
-proc formatCodeBlock*(lines: openArray[string]): string =
-    ## Returns the formatted `lines` markdown code block using the GDQuest standard:
+
+proc formatCodeLine(codeLine: md.CodeLine): string =
+    ## Returns the formatted `codeLine` block using the GDQuest standard:
     ##
     ## - Converts space-based indentations to tabs.
     ## - Fills GDScript code comments as paragraphs with a max line length of 80.
-    ## - If the code block has no language set, sets it to "gdscript".
-    const TAB_WIDTH = 4
-    var formattedStrings: seq[string]
+    case codeLine.kind
+    of md.clkGDQuestShortcode:
+        codeLine.gdquestShortcode.render
 
-    formattedStrings.add(if lines[0].strip() == "```": "```gdscript" else: lines[0])
-    for line in lines[1 .. ^1]:
-        var processedLine = line.replace(' '.repeat(TAB_WIDTH), "\t")
-        if not line.match(RegexCodeCommentLine):
-            formattedStrings.add(processedLine)
-            continue
+    of md.clkRegular:
+        const (SPACE, TAB, MAX_LINE_LEN) = (" ", "\t", 80)
+        if codeLine.line.match(RegexCodeCommentLine) and codeLine.line.len > MAX_LINE_LEN:
+            let
+                line = codeLine.line.replace(RegexFourSpaces, TAB)
+                bound = max(0, line.matchLen(RegexCodeCommentLine))
+                indent = line[0 ..< bound]
 
-        var indentCount = 0
-        while line[indentCount] == '\t':
-            indentCount += 1
-
-        let hashCount = processedLine[indentCount .. indentCount + 2].count("#")
-        let margin = indentCount + hashCount + 1
-        let desiredTextLength = 80 - indentCount * TAB_WIDTH - hashCount
-        let content = wrapWords(line[margin .. ^1], desiredTextLength)
-        for line in splitLines(content):
-            let optionalSpace = if not line.startswith(" "): " " else: ""
-            formattedStrings.add(
-                repeat("\t", indentCount) &
-                repeat("#", hashCount) &
-                optionalSpace &
-                line.strip()
-             )
-    return formattedStrings.join("\n")
+            line[bound .. ^1]
+                .strip.wrapWords(MAX_LINE_LEN - bound, splitLongWords=false)
+                .splitLines.map(x => [indent, x].join(SPACE))
+                .join(md.NL)
+        else:
+            codeLine.line
 
 
-proc convertBlocksToFormattedMarkdown*(blocks: seq[md.Block]): string =
-    ## Takes a sequence of `blocks` from a parsed markdown file
-    ## and returns a formatted document.
-    var formattedStrings: seq[string]
-    for mdBlock in blocks:
-        case mdBlock.kind
-            of md.bkCode: formattedStrings.add(mdBlock.render.formatCodeBlock)
-            of md.bkList: formattedStrings.add(mdBlock.render.formatMarkdownList)
-            of md.bkParagraph: formattedStrings.add(mdBlock.render.formatMarkdownTextLines)
-            else: formattedStrings &= mdBlock.render
-    result = formattedStrings.join("\n")
-    result.stripLineEnd()
+proc formatBlock(mdBlock: md.Block): string =
+    ## Takes an `mdBlock` from a parsed markdown file
+    ## and returns a formatted string.
+    var partialResult: seq[string]
+
+    case mdBlock.kind
+    of md.bkCode:
+        const OPEN_CLOSE = "```"
+        partialResult.add(OPEN_CLOSE & mdBlock.language)
+        partialResult &= mdBlock.code.map(formatCodeLine)
+        partialResult.add(OPEN_CLOSE)
+
+    of md.bkList:
+        partialResult &= mdBlock.body.formatList
+
+    of md.bkParagraph:
+        partialResult &= mdBlock.body.map(formatLine)
+
+    else:
+        partialResult.add(mdBlock.render)
+
+    partialResult.join(md.NL)
+
 
 
 proc formatContent*(content: string): string =
     ## Takes the markdown `content` and returns a formatted document using
     ## the GDQuest standard.
-    md.parse(content).convertBlocksToFormattedMarkdown
+    md.parse(content).map(formatBlock).join(md.NL).strip & md.NL
 
 
 proc parseCommandLineArguments(): CommandLineArgs =
@@ -253,16 +251,13 @@ proc parseCommandLineArguments(): CommandLineArgs =
                 if isValidFilename(value):
                     result.outputDirectory = value
                 else:
-                    echo "Invalid output directory: ", value, "\n"
-                    echo HelpMessage
+                    echo ["Invalid output directory: ", value, "", HelpMessage].join(md.NL)
                     quit(1)
             else:
-                echo "Invalid option: ", key, "\n"
-                echo HelpMessage
+                echo ["Invalid option: ", key, "", HelpMessage].join(md.NL)
                 quit(1)
     if result.inputFiles.len() == 0:
-        echo "No input files specified.\n"
-        echo HelpMessage
+        echo ["No input files specified.", "", HelpMessage].join(md.NL)
         quit(1)
 
 
