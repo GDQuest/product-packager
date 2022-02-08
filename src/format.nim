@@ -33,7 +33,7 @@ const
 let
     RegexFilePath = re([PatternDirPath, PatternFileAtRoot, PatternFilenameOnly].join("|"))
     RegexStartOfList = re"\s*(- |\d+\. )"
-    RegexCodeCommentLine = re"\s*#+"
+    RegexMaybeCodeCommentLine = re"\s*#*"
     RegexOnePascalCaseWord = re"[A-Z0-9]\w+[A-Z]\w+|[A-Z][a-zA-Z0-9]+(\.\.\.)?"
     RegexOnePascalCaseWordStrict = re"[A-Z0-9]\w+[A-Z]\w+"
     RegexMenuOrPropertyEntry = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )+[A-Z][a-zA-Z0-9]+( [A-Z][a-zA-Z0-9]*)*(\.\.\.)?)+"
@@ -48,6 +48,7 @@ let
     RegexStartOfSentence = re"\s*\p{Lu}"
     RegexEndOfSentence = re"[.!?:]\s+"
     RegexFourSpaces = re" {4}"
+    RegexAtLeastThreeHashes = re"#{3,}"
 
 
 func regexWrap(regexes: seq[Regex], pair: (string, string)): string -> (string, string)
@@ -187,19 +188,21 @@ proc formatCodeLine(codeLine: md.CodeLine): string =
         codeLine.gdquestShortcode.render
 
     of md.clkRegular:
-        const (SPACE, TAB, MAX_LINE_LEN) = (" ", "\t", 80)
-        if codeLine.line.match(RegexCodeCommentLine) and codeLine.line.len > MAX_LINE_LEN:
-            let
-                line = codeLine.line.replace(RegexFourSpaces, TAB)
-                bound = max(0, line.matchLen(RegexCodeCommentLine))
-                indent = line[0 ..< bound]
+        const (TAB, HASH, MAX_LINE_LEN) = ("\t", '#', 80)
+        let
+            bound = max(0, codeLine.line.matchLen(RegexMaybeCodeCommentLine))
+            indent = codeLine.line[0 ..< bound].multiReplace(
+                [ (RegexFourSpaces, TAB)
+                , (RegexAtLeastThreeHashes, HASH.repeat(2))
+                ])
+            sep = if indent.endsWith(HASH): " " else: ""
+            margin = indent.count(TAB) + indent.strip.len + sep.len
+            wrapLen = if sep == "": codeLine.line.len else: MAX_LINE_LEN - margin
 
-            line[bound .. ^1]
-                .strip.wrapWords(MAX_LINE_LEN - bound, splitLongWords=false)
-                .splitLines.map(x => [indent, x].join(SPACE))
-                .join(md.NL)
-        else:
-            codeLine.line
+        codeLine.line[bound .. ^1]
+            .strip.wrapWords(wrapLen, splitLongWords=false)
+            .splitLines.map(x => [indent, x].join(sep))
+            .join(md.NL)
 
 
 proc formatBlock(mdBlock: md.Block): string =
