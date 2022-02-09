@@ -13,13 +13,14 @@ jobs:
         with:
           nim-version: '1.6.0'
       - run: |
-          cd format_tutorials
-          nim c -d:release format_tutorials
-          nim c -d:release -d:mingw format_tutorials
+          nimble install honeycomb
+          cd src
+          nim c -d:release -o:gdquest-format format
+          nim c -d:release -d:mingw -o:gdquest-format format
           mkdir -p release
-          mv format_tutorials format_tutorials.exe release
+          mv gdquest-* release
       - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
-          name: format_tutorials
-          path: format_tutorials/release
+          name: gdquest-format
+          path: src/release
