@@ -13,7 +13,7 @@ jobs:
         with:
           nim-version: '1.6.0'
       - run: |
-          nimble install honeycomb
+          nimble -y install honeycomb
           cd src
           nim c -d:release -o:gdquest-format format
           nim c -d:release -d:mingw -o:gdquest-format format
