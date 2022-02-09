@@ -59,7 +59,7 @@ func render*(b: Block): string
 
 func render*(cl: CodeLine): string =
   case cl.kind
-    of clkGDQuestShortcode: render(cl.gdquestShortcode).join
+    of clkGDQuestShortcode: cl.gdquestShortcode.render
     of clkRegular: cl.line
 
 
