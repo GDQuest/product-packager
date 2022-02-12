@@ -60,7 +60,7 @@ func render*(cl: CodeLine): string =
 
 
 func Blank*(): Block = Block(kind: bkBlank)
-func Heading*(level: int, heading: string): Block = Block(kind: bkHeading, level: level, heading: heading)
+func Heading*(level: int, heading: string): Block = Block(kind: bkHeading, level: level, heading: heading.strip)
 func Code*(language: string, code: seq[CodeLine]): Block = Block(kind: bkCode, language: if language.strip == "": "gdscript" else: language, code: code)
 func Image*(alt: string, path: string): Block = Block(kind: bkImage, alt: alt, path: path)
 func Shortcode*(name: string, args: seq[string]): Block = Block(kind: bkShortcode, name: name, args: args)
@@ -102,7 +102,7 @@ let
 
 let
   blank = eol.result(Blank())
-  heading = ((c('#').atLeast(1) << manySpaceOrTab).join & nonEmptyLine).map(x => Heading(x[0].len, x[1]))
+  heading = ((c('#').atLeast(1).join << manySpaceOrTab) & nonEmptyLine).map(x => Heading(x[0].len, x[1]))
   list = listLine.atLeast(1).map(List)
   blockQuote = blockQuoteLine.atLeast(1).map(BlockQuote)
   image = (
