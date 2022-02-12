@@ -49,8 +49,7 @@ proc prepareFindFile*(dir: string, ignore: openArray[string] = []): string -> st
     elif name in cache and cache[name].len != 1:
       raise newException(ValueError, (
         @[ fmt"`{name}` is associated with multiple files:"] &
-           cache[name] &
-           @["Use a file path in your shortcode instead."]).join(NL))
+           cache[name] & @["Use a file path in your shortcode instead."]).join(NL))
 
     elif name in cache:
       return cache[name][0]
