@@ -19,8 +19,8 @@ jobs:
         with:
           nim-version: '1.6.0'
       - run: |
-          nimble build
-          nimble build -d:mingw
+          nimble -y build
+          nimble -y build -d:mingw
       - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
