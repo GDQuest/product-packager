@@ -15,7 +15,7 @@ import std/strutils
 import std/sugar
 import std/wordwrap
 import md/godotbuiltins
-import md/parser as mdp
+import md/parser
 
 
 const
@@ -33,7 +33,7 @@ const
 let
   RegexFilePath = re([PatternDirPath, PatternFileAtRoot, PatternFilenameOnly].join("|"))
   RegexStartOfList = re"\s*(- |\d+\. )"
-  RegexMaybeCodeCommentLine = re"\s*#*"
+  RegexMaybeCodeCommentLine = re"\s*[#/]*"
   RegexOnePascalCaseWord = re"[A-Z0-9]\w+[A-Z]\w+|[A-Z][a-zA-Z0-9]+(\.\.\.)?"
   RegexOnePascalCaseWordStrict = re"[A-Z0-9]\w+[A-Z]\w+"
   RegexMenuOrPropertyEntry = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )+[A-Z][a-zA-Z0-9]+( [A-Z][a-zA-Z0-9]*)*(\.\.\.)?)+"
@@ -48,7 +48,7 @@ let
   RegexStartOfSentence = re"\s*\p{Lu}"
   RegexEndOfSentence = re"[.!?:]\s+"
   RegexFourSpaces = re" {4}"
-  RegexAtLeastThreeHashes = re"#{3,}"
+  RegexCodeCommentSymbol = re"#{3,}|/+"
 
 
 func regexWrap(regexes: seq[Regex], pair: (string, string)): string -> (string, string)
@@ -170,7 +170,7 @@ proc formatList(lines: seq[string]): seq[string] =
       lines[i] = lines[i][bound .. ^1]
       i.inc
     else:
-      lines[i - 1] &= mdp.SPACE & lines[i].strip()
+      lines[i - 1] &= SPACE & lines[i].strip()
       lines.delete(i)
 
   for (lineStart, line) in zip(linesStart, lines):
@@ -178,59 +178,60 @@ proc formatList(lines: seq[string]): seq[string] =
 
 
 
-proc formatCodeLine(codeLine: mdp.CodeLine): string =
+proc formatCodeLine(codeLine: CodeLine): string =
   ## Returns the formatted `codeLine` block using the GDQuest standard:
   ##
   ## - Converts space-based indentations to tabs.
   ## - Fills GDScript code comments as paragraphs with a max line length of 80.
   case codeLine.kind
-  of mdp.clkShortcode:
-    codeLine.shortcode.render
+  of clkShortcode:
+    codeLine.render
 
-  of mdp.clkRegular:
-    const (TAB, HASH, MAX_LINE_LEN) = ("\t", '#', 80)
+  of clkRegular:
+    const (TAB, HASH, SLASH, MAX_LINE_LEN) = ("\t", '#', '/', 80)
     let
       bound = max(0, codeLine.line.matchLen(RegexMaybeCodeCommentLine))
-      indent = codeLine.line[0 ..< bound].multiReplace(
+      first = codeLine.line[0 ..< bound]
+      indent = first.multiReplace(
         [ (RegexFourSpaces, TAB)
-        , (RegexAtLeastThreeHashes, HASH.repeat(2))
+        , (RegexCodeCommentSymbol, (if first.endsWith(HASH): HASH else: SLASH).repeat(2))
         ])
-      sep = if indent.endsWith(HASH): mdp.SPACE else: ""
+      sep = if indent.endsWith(HASH) or indent.endsWith(SLASH): SPACE else: ""
       margin = indent.count(TAB) + indent.strip.len + sep.len
       wrapLen = if sep == "": codeLine.line.len else: MAX_LINE_LEN - margin
 
     codeLine.line[bound .. ^1]
       .strip.wrapWords(wrapLen, splitLongWords=false)
       .splitLines.map(x => [indent, x].join(sep))
-      .join(mdp.NL)
+      .join(NL)
 
 
-proc formatBlock(mdBlock: mdp.Block): string =
+proc formatBlock(mdBlock: Block): string =
   ## Takes an `mdBlock` from a parsed markdown file
   ## and returns a formatted string.
   var partialResult: seq[string]
 
   case mdBlock.kind
-  of mdp.bkCode:
+  of bkCode:
     const OPEN_CLOSE = "```"
     partialResult.add(OPEN_CLOSE & mdBlock.language)
     partialResult &= mdBlock.code.map(formatCodeLine)
     partialResult.add(OPEN_CLOSE)
 
-  of mdp.bkList:
+  of bkList:
     partialResult &= mdBlock.body.formatList
 
   else:
     partialResult.add(mdBlock.render)
 
-  partialResult.join(mdp.NL)
+  partialResult.join(NL)
 
 
 
 proc formatContent*(content: string): string =
   ## Takes the markdown `content` and returns a formatted document using
   ## the GDQuest standard.
-  mdp.parse(content).map(formatBlock).join(mdp.NL).strip & mdp.NL
+  parse(content).map(formatBlock).join(NL).strip & NL
 
 
 proc parseCommandLineArguments(): CommandLineArgs =
@@ -251,13 +252,13 @@ proc parseCommandLineArguments(): CommandLineArgs =
         if isValidFilename(value):
           result.outputDirectory = value
         else:
-          echo ["Invalid output directory: ", value, "", HelpMessage].join(mdp.NL)
+          echo ["Invalid output directory: ", value, "", HelpMessage].join(NL)
           quit(1)
       else:
-        echo ["Invalid option: ", key, "", HelpMessage].join(mdp.NL)
+        echo ["Invalid option: ", key, "", HelpMessage].join(NL)
         quit(1)
   if result.inputFiles.len() == 0:
-    echo ["No input files specified.", "", HelpMessage].join(mdp.NL)
+    echo ["No input files specified.", "", HelpMessage].join(NL)
     quit(1)
 
 

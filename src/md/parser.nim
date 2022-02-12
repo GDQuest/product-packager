@@ -65,7 +65,7 @@ func Code*(language: string, code: seq[CodeLine]): Block = Block(kind: bkCode, l
 func Image*(alt: string, path: string): Block = Block(kind: bkImage, alt: alt, path: path)
 func Shortcode*(name: string, args: seq[string]): Block = Block(kind: bkShortcode, name: name, args: args)
 func ShortcodeFromSeq*(x: seq[string]): Block =
-  if x.len == 0: Shortcode("", @[]) else: Shortcode(x[0], x[1..^1].filter(x => x.len > 0))
+  if x.len == 0: Shortcode("", @[]) else: Shortcode(x[0], x[1..^1])
 func Paragraph*(body: seq[string]): Block = Block(kind: bkParagraph, body: body)
 func List*(body: seq[string]): Block = Block(kind: bkList, body: body)
 func BlockQuote*(body: seq[string]): Block = Block(kind: bkBlockQuote, body: body)
@@ -79,7 +79,7 @@ func render*(b: Block): string =
     of bkHeading: '#'.repeat(b.level) & SPACE & b.heading
     of bkCode: (@["```" & b.language] & b.code.map(render) & @["```"]).join(NL)
     of bkImage: "![" & b.alt & "](" & b.path & ")"
-    of bkShortcode: (@["{%", b.name] & b.args & @["%}"]).filter(x => x.len > 0).join(SPACE)
+    of bkShortcode: ["{%", (@[b.name] & b.args).join(SPACE), "%}"].join(SPACE)
     of bkYAMLFrontMatter: (@["---"] & b.body & @["---"]).join(NL)
     else: b.body.join(NL)
 
@@ -110,12 +110,11 @@ let
     (s("](") >> ((nonNewLine << !c(')')).many & nonNewLine).join) << c(')') << eol
   ).map(x => Image(x[0], x[1]))
 
-  # TODO: preserve codeline shortcode leading whitespace
-  shortcodeToken = (alphanumeric | c("._")).many.join << manySpaceOrTab
-  shortcodeSection* = manySpaceOrTab >> s("{%") >> manySpaceOrTab >> shortcodeToken.atLeast(1) << s("%}") << manySpaceOrTab
+  shortcodeToken = manySpaceOrTab >> (alphanumeric | c("._")).many.join << manySpaceOrTab
+  shortcodeSection* = manySpaceOrTab >> s("{%") >> shortcodeToken.atLeast(1).filter(x => x.len > 0) << s("%}") << manySpaceOrTab
   shortcode = shortcodeSection.map(ShortcodeFromSeq) << eol
 
-  paragraphSection* = (nonNewLine << !s("{%")).many.join
+  paragraphSection* = (nonNewLine << !s("{%")).many.join << manySpaceOrTab
   paragraph = nonEmptyLine.atLeast(1).map(Paragraph)
 
   lineToCodeLine = proc(x: string): CodeLine =
@@ -134,3 +133,4 @@ proc parse*(contents: string): seq[Block] =
     case parsed.kind
         of failure: stderr.writeLine(parsed.error)
         of success: return parsed.value
+
