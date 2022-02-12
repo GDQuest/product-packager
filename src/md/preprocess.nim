@@ -1,20 +1,15 @@
-import std/algorithm
-import std/os
-import std/osproc
-import std/sequtils
-import std/strformat
-import std/strutils
-import std/sugar
-import std/tables
-import fuzzy
-import itertools
+import std/
+  [ sequtils
+  , strutils
+  , sugar
+  , tables
+  ]
 import honeycomb
-import parser as p
+import parser
+import shortcodes
+import shortcodesparagraph
+import utils
 
-
-const
-  GD_EXT = ".gd"
-  MD_EXT = ".md"
 
 type
   ParagraphLineSectionKind = enum
@@ -24,100 +19,22 @@ type
   ParagraphLineSection = object
     case kind: ParagraphLineSectionKind
     of plskRegular: section: string
-    of plskShortcode: shortcode: p.Block
+    of plskShortcode: shortcode: Block
 
   ParagraphLine = seq[ParagraphLineSection]
 
 func ParagraphLineSectionRegular(section: string): ParagraphLineSection = ParagraphLineSection(kind: plskRegular, section: section)
-func ParagraphLineSectionShortcode(shortcode: p.Block): ParagraphLineSection = ParagraphLineSection(kind: plskShortcode, shortcode: shortcode)
+func ParagraphLineSectionShortcode(shortcode: Block): ParagraphLineSection = ParagraphLineSection(kind: plskShortcode, shortcode: shortcode)
 
 proc toParagraphLine(x: string): ParagraphLine =
   let parsed = (
-    p.shortcodeSection.map(p.ShortcodeFromSeq).map(ParagraphLineSectionShortcode) |
-    p.paragraphSection.map(ParagraphLineSectionRegular)
+    shortcodeSection.map(ShortcodeFromSeq).map(ParagraphLineSectionShortcode) |
+    paragraphSection.map(ParagraphLineSectionRegular)
   ).many.parse(x)
 
   case parsed.kind
     of success: parsed.value
     else: @[]
-
-
-var findFile: string -> string
-
-proc prepareFindFile(dir: string, ignore: openArray[string] = []): string -> string =
-  let (gitDir, exitCode) = execCmdEx("git rev-parse --show-toplevel", workingDir = dir)
-  if exitCode != 0: ["[ERROR]", gitDir].join(p.SPACE).quit
-
-  let
-    cacheFiles = collect:
-      for path in walkDirRec(gitDir.strip, relative = true):
-        if (path.endsWith(GD_EXT) or
-            path.endsWith(MD_EXT) and
-            not ignore.any(x => path.startsWith(x))
-        ): path
-
-    cache = collect(
-      for k, v in cacheFiles.groupBy(extractFilename): (k, v)
-    ).toTable
-
-  return func(name: string): string =
-    if not (name in cache or name in cacheFiles):
-      let candidates = cacheFiles
-        .mapIt((score: name.fuzzyMatchSmart(it), path: it))
-        .sorted((x, y) => cmp(x.score, y.score), SortOrder.Descending)[0 .. min(5, cacheFiles.len)]
-        .mapIt(it.path)
-
-      raise newException(ValueError, (
-        @[ fmt"`{name}` doesnt exist. Check your path/name."
-         , "First 5 possible candidates:" ] &
-        candidates).join(p.NL))
-
-    elif name in cache and cache[name].len != 1:
-      raise newException(ValueError, (
-        @[ fmt"`{name}` is associated with multiple files:"] &
-           cache[name] &
-           @["Use a file path in your shortcode instead."]).join(p.NL))
-
-    elif name in cache:
-      return cache[name][0]
-
-    else:
-      return name
-
-
-func contentsShortcode(mdBlock: p.Block, mdBlocks: seq[p.Block]): seq[Block] =
-  let
-    levels = 2 .. (if mdBlock.args.len > 0: parseInt(mdBlock.args[0]) else: 3)
-    headingToAnchor = proc(b: p.Block): string = b.heading.toLower.multiReplace({p.SPACE: "-", "'": ""}).strip(chars = {'?', '!'})
-
-  @[ p.Paragraph(@["Contents:"])
-   , p.Blank()
-   , p.List(mdBlocks
-     .filter(x => x.kind == p.bkHeading and x.level in levels)
-     .map(x => ' '.repeat(2 * (x.level - 2)) & "- [" & x.heading & "](" & x.headingToAnchor & ")"))
-   ]
-
-const SHORTCODES =
-  { "contents": contentsShortcode
-  }.toTable
-
-
-proc linkShortcode(shortcode: p.Block): string =
-  try:
-    let
-      arg = shortcode.args[0]
-      name = findFile(if arg.endsWith(MD_EXT): arg else: arg & MD_EXT).splitFile.name
-
-    fmt"[{name}]({name}.html)"
-
-  except ValueError:
-    ( @[shortcode.render] &
-      getCurrentExceptionMsg().splitLines
-    ).map(x => ["[ERROR]", x].join(p.SPACE)).join(p.NL).quit
-
-const PARAGRAPH_SHORTCODES =
-  { "link": linkShortcode
-  }.toTable
 
 
 proc processParagraphLineSection(pls: ParagraphLineSection): string =
@@ -130,22 +47,22 @@ when isMainModule:
   const DIR = "../../godot-node-essentials/godot-project/"
   findFile = prepareFindFile(DIR, ["free-samples"])
 
-  let mdBlocks = p.parse(readFile("./data/Line2D.md"))
+  let mdBlocks = parse(readFile("./data/Line2D.md"))
   var result: seq[Block]
   for mdBlock in mdBlocks:
     case mdBlock.kind
-    of p.bkShortcode:
+    of bkShortcode:
       result &= SHORTCODES[mdBlock.name](mdBlock, mdBlocks)
 
-    of p.bkParagraph:
+    of bkParagraph:
       result.add Paragraph(
         mdBlock.body.map(
-          x => x.toParagraphLine.map(processParagraphLineSection).join(p.SPACE)))
+          x => x.toParagraphLine.map(processParagraphLineSection).join(SPACE)))
 
     else:
       result.add mdBlock
 
-  echo result.map(p.render).join("\n")
+  echo result.map(render).join(NL)
 
 # proc replaceIncludeShortcode(filename: string, anchor: string): string =
 #   # TODO: Find file by filename, parse file and find content of anchor
