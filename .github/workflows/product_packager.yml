@@ -1,9 +1,13 @@
 name: Build Product Packager Nim Suite
 
 on:
+  workflow_dispatch:
+
   push:
     branches:
       - release
+    paths:
+      - '**.nim'
 
 jobs:
   build:
