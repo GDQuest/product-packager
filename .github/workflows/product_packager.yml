@@ -1,8 +1,14 @@
-name: Build Formatter
+name: Build Product Packager Nim Suite
+
 on:
+  workflow_dispatch:
+
   push:
     branches:
       - release
+    paths:
+      - '**.nim'
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,14 +19,10 @@ jobs:
         with:
           nim-version: '1.6.0'
       - run: |
-          nimble -y install honeycomb
-          cd src
-          nim c -d:release -o:gdquest-format format
-          nim c -d:release -d:mingw -o:gdquest-format format
-          mkdir -p release
-          mv gdquest-* release
+          nimble build
+          nimble build -d:mingw
       - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
-          name: gdquest-format
-          path: src/release
+          name: gdquest-product-packager
+          path: bin
