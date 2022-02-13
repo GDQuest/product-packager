@@ -1,9 +1,11 @@
 import std/
-  [ strutils
+  [ strformat
+  , strutils
   , sugar
   , tables
   ]
 import parser
+import utils
 
 
 proc contentsShortcode(mdBlock: Block, mdBlocks: seq[Block]): seq[Block] =
@@ -15,10 +17,13 @@ proc contentsShortcode(mdBlock: Block, mdBlocks: seq[Block]): seq[Block] =
         if mdBlock.kind == bkHeading and mdBlock.level in levels:
           SPACE.repeat(2 * (mdBlock.level - 2)) & "- [" & mdBlock.heading & "](" & mdBlock.headingToAnchor & ")"
 
-  @[ Paragraph(@["Contents:"])
-   , Blank()
-   , List(listBody)
-   ]
+  if listBody.len > 0:
+    @[Paragraph(@["Contents:"]), Blank(), List(listBody)]
+
+  else:
+    fmt"{mdBlock.render}: No valid headings found for ToC. Skipping...".log
+    @[mdBlock]
+
 
 const SHORTCODES* =
   { "contents": contentsShortcode

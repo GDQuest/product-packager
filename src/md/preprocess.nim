@@ -1,40 +1,13 @@
 import std/
   [ sequtils
   , strutils
-  , sugar
   , tables
   ]
-import honeycomb
 import parser
+import parserparagraph
 import shortcodes
 import shortcodesparagraph
 import utils
-
-
-type
-  ParagraphLineSectionKind = enum
-    plskRegular,
-    plskShortcode
-
-  ParagraphLineSection = object
-    case kind: ParagraphLineSectionKind
-    of plskRegular: section: string
-    of plskShortcode: shortcode: Block
-
-  ParagraphLine = seq[ParagraphLineSection]
-
-func ParagraphLineSectionRegular(section: string): ParagraphLineSection = ParagraphLineSection(kind: plskRegular, section: section)
-func ParagraphLineSectionShortcode(shortcode: Block): ParagraphLineSection = ParagraphLineSection(kind: plskShortcode, shortcode: shortcode)
-
-proc toParagraphLine(x: string): ParagraphLine =
-  let parsed = (
-    shortcodeSection.map(ShortcodeFromSeq).map(ParagraphLineSectionShortcode) |
-    paragraphSection.map(ParagraphLineSectionRegular)
-  ).many.parse(x)
-
-  case parsed.kind
-    of success: parsed.value
-    else: @[]
 
 
 proc processParagraphLineSection(pls: ParagraphLineSection): string =
@@ -47,7 +20,7 @@ when isMainModule:
   const DIR = "../../godot-node-essentials/godot-project/"
   findFile = prepareFindFile(DIR, ["free-samples"])
 
-  let mdBlocks = parse(readFile("./data/Line2D.md"))
+  let mdBlocks = parse(readFile("./data/test.md"))
   var result: seq[Block]
   for mdBlock in mdBlocks:
     case mdBlock.kind
@@ -55,9 +28,7 @@ when isMainModule:
       result &= SHORTCODES[mdBlock.name](mdBlock, mdBlocks)
 
     of bkParagraph:
-      result.add Paragraph(
-        mdBlock.body.map(
-          x => x.toParagraphLine.map(processParagraphLineSection).join(SPACE)))
+      result.add mdBlock.body.mapIt(it.toParagraphLine.map(processParagraphLineSection).join(SPACE)).Paragraph
 
     else:
       result.add mdBlock

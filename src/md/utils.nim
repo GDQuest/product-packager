@@ -1,5 +1,6 @@
 import std/
   [ algorithm
+  , logging
   , os
   , osproc
   , sequtils
@@ -13,6 +14,10 @@ import itertools
 import parser
 
 
+let errorLogger = newConsoleLogger(lvlWarn, useStderr = true)
+addHandler(errorLogger)
+
+
 const
   GD_EXT* = ".gd"
   MD_EXT* = ".md"
@@ -22,7 +27,7 @@ var findFile*: string -> string
 
 proc prepareFindFile*(dir: string, ignore: openArray[string] = []): string -> string =
   let (gitDir, exitCode) = execCmdEx("git rev-parse --show-toplevel", workingDir = dir)
-  if exitCode != 0: ["[ERROR]", gitDir].join(SPACE).quit
+  if exitCode != 0: fmt"[ERROR] {gitDir}".quit
 
   let
     cacheFiles = collect:
@@ -38,21 +43,30 @@ proc prepareFindFile*(dir: string, ignore: openArray[string] = []): string -> st
   return func(name: string): string =
     if not (name in cache or name in cacheFiles):
       let candidates = cacheFiles
+        .filterIt(it.endsWith(name.splitFile.ext))
         .mapIt((score: name.fuzzyMatchSmart(it), path: it))
         .sorted((x, y) => cmp(x.score, y.score), SortOrder.Descending)[0 .. min(5, cacheFiles.len)]
         .mapIt(it.path)
 
       raise newException(ValueError, (
-        @[ fmt"`{name}` doesnt exist. Check your path/name."
-         , "First 5 possible candidates:" ] & candidates).join(NL))
+        @[fmt"`{name}` doesnt exist. Possible candidates:"] &
+        candidates &
+        "Skipping..."
+      ).join(NL))
 
     elif name in cache and cache[name].len != 1:
       raise newException(ValueError, (
-        @[ fmt"`{name}` is associated with multiple files:"] &
-           cache[name] & @["Use a file path in your shortcode instead."]).join(NL))
+        @[fmt"`{name}` is associated with multiple files:"] &
+        cache[name] &
+        @["Use a file path in your shortcode instead."]
+      ).join(NL))
 
     elif name in cache:
       return cache[name][0]
 
     else:
       return name
+
+
+proc log*(msg = "", level: Level = lvlError) =
+  if msg != "": log(level, msg & NL)
