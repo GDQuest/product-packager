@@ -19,6 +19,7 @@ jobs:
         with:
           nim-version: '1.6.0'
       - run: |
+          git clone https://github.com/godotengine/godot.git
           nimble -y build
           nimble -y build -d:mingw
       - name: Upload artifact

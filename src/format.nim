@@ -17,10 +17,8 @@ import std/
   , sugar
   , wordwrap
   ]
-import md/
-  [ godotbuiltins
-  , parser
-  ]
+import md/parser
+import assets
 
 
 const HelpMessage = """Auto-formats markdown documents, saving manual formatting work:
@@ -55,7 +53,7 @@ const
   PatternOtherKeys = r"F\d{1,2}|Tab|Up|Down|Left|Right|LMB|MMB|RMB|Backspace|Delete"
   PatternFunctionOrConstructorCall = r"\w+(\.\w+)*\(.*?\)"
   PatternVariablesAndProperties = r"_\w+|[a-zA-Z0-9]+([\._]\w+)+"
-  PatternGodotBuiltIns = GodotBuiltInClassesByLength.join("|")
+  PatternGodotBuiltIns = CACHE_GODOT_BUILTIN_CLASSES.join("|")
 
 let
   RegexFilePath = re([PatternDirPath, PatternFileAtRoot, PatternFilenameOnly].join("|"))

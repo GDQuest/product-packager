@@ -46,7 +46,7 @@ proc prepareFindFile*(dir: string, ignore: openArray[string] = []): string -> st
       let candidates = cacheFiles
         .filterIt(it.endsWith(name.splitFile.ext))
         .mapIt((score: name.fuzzyMatchSmart(it), path: it))
-        .sorted((x, y) => cmp(x.score, y.score), SortOrder.Descending)[0 .. min(5, cacheFiles.len)]
+        .sorted((x, y) => cmp(x.score, y.score), Descending)[0 .. min(5, cacheFiles.len)]
         .mapIt("\t" & it.path)
 
       raise newException(ValueError, (
