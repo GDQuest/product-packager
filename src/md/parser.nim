@@ -50,8 +50,8 @@ type
 
 func render*(b: Block): string
 
-func CodeRegular*(line: string): CodeLine = CodeLine(kind: clkRegular, line: line)
-func CodeShortcode*(shortcode: Block): CodeLine = CodeLine(kind: clkShortcode, shortcode: shortcode)
+func CodeLineRegular*(line: string): CodeLine = CodeLine(kind: clkRegular, line: line)
+func CodeLineShortcode*(shortcode: Block): CodeLine = CodeLine(kind: clkShortcode, shortcode: shortcode)
 
 func render*(cl: CodeLine): string =
   case cl.kind
@@ -118,8 +118,8 @@ let
   paragraph = nonEmptyLine.atLeast(1).map(Paragraph)
 
   lineToCodeLine = proc(x: string): CodeLine =
-    if x.strip.startsWith("{%"): CodeShortcode(shortcode.parse(x).value)
-    else: CodeRegular(x.strip(false))
+    if x.strip.startsWith("{%"): CodeLineShortcode(shortcode.parse(x).value)
+    else: CodeLineRegular(x.strip(false))
   code = (codeOpenLine & (line << !codeCloseLine).many & line << codeCloseLine).map(x => Code(x[0], x[1 .. ^1].map(lineToCodeLine)))
 
   yamlFrontMatter = (yamlOpenClose >> (line << !yamlOpenClose).many & (line << yamlOpenClose)).map(YAMLFrontMatter)

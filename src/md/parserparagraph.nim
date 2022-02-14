@@ -12,6 +12,11 @@ type
     of plskRegular: section*: string
     of plskShortcode: shortcode*: Block
 
+func render*(pls: ParagraphLineSection): string =
+  case pls.kind
+  of plskShortcode: pls.shortcode.render
+  of plskRegular: pls.section
+
 func ParagraphLineSectionRegular(section: string): ParagraphLineSection = ParagraphLineSection(kind: plskRegular, section: section)
 func ParagraphLineSectionShortcode(shortcode: Block): ParagraphLineSection = ParagraphLineSection(kind: plskShortcode, shortcode: shortcode)
 

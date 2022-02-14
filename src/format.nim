@@ -7,15 +7,42 @@
 ## - Marks code blocks without a language as using `gdscript`.
 ## - Add <kbd> tags around keyboard shortcuts (the form needs to be Ctrl+F1).
 
-import std/parseopt
-import std/re
-import std/os
-import std/sequtils
-import std/strutils
-import std/sugar
-import std/wordwrap
-import md/godotbuiltins
-import md/parser
+import std/
+  [ parseopt
+  , re
+  , os
+  , sequtils
+  , strformat
+  , strutils
+  , sugar
+  , wordwrap
+  ]
+import md/
+  [ godotbuiltins
+  , parser
+  ]
+
+
+const HelpMessage = """Auto-formats markdown documents, saving manual formatting work:
+
+- Converts space-based indentations to tabs in code blocks.
+- Fills GDScript code comments as paragraphs.
+- Wraps symbols and numeric values in code.
+- Wraps other capitalized names, pascal case values into italics (we assume they're node names).
+- Marks code blocks without a language as using `gdscript`.
+- Add <kbd> tags around keyboard shortcuts (the form needs to be Ctrl+F1).
+
+How to use:
+
+format_tutorials [options] <input-file> [<input-file> ...]
+
+Options:
+
+-i/--in-place: Overwrite the input files with the formatted output.
+-o/--output-directory: Write the formatted output to the specified directory.
+
+-h/--help: Prints this help message.
+"""
 
 
 const
@@ -63,28 +90,6 @@ let formatters =
   , "any": regexWrap(@[RegexOnePascalCaseWordStrict], ("*", "*"))
   , "skipStartOfSentence": regexWrap(@[RegexCapitalWordSequence, RegexOnePascalCaseWord], ("*", "*"))
   }
-
-
-const HelpMessage = """Auto-formats markdown documents, saving manual formatting work:
-
-- Converts space-based indentations to tabs in code blocks.
-- Fills GDScript code comments as paragraphs.
-- Wraps symbols and numeric values in code.
-- Wraps other capitalized names, pascal case values into italics (we assume they're node names).
-- Marks code blocks without a language as using `gdscript`.
-- Add <kbd> tags around keyboard shortcuts (the form needs to be Ctrl+F1).
-
-How to use:
-
-format_tutorials [options] <input-file> [<input-file> ...]
-
-Options:
-
--i/--in-place: Overwrite the input files with the formatted output.
--o/--output-directory: Write the formatted output to the specified directory.
-
--h/--help: Prints this help message.
-"""
 
 
 type
@@ -177,7 +182,6 @@ proc formatList(lines: seq[string]): seq[string] =
     result.add(lineStart & line.formatLine)
 
 
-
 proc formatCodeLine(codeLine: CodeLine): string =
   ## Returns the formatted `codeLine` block using the GDQuest standard:
   ##
@@ -227,7 +231,6 @@ proc formatBlock(mdBlock: Block): string =
   partialResult.join(NL)
 
 
-
 proc formatContent*(content: string): string =
   ## Takes the markdown `content` and returns a formatted document using
   ## the GDQuest standard.
@@ -238,12 +241,13 @@ proc parseCommandLineArguments(): CommandLineArgs =
   for kind, key, value in getopt():
     case kind
     of cmdEnd: break
+
     of cmdArgument:
       if fileExists(key):
         result.inputFiles.add(key)
       else:
-        echo "Invalid filename: ", key
-        quit(1)
+        fmt"Invalid filename: {key}".quit
+
     of cmdLongOption, cmdShortOption:
       case key
       of "help", "h": echo HelpMessage
@@ -252,14 +256,12 @@ proc parseCommandLineArguments(): CommandLineArgs =
         if isValidFilename(value):
           result.outputDirectory = value
         else:
-          echo ["Invalid output directory: ", value, "", HelpMessage].join(NL)
-          quit(1)
+          ["Invalid output directory: ", value, "", HelpMessage].join(NL).quit
       else:
-        echo ["Invalid option: ", key, "", HelpMessage].join(NL)
-        quit(1)
+        ["Invalid option: ", key, "", HelpMessage].join(NL).quit
+
   if result.inputFiles.len() == 0:
-    echo ["No input files specified.", "", HelpMessage].join(NL)
-    quit(1)
+    ["No input files specified.", "", HelpMessage].join(NL).quit
 
 
 when isMainModule:
