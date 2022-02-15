@@ -17,11 +17,14 @@ import std/
   , sugar
   , wordwrap
   ]
-import md/parser
-import assets
+import md/
+  [ assets
+  , parser
+  ]
 
 
-const HelpMessage = """Auto-formats markdown documents, saving manual formatting work:
+const HelpMessage = """
+Auto-formats markdown documents, saving manual formatting work:
 
 - Converts space-based indentations to tabs in code blocks.
 - Fills GDScript code comments as paragraphs.
@@ -37,10 +40,9 @@ format_tutorials [options] <input-file> [<input-file> ...]
 Options:
 
 -i/--in-place: Overwrite the input files with the formatted output.
--o/--output-directory: Write the formatted output to the specified directory.
+-o/--output-dir: Write the formatted output to the specified directory.
 
--h/--help: Prints this help message.
-"""
+-h/--help: Prints this help message."""
 
 
 const
@@ -91,10 +93,10 @@ let formatters =
 
 
 type
-  CommandLineArgs = object
+  AppSettings = object
     inputFiles: seq[string]
     inPlace: bool
-    outputDirectory: string
+    outputDir: string
 
 
 func regexWrap(regexes: seq[Regex], pair: (string, string)): string -> (string, string) =
@@ -147,12 +149,12 @@ proc formatLine(line: string): string =
         if line.len <= 0: break outer
         if (applyAt, isStartOfSentence) == ("skipStartOfSentence", true): continue
         let (formatted, rest) = formatter(line)
-        result &= formatted
+        result.add formatted
         line = rest
 
       let (advanced, rest) = advance(line)
       isStartOfSentence = advanced.endsWith(RegexEndOfSentence)
-      result &= advanced
+      result.add advanced
       line = rest
 
 
@@ -173,7 +175,7 @@ proc formatList(lines: seq[string]): seq[string] =
       lines[i] = lines[i][bound .. ^1]
       i.inc
     else:
-      lines[i - 1] &= SPACE & lines[i].strip()
+      lines[i - 1].add SPACE & lines[i].strip()
       lines.delete(i)
 
   for (lineStart, line) in zip(linesStart, lines):
@@ -216,12 +218,12 @@ proc formatBlock(mdBlock: Block): string =
   case mdBlock.kind
   of bkCode:
     const OPEN_CLOSE = "```"
-    partialResult.add(OPEN_CLOSE & mdBlock.language)
-    partialResult &= mdBlock.code.map(formatCodeLine)
-    partialResult.add(OPEN_CLOSE)
+    partialResult.add OPEN_CLOSE & mdBlock.language
+    partialResult.add mdBlock.code.map(formatCodeLine)
+    partialResult.add OPEN_CLOSE
 
   of bkList:
-    partialResult &= mdBlock.body.formatList
+    partialResult.add mdBlock.body.formatList
 
   else:
     partialResult.add(mdBlock.render)
@@ -235,38 +237,38 @@ proc formatContent*(content: string): string =
   parse(content).map(formatBlock).join(NL).strip & NL
 
 
-proc parseCommandLineArguments(): CommandLineArgs =
-  for kind, key, value in getopt():
+proc getAppSettings(): AppSettings =
+  for kind, key, value in getopt(shortNoVal = {'h', 'i'}, longNoVal = @["help", "in-place"]):
     case kind
     of cmdEnd: break
 
     of cmdArgument:
-      if fileExists(key):
-        result.inputFiles.add(key)
-      else:
-        fmt"Invalid filename: {key}".quit
+      if fileExists(key): result.inputFiles.add key
+      else: fmt"Invalid filename: {key}".quit
 
     of cmdLongOption, cmdShortOption:
       case key
-      of "help", "h": echo HelpMessage
+      of "help", "h": HelpMessage.quit(QuitSuccess)
       of "in-place", "i": result.inPlace = true
-      of "output-directory", "o":
-        if isValidFilename(value):
-          result.outputDirectory = value
-        else:
-          ["Invalid output directory: ", value, "", HelpMessage].join(NL).quit
-      else:
-        ["Invalid option: ", key, "", HelpMessage].join(NL).quit
+      of "output-dir", "o":
+        if isValidFilename(value): result.outputDir = value
+        else: [fmt"Invalid output directory: {value}", "", HelpMessage].join(NL).quit
+      else: [fmt"Invalid option: {key}", "", HelpMessage].join(NL).quit
 
-  if result.inputFiles.len() == 0:
-    ["No input files specified.", "", HelpMessage].join(NL).quit
+  if result.inputFiles.len == 0: ["No input files specified.", "", HelpMessage].join(NL).quit
 
 
 when isMainModule:
-  var args = parseCommandLineArguments()
-  for file in args.inputFiles:
-    let formattedContent = readFile(file).formatContent
-    if args.inPlace:
-      writeFile(file, formattedContent)
+  let appSettings = getAppSettings()
+
+  for filename in appSettings.inputFiles:
+    let formattedContent = filename.readFile.formatContent
+    if appSettings.inPlace:
+      filename.writeFile(formattedContent)
+
+    elif appSettings.outputDir != "":
+      appSettings.outputDir.createDir
+      (appSettings.outputDir / filename.extractFilename).writeFile(formattedContent)
+
     else:
       echo formattedContent

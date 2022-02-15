@@ -10,12 +10,13 @@ const
   XML_EXT = ".xml"
   SVG_EXT = ".svg"
   DIR_GODOT = "godot"
-  DIR_GODOT_ICONS = joinPath(DIR_GODOT, "editor", "icons")
-  DIR_GODOT_DOC_CLASSES = joinPath(DIR_GODOT, "doc", "classes")
-  DIR_GODOT_MODULES = joinPath(DIR_GODOT, "modules")
+  DIR_GODOT_ICONS = DIR_GODOT / "editor" / "icons"
+  DIR_GODOT_DOC_CLASSES = DIR_GODOT / "doc" / "classes"
+  DIR_GODOT_MODULES = DIR_GODOT / "modules"
 
   CACHE_GODOT_BUILTIN_CLASSES* = block:
     var result: seq[string]
+
     for node in walkDir(DIR_GODOT_DOC_CLASSES, checkDir = true):
       if node.kind == pcFile and node.path.toLower.endsWith(XML_EXT):
         result.add node.path.splitFile.name
@@ -28,12 +29,13 @@ const
 
   CACHE_GODOT_ICONS* = block:
     var result: Table[string, string]
+
     for node in walkDir(DIR_GODOT_ICONS, checkDir = true):
       if node.kind == pcFile and node.path.toLower.endsWith(SVG_EXT):
-        result[node.path.splitFile.name] = staticRead(".." / node.path)
+        result[node.path.splitFile.name] = staticRead(".." / ".." / node.path)
 
     for path in walkDirRec(DIR_GODOT_MODULES, checkDir = true):
       if "icons" in path and path.toLower.endsWith(SVG_EXT):
-        result[path.splitFile.name] = staticRead(".." / path)
+        result[path.splitFile.name] = staticRead(".." / ".." / path)
 
     result
