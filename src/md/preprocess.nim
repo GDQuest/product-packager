@@ -1,16 +1,16 @@
 import std/
   [ sequtils
+  , strformat
   , strutils
-  , sugar
   , tables
   ]
+import assets
 import parser
 import parserparagraph
 import shortcodes
-import utils
 
 
-proc processParagraphLine(pl: seq[ParagraphLineSection], mdBlocks: seq[Block]): string =
+proc preprocessParagraphLine(pl: seq[ParagraphLineSection], mdBlocks: seq[Block]): string =
   pl.mapIt(
     case it.kind
     of plskShortcode: SHORTCODES[it.shortcode.name](it.shortcode, mdBlocks)
@@ -18,31 +18,30 @@ proc processParagraphLine(pl: seq[ParagraphLineSection], mdBlocks: seq[Block]): 
   ).join(SPACE)
 
 
-proc processCodeLine(cl: CodeLine, mdBlocks: seq[Block]): CodeLine =
+proc preprocessCodeLine(cl: CodeLine, mdBlocks: seq[Block]): string =
   case cl.kind
-  of clkShortcode: CodeLineRegular(SHORTCODES[cl.shortcode.name](cl.shortcode, mdBlocks))
-  of clkRegular: cl
+  of clkShortcode: SHORTCODES[cl.shortcode.name](cl.shortcode, mdBlocks)
+  of clkRegular: cl.line
 
 
-when isMainModule:
-  const DIR = "../../godot-node-essentials/godot-project/"
-  findFile = prepareFindFile(DIR, ["free-samples"])
+proc preprocessBlock(mdBlock: Block, mdBlocks: seq[Block]): string =
+  case mdBlock.kind
+  of bkShortcode:
+    SHORTCODES[mdBlock.name](mdBlock, mdBlocks)
 
-  let
-    mdBlocks = parse(readFile("./data/Line2D.md"))
-    result = collect:
-      for mdBlock in mdBlocks:
-        case mdBlock.kind
-        of bkShortcode:
-          SHORTCODES[mdBlock.name](mdBlock, mdBlocks)
+  of bkParagraph:
+    mdBlock.body.mapIt(it.toParagraphLine.preprocessParagraphLine(mdBlocks)).join(NL)
 
-        of bkParagraph:
-          mdBlock.body.mapIt(it.toParagraphLine.processParagraphLine(mdBlocks)).join(NL)
+  of bkCode:
+    [ fmt"```{mdBlock.language}"
+    , mdBlock.code.mapIt(it.preprocessCodeLine(mdBlocks)).join(NL)
+    , "```"
+    ].join(NL)
 
-        of bkCode:
-          Code(mdBlock.language, mdBlock.code.mapIt(it.processCodeLine(mdBlocks))).render
+  else:
+    mdBlock.render
 
-        else:
-          mdBlock.render
 
-  echo result.join(NL)
+proc preprocess*(filename: string): string =
+  let mdBlocks = parse(readFile(filename))
+  mdBlocks.mapIt(preprocessBlock(it, mdBlocks)).join(NL)

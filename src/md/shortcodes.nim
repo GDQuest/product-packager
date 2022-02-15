@@ -36,7 +36,7 @@ proc linkShortcode(mdBlock: Block, mdBlocks: seq[Block]): string =
   try:
     let
       argName = mdBlock.args[0]
-      name = findFile(argName & (if argName.endsWith(MD_EXT): "" else: MD_EXT)).splitFile.name
+      name = cache.findFile(argName & (if argName.endsWith(MD_EXT): "" else: MD_EXT)).splitFile.name
     fmt"[{name}](../{name}/{name}.html)"
 
   except ValueError:
@@ -52,7 +52,7 @@ proc includeShortcode(mdBlock: Block, mdBlocks: seq[Block]): string =
     var matches = [""]
     let
       (argName, argAnchor) = (mdBlock.args[0], mdBlock.args[1])
-      fileName = findFile(argName & (if argName.endsWith(GD_EXT): "" else: GD_EXT))
+      fileName = cache.findFile(argName)
       regexAnchor = fmt"\h*#\h*ANCHOR:\h*{argAnchor}\s*(.*?)\s*#\h*END:\h*{argAnchor}".re({reDotAll})
       fileContents = readFile(fileName)
 

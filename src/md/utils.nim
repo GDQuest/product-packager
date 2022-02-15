@@ -2,7 +2,6 @@ import std/
   [ algorithm
   , logging
   , os
-  , osproc
   , sequtils
   , strformat
   , strutils
@@ -14,56 +13,73 @@ import itertools
 import parser
 
 
+const
+  GD_EXT* = ".gd"
+  MD_EXT* = ".md"
+  SHADER_EXT* = ".shader"
+
+
+type Cache = tuple
+  [ files: seq[string]
+  , table: Table[string, seq[string]]
+  , findFile: string -> string
+  ]
+
+
 let errorLogger = newConsoleLogger(lvlWarn, useStderr = true)
 addHandler(errorLogger)
 
 
-const
-  GD_EXT* = ".gd"
-  MD_EXT* = ".md"
+var cache*: Cache
 
-
-var findFile*: string -> string
-
-proc prepareFindFile*(dir: string, ignore: openArray[string] = []): string -> string =
-  var (rootDir, exitCode) = execCmdEx("git rev-parse --show-toplevel", workingDir = dir)
-  if exitCode != QuitSuccess: rootDir.quit
-  rootDir = rootDir.strip
-
+proc prepareCache*(workingDir: string, courseDir: string, ignoreDirs: openArray[string]): Cache =
   let
-    cacheFiles = collect:
-      for path in walkDirRec(rootDir, relative = true):
-        if ((path.endsWith(GD_EXT) or path.endsWith(MD_EXT)) and
-            not ignore.any(x => path.isRelativeTo(x))
-        ): path
+    cacheFiles = block:
+      let searchDirs = walkDir(workingDir, relative = true)
+        .toSeq
+        .filterIt(it.kind == pcDir and not it.path.startsWith(".") and it.path notin ignoreDirs)
+        .mapIt(it.path)
 
-    cache = collect(
-      for k, v in cacheFiles.groupBy(extractFilename): (k, v)
-    ).toTable
+      var blockResult: seq[string]
 
-  return func(name: string): string =
-    if not (name in cache or name in cacheFiles):
-      let candidates = cacheFiles
-        .filterIt(it.endsWith(name.splitFile.ext))
-        .mapIt((score: name.fuzzyMatchSmart(it), path: it))
-        .sorted((x, y) => cmp(x.score, y.score), Descending)[0 .. min(5, cacheFiles.len)]
-        .mapIt("\t" & it.path)
+      for path in searchDirs.mapIt(walkDirRec(workingDir / it).toSeq).concat:
+        if (path.toLower.endsWith(GD_EXT) or path.toLower.endsWith(SHADER_EXT)):
+          blockResult.add path
+
+      for path in walkDirRec(workingDir / courseDir):
+        if path.toLower.endsWith(MD_EXT):
+          blockResult.add path
+
+      blockResult
+
+    cacheTable = collect(for k, v in cacheFiles.groupBy(extractFilename): (k, v)).toTable
+
+  result.files = cacheFiles
+  result.table = cacheTable
+  result.findFile = func(name: string): string =
+    if not (name in cacheTable or name in cacheFiles):
+      let
+        filteredCandidates = cacheFiles.filterIt(it.endsWith(name.splitFile.ext))
+        candidates = filteredCandidates
+          .mapIt((score: name.fuzzyMatchSmart(it), path: it))
+          .sorted((x, y) => cmp(x.score, y.score), Descending)[0 .. min(5, filteredCandidates.len - 1)]
+          .mapIt("\t" & it.path)
 
       raise newException(ValueError, (
         fmt"`{name}` doesnt exist. Possible candidates:" &
         candidates &
-        fmt"Relative to {rootDir}. Skipping..."
+        fmt"Relative to {workingDir}. Skipping..."
       ).join(NL))
 
-    elif name in cache and cache[name].len != 1:
+    elif name in cacheTable and cacheTable[name].len != 1:
       raise newException(ValueError, (
         fmt"`{name}` is associated with multiple files:" &
-        cache[name] &
-        fmt"Relative to {rootDir}. Use a file path in your shortcode instead."
+        cacheTable[name] &
+        fmt"Relative to {workingDir}. Use a file path in your shortcode instead."
       ).join(NL))
 
-    elif name in cache:
-      return joinPath(rootDir, cache[name][0])
+    elif name in cacheTable:
+      return cacheTable[name][0]
 
     else:
-      return joinPath(rootDir, name)
+      return name
