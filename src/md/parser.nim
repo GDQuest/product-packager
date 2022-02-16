@@ -1,11 +1,12 @@
-import std/sequtils
-import std/strutils
-import std/sugar
+import std/
+  [ logging
+  , sequtils
+  , strutils
+  , sugar
+  ]
 import honeycomb
+import utils
 
-
-const SPACE* = " "
-const NL* = "\n"
 
 type
   BlockKind* = enum
@@ -131,6 +132,6 @@ let
 proc parse*(contents: string): seq[Block] =
     let parsed = parser.parse(contents)
     case parsed.kind
-        of failure: stderr.writeLine(parsed.error)
+        of failure: error parsed.error
         of success: return parsed.value
 

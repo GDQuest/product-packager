@@ -20,6 +20,7 @@ import std/
 import md/
   [ assets
   , parser
+  , utils
   ]
 
 
@@ -55,7 +56,6 @@ const
   PatternOtherKeys = r"F\d{1,2}|Tab|Up|Down|Left|Right|LMB|MMB|RMB|Backspace|Delete"
   PatternFunctionOrConstructorCall = r"\w+(\.\w+)*\(.*?\)"
   PatternVariablesAndProperties = r"_\w+|[a-zA-Z0-9]+([\._]\w+)+"
-  PatternGodotBuiltIns = CACHE_GODOT_BUILTIN_CLASSES.join("|")
 
 let
   RegexFilePath = re([PatternDirPath, PatternFileAtRoot, PatternFilenameOnly].join("|"))
@@ -70,7 +70,7 @@ let
   RegexNumber = re"\d+(D|px)|\d+(x\d+)*"
   RegexHexValue = re"(0x|#)[0-9a-fA-F]+"
   RegexCodeIdentifier = re([PatternFunctionOrConstructorCall, PatternVariablesAndProperties].join("|"))
-  RegexGodotBuiltIns = re(PatternGodotBuiltIns)
+  RegexGodotBuiltIns = re(CACHE_GODOT_BUILTIN_CLASSES.join("|"))
   RegexSkip = re"""({%.*?%}|_.+?_|\*\*[^*]+?\*\*|\*[^*]+?\*|`.+?`|".+?"|'.+?'|\!?\[.+?\)|\[.+?\])\s*|\s+|$"""
   RegexStartOfSentence = re"\s*\p{Lu}"
   RegexEndOfSentence = re"[.!?:]\s+"

@@ -10,13 +10,15 @@ import std/
   ]
 import fuzzy
 import itertools
-import parser
 
 
 const
+  SPACE* = " "
+  NL* = "\n"
   GD_EXT* = ".gd"
   MD_EXT* = ".md"
   SHADER_EXT* = ".shader"
+  HTML_EXT* = ".html"
 
 
 type Cache = tuple
@@ -32,11 +34,10 @@ addHandler(errorLogger)
 
 var cache*: Cache
 
-proc prepareCache*(workingDir: string, courseDir: string, ignoreDirs: openArray[string]): Cache =
+proc prepareCache*(workingDir, courseDir: string; ignoreDirs: openArray[string]): Cache =
   let
     cacheFiles = block:
-      let searchDirs = walkDir(workingDir, relative = true)
-        .toSeq
+      let searchDirs = walkDir(workingDir, relative = true).toSeq
         .filterIt(it.kind == pcDir and not it.path.startsWith(".") and it.path notin ignoreDirs)
         .mapIt(it.path)
 
@@ -66,9 +67,9 @@ proc prepareCache*(workingDir: string, courseDir: string, ignoreDirs: openArray[
           .mapIt("\t" & it.path)
 
       raise newException(ValueError, (
-        fmt"`{name}` doesnt exist. Possible candidates:" &
+        fmt"`{name}` doesn't exist. Possible candidates:" &
         candidates &
-        fmt"Relative to {workingDir}. Skipping..."
+        "Skipping..."
       ).join(NL))
 
     elif name in cacheTable and cacheTable[name].len != 1:
