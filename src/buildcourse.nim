@@ -1,16 +1,19 @@
 import std/
-  [ os
+  [ logging
+  , os
   , osproc
   , parseopt
   , parsecfg
   , sequtils
   , strformat
   , strutils
+  , sysrand
   ]
 import md/
   [ preprocess
   , utils
   ]
+import assets
 
 
 type AppSettings = object
@@ -25,6 +28,7 @@ type AppSettings = object
 
 
 const
+  RAND_LEN = 8
   COURSE_DIR = "content"
   DIST_DIR = "dist"
   PANDOC_EXE = "pandoc"
@@ -32,6 +36,8 @@ const
   HELP_MESSAGE = """
 HelpMessage"""
 
+
+proc genTempDir(): string = [".tmp-", urandom(RAND_LEN).join[0 ..< RAND_LEN]].join
 
 proc resolveWorkingDir(appSettings: AppSettings): AppSettings =
   result = appSettings
@@ -61,9 +67,6 @@ proc resolveAppSettings(appSettings: AppSettings): AppSettings =
 
     if not dirExists(result.workingDir / result.courseDir):
       fmt"Can't find course directory: `{result.workingDir / result.courseDir}`. Exiting...".quit
-
-    if not dirExists(result.pandocAssetsDir):
-      fmt"Invalid Pandoc assets directory: `{result.pandocAssetsDir}`. Exiting...".quit
 
     let ignoreDirsErrors = result.ignoreDirs
       .filterIt(not dirExists(result.workingDir / it))
@@ -107,22 +110,41 @@ when isMainModule:
     fmt"Removing `{appSettings.workingDir / appSettings.distDir}`. Exiting...".quit(QuitSuccess)
 
   else:
+    let
+      tmpDir = appSettings.workingDir / genTempDir()
+      courseCssFile = tmpDir / CACHE_COURSE_CSS_NAME
+      gdscriptDefFile = tmpDir / CACHE_GDSCRIPT_DEF_NAME
+      gdscriptThemeFile = tmpDir / CACHE_GDSCRIPT_THEME_NAME
+
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    writeFile(courseCssFile, CACHE_COURSE_CSS)
+    writeFile(gdscriptDefFile, CACHE_GDSCRIPT_DEF)
+    writeFile(gdscriptThemeFile, CACHE_GDSCRIPT_THEME)
+
+    let pandocAssetsCmdOptions = if appSettings.pandocAssetsDir == "": [ fmt"--css={courseCssFile}"
+                                                                       , fmt"--syntax-definition={gdscriptDefFile}"
+                                                                       , fmt"--highlight-style={gdscriptThemeFile}"
+                                                                       ].join(SPACE)
+                                 else: [ "--css=" & (appSettings.pandocAssetsDir / "course.css")
+                                       , "--syntax-definition=" & (appSettings.pandocAssetsDir / "gdscript.xml")
+                                       , "--highlight-style=" & (appSettings.pandocAssetsDir / "gdscript.theme")
+                                       ].join(SPACE)
+
     cache = prepareCache(appSettings.workingDir, appSettings.courseDir, appSettings.ignoreDirs)
     for fileIn in cache.files.filterIt(it.toLower.endsWith(MD_EXT)):
       let fileOut = fileIn.multiReplace((appSettings.courseDir & DirSep, appSettings.distDir & DirSep), (MD_EXT, HTML_EXT))
-      fileOut.parentDir.createDir
+      createDir(fileOut.parentDir)
 
-      let (output, exitCode) = execCmdEx([ fmt"{appSettings.pandocExe}"
+      let (output, exitCode) = execCmdEx([ appSettings.pandocExe
                                          , "--self-contained"
-                                         , if appSettings.pandocAssetsDir != "": [ "--css=" & (appSettings.pandocAssetsDir / "course.css")
-                                                                                 , "--syntax-definition=" & (appSettings.pandocAssetsDir / "gdscript.xml")
-                                                                                 , "--highlight-style=" & (appSettings.pandocAssetsDir / "gdscript.theme")
-                                                                                 ].join(SPACE) else: ""
                                          , fmt"--resource-path={fileIn.parentDir}"
                                          , fmt"--metadata=title:{fileOut.splitFile.name}"
                                          , fmt"--output={fileOut}"
+                                         , pandocAssetsCmdOptions
                                          , "-"
-                                         ].filterIt(it != "").join(SPACE), input = fileIn.preprocess)
+                                         ].join(SPACE), input = preprocess(fileIn))
 
       if exitCode != QuitSuccess:
-        output.quit(exitCode)
+        error fmt"{fileIn}:{output.strip}. Skipping..."

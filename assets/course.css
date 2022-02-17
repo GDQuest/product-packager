@@ -2,6 +2,7 @@
 :root {
   --color-caption: grey;
   --color-blue: #26bfe3;
+  --color-samp: #0084b8;
   --color-green: #02e180;
   --color-orange: #f2971a;
   --color-pink: #e3266f;
@@ -177,7 +178,7 @@ pre,
 code,
 kbd,
 samp {
-  color: #0084b8;
+  color: var(--color-samp);
   font-family: monospace, monospace;
 }
 
@@ -191,6 +192,10 @@ pre {
 
 code {
   white-space: pre-wrap;
+}
+
+.sourceCode {
+  color: inherit;
 }
 
 b,

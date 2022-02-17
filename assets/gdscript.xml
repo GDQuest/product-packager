@@ -356,7 +356,7 @@
 			<itemData name="String Substitution" defStyleNum="dsSpecialChar" spellChecking="false"/>
 			<itemData name="NodePath-String" defStyleNum="dsSpecialString" spellChecking="false"/>
 			<itemData name="NodePath-Var" defStyleNum="dsVariable" spellChecking="false"/>
-			<itemData name="UnusedVariable" defStyleNum="dsComment" spellChecking="false"/>
+			<itemData name="UnusedVariable" defStyleNum="dsVariable" spellChecking="false"/>
 			<itemData name="Function Call" defStyleNum="dsFunction" spellChecking="false"/>
 		</itemDatas>
 	</highlighting>
