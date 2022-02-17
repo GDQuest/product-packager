@@ -146,7 +146,12 @@ proc getAppSettings(): AppSettings =
       of "pandoc-exe", "p": result.pandocExe = value
       of "pandoc-assets-dir", "a": result.pandocAssetsDir = value 
       of "verbose", "v": logger.levelThreshold = lvlAll
-      else: fmt"Unrecognized command line option: `{key}`. Exiting".quit
+      else: [ fmt"Unrecognized command line option: `{key}`."
+            , ""
+            , "Help:"
+            , HELP_MESSAGE.fmt
+            , "Exiting."
+            ].join(NL).quit
 
   result = result.resolveAppSettings
 
@@ -167,42 +172,46 @@ when isMainModule:
       gdscriptThemeFile = tmpDir / CACHE_GDSCRIPT_THEME_NAME
 
     createDir(tmpDir)
-    defer: removeDir(tmpDir)
     info fmt"Creating temporary directory `{tmpDir}`..."
+
+    defer:
+      info ""
+      info fmt"Removing temporary directory `{tmpDir}`..."
+      removeDir(tmpDir)
 
     writeFile(courseCssFile, CACHE_COURSE_CSS)
     writeFile(gdscriptDefFile, CACHE_GDSCRIPT_DEF)
     writeFile(gdscriptThemeFile, CACHE_GDSCRIPT_THEME)
 
-    let pandocAssetsCmdOptions = if appSettings.pandocAssetsDir == "": [ fmt"--css={courseCssFile}"
-                                                                       , fmt"--syntax-definition={gdscriptDefFile}"
-                                                                       , fmt"--highlight-style={gdscriptThemeFile}"
+    let pandocAssetsCmdOptions = if appSettings.pandocAssetsDir == "": [ "--css=\"{courseCssFile}\"".fmt
+                                                                       , "--syntax-definition=\"{gdscriptDefFile}\"".fmt
+                                                                       , "--highlight-style=\"{gdscriptThemeFile}\"".fmt
                                                                        ].join(SPACE)
-                                 else: [ fmt"--css={appSettings.pandocAssetsDir / CACHE_COURSE_CSS_NAME}"
-                                       , fmt"--syntax-definition=(appSettings.pandocAssetsDir / CACHE_GDSCRIPT_DEF_NAME)"
-                                       , fmt"--highlight-style={appSettings.pandocAssetsDir / CACHE_GDSCRIPT_THEME_NAME}"
+                                 else: [ "--css=\"{appSettings.pandocAssetsDir / CACHE_COURSE_CSS_NAME}\"".fmt
+                                       , "--syntax-definition=\"{appSettings.pandocAssetsDir / CACHE_GDSCRIPT_DEF_NAME}\"".fmt
+                                       , "--highlight-style=\"{appSettings.pandocAssetsDir / CACHE_GDSCRIPT_THEME_NAME}\"".fmt
                                        ].join(SPACE)
 
     cache = prepareCache(appSettings.workingDir, appSettings.courseDir, appSettings.ignoreDirs)
     for fileIn in cache.files.filterIt(it.toLower.endsWith(MD_EXT)):
       let fileOut = fileIn.multiReplace((appSettings.courseDir & DirSep, appSettings.distDir & DirSep), (MD_EXT, HTML_EXT))
-      info ["Processing:", "\t`{fileIn}` -> `{fileOut}`...".fmt].join(NL)
+      info ""
+      info fmt"Processing: `{fileIn}` -> `{fileOut}`..."
 
-      if fileIn.fileNewer(fileOut) or appSettings.isForced:
+      if appSettings.isForced or not fileExists(fileOut) or fileIn.fileNewer(fileOut):
         createDir(fileOut.parentDir)
         info fmt"Creating output `{fileOut.parentDir}` directory..."
 
         let cmd = [ appSettings.pandocExe
                   , "--self-contained"
-                  , fmt"--resource-path={fileIn.parentDir}"
-                  , fmt"--metadata=title:{fileOut.splitFile.name}"
-                  , fmt"--output={fileOut}"
+                  , "--resource-path=\"{fileIn.parentDir}\"".fmt
+                  , "--metadata=title:\"{fileOut.splitFile.name}\"".fmt
+                  , "--output=\"{fileOut}\"".fmt
                   , pandocAssetsCmdOptions
                   , "-"
                   ].join(SPACE)
-        info fmt"Executing: `{cmd}`..."
 
-        let (output, exitCode) = execCmdEx(cmd, input = preprocess(fileIn))
+        let (output, exitCode) = execCmdEx(cmd, {poEchoCmd}, input = preprocess(fileIn))
         if exitCode != QuitSuccess:
           error fmt"{fileIn}:{output.strip}. Skipping..."
 

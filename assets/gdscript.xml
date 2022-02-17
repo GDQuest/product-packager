@@ -342,7 +342,7 @@
 			<itemData name="Operator Keyword" defStyleNum="dsKeyword" spellChecking="false"/>
 			<itemData name="Flow Control Keyword" defStyleNum="dsControlFlow" spellChecking="false"/>
 			<itemData name="Builtin Function" defStyleNum="dsBuiltIn" spellChecking="false"/>
-			<itemData name="Special Variable" defStyleNum="dsVariable" spellChecking="false"/>
+			<itemData name="Special Variable" defStyleNum="dsOperator" spellChecking="false"/>
 			<itemData name="Bindings" defStyleNum="dsBuiltIn" spellChecking="false"/>
 			<itemData name="Overloaders" defStyleNum="dsBuiltIn" spellChecking="false"/>
 			<itemData name="Float" defStyleNum="dsFloat" spellChecking="false"/>
