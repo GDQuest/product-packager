@@ -13,23 +13,19 @@ import utils
 
 
 proc contentsShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): string =
-  try:
-    let
-      levels = 2 .. (if mdBlock.args.len > 0: parseInt(mdBlock.args[0]) else: 3)
-      headingToAnchor = proc(b: Block): string = b.heading.toLower.multiReplace({SPACE: "-", "'": "", "?": "", "!": ""})
-      listBody = collect:
-        for mdBlock in mdBlocks:
-          if mdBlock.kind == bkHeading and mdBlock.level in levels:
-            SPACE.repeat(2 * (mdBlock.level - 2)) & "- [" & mdBlock.heading & "](#" & mdBlock.headingToAnchor & ")"
+  let
+    levels = 2 .. (if mdBlock.args.len > 0: parseInt(mdBlock.args[0]) else: 3)
+    headingToAnchor = proc(b: Block): string = b.heading.toLower.multiReplace({SPACE: "-", "'": "", "?": "", "!": ""})
+    listBody = collect:
+      for mdBlock in mdBlocks:
+        if mdBlock.kind == bkHeading and mdBlock.level in levels:
+          SPACE.repeat(2 * (mdBlock.level - 2)) & "- [" & mdBlock.heading & "](#" & mdBlock.headingToAnchor & ")"
 
-    if listBody.len == 0:
-      raise newException(ValueError, fmt"No valid headings found for ToC. Skipping...")
-
-    result = @[Paragraph(@["Contents:"]), Blank(), List(listBody)].map(render).join(NL)
-
-  except ValueError:
+  if listBody.len == 0:
     result = mdBlock.render
-    fmt"{fileName}:{result}: {getCurrentExceptionMsg()}".warn
+    warn fmt"{fileName}:{result}: No valid headings found for ToC. Skipping..."
+  else:
+    result = @[Paragraph(@["Contents:"]), Blank(), List(listBody)].map(render).join(NL)
 
 
 proc linkShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): string =

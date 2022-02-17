@@ -21,15 +21,14 @@ const
   HTML_EXT* = ".html"
 
 
-type Cache = tuple
-  [ files: seq[string]
-  , table: Table[string, seq[string]]
-  , findFile: string -> string
-  ]
+type Cache = tuple[ files: seq[string]
+                  , table: Table[string, seq[string]]
+                  , findFile: string -> string
+                  ]
 
 
-let errorLogger = newConsoleLogger(lvlWarn, useStderr = true)
-addHandler(errorLogger)
+let logger* = newConsoleLogger(lvlWarn, useStderr = true)
+addHandler(logger)
 
 
 var cache*: Cache

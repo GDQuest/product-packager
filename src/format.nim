@@ -42,7 +42,6 @@ Options:
 
 -i/--in-place: Overwrite the input files with the formatted output.
 -o/--output-dir: Write the formatted output to the specified directory.
-
 -h/--help: Prints this help message."""
 
 

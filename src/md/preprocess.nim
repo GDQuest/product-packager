@@ -29,7 +29,7 @@ proc addGodotIcon(line: string): string =
     if class in CACHE_GODOT_ICONS:
       result.add [line[0 ..< bounds.first], """<span class="godot-icon-class">""", CACHE_GODOT_ICONS[class], line[bounds.first .. bounds.last], "</span>"].join
     else:
-      warn fmt"Couldn't find icon for `{class}` in line: `{line}`. Skipping..."
+      info fmt"Couldn't find icon for `{class}` in line: `{line}`. Skipping..."
       result.add line[0 .. bounds.last]
 
     line = line[bounds.last + 1 .. ^1]
