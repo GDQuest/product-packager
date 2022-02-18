@@ -8,6 +8,7 @@ import honeycomb
 import utils
 
 
+
 type
   BlockKind* = enum
     bkBlank = "Blank",
@@ -97,6 +98,7 @@ let
   line = eol | nonEmptyLine
   listLine = (manySpaceOrTab & regex(r"-|([a-z]|[0-9]|#)+\.") & nonEmptyLine).join
   blockQuoteLine = (s(">") & manySpaceOrTab & nonEmptyLine).join
+
   (codeOpenLine, codeCloseLine) = (s("```") >> nonNewLine.many.join << newLine, s("```") << eol)
   yamlOpenClose = (s("---") << eol)
 
@@ -104,6 +106,7 @@ let
 let
   blank = eol.result(Blank())
   heading = ((c('#').atLeast(1).join << manySpaceOrTab) & nonEmptyLine).map(x => Heading(x[0].len, x[1]))
+
   list = listLine.atLeast(1).map(List)
   blockQuote = blockQuoteLine.atLeast(1).map(BlockQuote)
   image = (
@@ -121,6 +124,7 @@ let
   lineToCodeLine = proc(x: string): CodeLine =
     if x.strip.startsWith("{%"): CodeLineShortcode(shortcode.parse(x).value)
     else: CodeLineRegular(x.strip(false))
+
   code = (codeOpenLine & (line << !codeCloseLine).many & line << codeCloseLine).map(x => Code(x[0], x[1 .. ^1].map(lineToCodeLine)))
 
   yamlFrontMatter = (yamlOpenClose >> (line << !yamlOpenClose).many & (line << yamlOpenClose)).map(YAMLFrontMatter)
@@ -129,9 +133,9 @@ let
   parser = (blank | yamlFrontMatter | code | heading | list | blockQuote | html | table | shortcode | image | paragraph).many
 
 
+
 proc parse*(contents: string): seq[Block] =
     let parsed = parser.parse(contents)
     case parsed.kind
         of failure: error parsed.error
         of success: return parsed.value
-
