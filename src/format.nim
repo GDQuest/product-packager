@@ -69,26 +69,12 @@ let
   RegexNumber = re"\d+(D|px)|\d+(x\d+)*"
   RegexHexValue = re"(0x|#)[0-9a-fA-F]+"
   RegexCodeIdentifier = re([PatternFunctionOrConstructorCall, PatternVariablesAndProperties].join("|"))
-  RegexGodotBuiltIns = re(CACHE_GODOT_BUILTIN_CLASSES.join("|"))
+  RegexGodotBuiltIns = re([r"\b(", CACHE_GODOT_BUILTIN_CLASSES.join("|"), r")\b"].join)
   RegexSkip = re"""({%.*?%}|_.+?_|\*\*[^*]+?\*\*|\*[^*]+?\*|`.+?`|".+?"|'.+?'|\!?\[.+?\)|\[.+?\])\s*|\s+|$"""
   RegexStartOfSentence = re"\s*\p{Lu}"
   RegexEndOfSentence = re"[.!?:]\s+"
   RegexFourSpaces = re" {4}"
   RegexCodeCommentSymbol = re"#{3,}|/+"
-
-
-func regexWrap(regexes: seq[Regex], pair: (string, string)): string -> (string, string)
-func regexWrapEach(regexAll, regexOne: Regex; pair: (string, string)): string -> (string, string)
-
-let formatters =
-  { "any": regexWrapEach(RegexKeyboardShortcut, RegexOneKeyboardKey, ("<kbd>", "</kbd>"))
-  , "any": regexWrap(@[RegexFilePath], ("`", "`"))
-  , "any": regexWrap(@[RegexMenuOrPropertyEntry], ("*", "*"))
-  , "any": regexWrap(@[RegexCodeIdentifier, RegexGodotBuiltIns], ("`", "`"))
-  , "any": regexWrap(@[RegexNumber, RegexHexValue], ("`", "`"))
-  , "any": regexWrap(@[RegexOnePascalCaseWordStrict], ("*", "*"))
-  , "skipStartOfSentence": regexWrap(@[RegexCapitalWordSequence, RegexOnePascalCaseWord], ("*", "*"))
-  }
 
 
 type
@@ -127,6 +113,16 @@ func regexWrapEach(regexAll, regexOne: Regex; pair: (string, string)): string ->
       let replaced = replacef(text[0 ..< bound], regexOne, pair[0] & "$1" & pair[1])
       return (replaced, text[bound .. ^1])
     return ("", text)
+
+let formatters =
+  { "any": regexWrapEach(RegexKeyboardShortcut, RegexOneKeyboardKey, ("<kbd>", "</kbd>"))
+  , "any": regexWrap(@[RegexFilePath], ("`", "`"))
+  , "any": regexWrap(@[RegexMenuOrPropertyEntry], ("*", "*"))
+  , "any": regexWrap(@[RegexCodeIdentifier, RegexGodotBuiltIns], ("`", "`"))
+  , "any": regexWrap(@[RegexNumber, RegexHexValue], ("`", "`"))
+  , "any": regexWrap(@[RegexOnePascalCaseWordStrict], ("*", "*"))
+  , "skipStartOfSentence": regexWrap(@[RegexCapitalWordSequence, RegexOnePascalCaseWord], ("*", "*"))
+  }
 
 
 proc formatLine(line: string): string =
@@ -223,6 +219,9 @@ proc formatBlock(mdBlock: Block): string =
 
   of bkList:
     partialResult.add mdBlock.body.formatList
+
+  of bkParagraph:
+    partialResult.add mdBlock.body.map(formatLine)
 
   else:
     partialResult.add(mdBlock.render)
