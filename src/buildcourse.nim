@@ -221,7 +221,6 @@ proc process(appSettings: AppSettings) =
     pandocAssetsCmdOptions = block:
       if appSettings.pandocAssetsDir == "":
         let
-          tmpDir = getTempDir(appSettings.workingDir)
           courseCssFile = tmpDir / CACHE_COURSE_CSS_NAME
           gdscriptDefFile = tmpDir / CACHE_GDSCRIPT_DEF_NAME
           gdscriptThemeFile = tmpDir / CACHE_GDSCRIPT_THEME_NAME
