@@ -13,12 +13,10 @@ import shortcodes
 import utils
 
 
-const PatternGodotBuiltins = ["(`(", CACHE_GODOT_BUILTIN_CLASSES.join("|"), ")`)"].join
+let RegexGodotBuiltIns = ["(`(", CACHE_GODOT_BUILTIN_CLASSES.join("|"), ")`)"].join.re
 
 
 proc addGodotIcon(line: string): string =
-  let RegexGodotBuiltIns = PatternGodotBuiltins.re
-
   var
     line = line
     bounds = line.findBounds(RegexGodotBuiltIns)
@@ -75,6 +73,6 @@ proc preprocessBlock(mdBlock: Block, mdBlocks: seq[Block]; fileName: string): st
     mdBlock.render
 
 
-proc preprocess*(fileName: string): string =
-  let mdBlocks = readFile(fileName).parse
+proc preprocess*(fileName, contents: string): string =
+  let mdBlocks = contents.parse
   mdBlocks.mapIt(preprocessBlock(it, mdBlocks, fileName)).join(NL)

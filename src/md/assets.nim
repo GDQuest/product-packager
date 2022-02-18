@@ -6,10 +6,11 @@ import std/
   , tables
   ]
 
+
 const
   XML_EXT = ".xml"
   SVG_EXT = ".svg"
-  DIR_GODOT = "godot"
+  DIR_GODOT = currentSourcePath.parentDir / ".." / ".." / "godot"
   DIR_GODOT_ICONS = DIR_GODOT / "editor" / "icons"
   DIR_GODOT_DOC_CLASSES = DIR_GODOT / "doc" / "classes"
   DIR_GODOT_MODULES = DIR_GODOT / "modules"
@@ -32,10 +33,10 @@ const
 
     for node in walkDir(DIR_GODOT_ICONS, checkDir = true):
       if node.kind == pcFile and node.path.toLower.endsWith(SVG_EXT):
-        result[node.path.splitFile.name] = staticRead(".." / ".." / node.path)
+        result[node.path.splitFile.name] = staticRead(node.path)
 
     for path in walkDirRec(DIR_GODOT_MODULES, checkDir = true):
       if "icons" in path and path.toLower.endsWith(SVG_EXT):
-        result[path.splitFile.name] = staticRead(".." / ".." / path)
+        result[path.splitFile.name] = staticRead(path)
 
     result

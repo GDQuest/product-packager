@@ -31,14 +31,30 @@ let logger* = newConsoleLogger(lvlWarn, useStderr = true)
 addHandler(logger)
 
 
-var cache*: Cache
+var cache*: Cache ## |
+  ## Global cache that has to be initialized with `prepareCache()`.
 
 proc prepareCache*(workingDir, courseDir: string; ignoreDirs: openArray[string]): Cache =
+  ## Retruns a `Cache` object with:
+  ##   - `return.files`: `seq[string]` stores all Markdown, GDScript and Shader
+  ##                     paths.
+  ##   - `return.table`: `Table[string, seq[string]]` with keys being the file
+  ##                     base names and values being a sequence of paths.
+  ##                     One key can have multiple paths associated with it in
+  ##                     which case it isn't clear which to use with
+  ##                     `{% link ... %}` and `{% include ... %}` shortcodes.
+  ##   - `return.findFile`: `string -> string` is the function that searches for
+  ##                        paths in both `return.files` and `return.table`.
+  ##                        It raises a `ValueError` if:
+  ##                          - the file name isn't stored in the cache.
+  ##                          - the file name is associated with multiple paths.
   let
     cacheFiles = block:
       let searchDirs = walkDir(workingDir, relative = true).toSeq
-        .filterIt(it.kind == pcDir and not it.path.startsWith(".") and it.path notin ignoreDirs)
-        .mapIt(it.path)
+        .filterIt(
+          it.kind == pcDir and not it.path.startsWith(".") and
+          it.path notin ignoreDirs
+        ).mapIt(it.path)
 
       var blockResult: seq[string]
 
@@ -59,7 +75,7 @@ proc prepareCache*(workingDir, courseDir: string; ignoreDirs: openArray[string])
   result.findFile = func(name: string): string =
     if not (name in cacheTable or name in cacheFiles):
       let
-        filteredCandidates = cacheFiles.filterIt(it.endsWith(name.splitFile.ext))
+        filteredCandidates = cacheFiles.filterIt(it.toLower.endsWith(name.splitFile.ext))
         candidates = filteredCandidates
           .mapIt((score: name.fuzzyMatchSmart(it), path: it))
           .sorted((x, y) => cmp(x.score, y.score), Descending)[0 .. min(5, filteredCandidates.len - 1)]
@@ -75,7 +91,7 @@ proc prepareCache*(workingDir, courseDir: string; ignoreDirs: openArray[string])
       raise newException(ValueError, (
         fmt"`{name}` is associated with multiple files:" &
         cacheTable[name] &
-        fmt"Relative to {workingDir}. Use a file path in your shortcode instead."
+        fmt"Relative to {workingDir}. Use a file path in your shortcode instead. Skipping..."
       ).join(NL))
 
     elif name in cacheTable:

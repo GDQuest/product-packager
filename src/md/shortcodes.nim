@@ -19,13 +19,18 @@ proc contentsShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): 
     listBody = collect:
       for mdBlock in mdBlocks:
         if mdBlock.kind == bkHeading and mdBlock.level in levels:
-          SPACE.repeat(2 * (mdBlock.level - 2)) & "- [" & mdBlock.heading & "](#" & mdBlock.headingToAnchor & ")"
+          [ spaces(2 * (mdBlock.level - 2))
+          , fmt"- [{mdBlock.heading}](#{mdBlock.headingToAnchor})"
+          ].join
 
   if listBody.len == 0:
     result = mdBlock.render
-    warn fmt"{fileName}:{result}: No valid headings found for ToC. Skipping..."
+    warn fmt"{result}: No valid headings found for ToC. Skipping..."
   else:
-    result = @[Paragraph(@["Contents:"]), Blank(), List(listBody)].map(render).join(NL)
+    result = @[ Paragraph(@["Contents:"])
+              , Blank()
+              , List(listBody)
+              ].map(render).join(NL)
 
 
 proc linkShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): string =
@@ -40,7 +45,7 @@ proc linkShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): stri
 
   except ValueError:
     result = mdBlock.render
-    error fmt"{fileName}:{result}: {getCurrentExceptionMsg()}"
+    error fmt"{result}: {getCurrentExceptionMsg()}"
 
 
 proc includeShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): string =
@@ -50,7 +55,7 @@ proc includeShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): s
 
     let
       argName = mdBlock.args[0]
-      includeFileName = cache.findFile(argName & (if argName.endsWith(GD_EXT) or argName.endsWith(SHADER_EXT): "" else: GD_EXT))
+      includeFileName = cache.findFile(argName)
 
     result = readFile(includeFileName)
 
@@ -67,12 +72,12 @@ proc includeShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): s
 
   except ValueError:
     result = mdBlock.render
-    error fmt"{fileName}:{result}: {getCurrentExceptionMsg()}"
+    error fmt"{result}: {getCurrentExceptionMsg()}"
 
 
 proc noOpShortcode*(mdBlock: Block, mdBlocks: seq[Block], fileName: string): string =
   result = mdBlock.render
-  error fmt"{fileName}:{result}: Got malformed shortcode. Skipping..."
+  error fmt"{result}: Got malformed shortcode. Skipping..."
 
 
 const SHORTCODES* =
