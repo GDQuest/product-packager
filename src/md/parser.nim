@@ -87,6 +87,7 @@ func render*(b: Block): string =
 
 let
   newLine = regex(r"\R")
+  nonHorizontalWhitespace = regex(r"\H")
   nonNewLine = regex(r"\N")
   manySpaceOrTab = (c(' ') | c('\t')).many.join
   eol = manySpaceOrTab >> (newLine | eof)
@@ -111,16 +112,19 @@ let
     (s("](") >> ((nonNewLine << !c(')')).many & nonNewLine).join) << c(')') << eol
   ).map(x => Image(x[0], x[1]))
 
-  shortcodeToken = manySpaceOrTab >> (alphanumeric | c("._")).many.join << manySpaceOrTab
-  shortcodeSection* = manySpaceOrTab >> s("{%") >> shortcodeToken.atLeast(1).filter(x => x.len > 0) << s("%}") << manySpaceOrTab
+  shortcodeToken = manySpaceOrTab >> (nonHorizontalWhitespace.many << manySpaceOrTab << !s("%}")).join << manySpaceOrTab
+  shortcodeTokenLast = manySpaceOrTab >> nonHorizontalWhitespace.many.join << manySpaceOrTab << s("%}") << manySpaceOrTab
+  shortcodeSection* = manySpaceOrTab >> s("{%") >> (shortcodeToken.atLeast(1).filter(x => x.len > 0) & shortcodeTokenLast) << manySpaceOrTab
   shortcode = shortcodeSection.map(ShortcodeFromSeq) << eol
 
   paragraphSection* = (nonNewLine << !s("{%")).many.join << manySpaceOrTab
   paragraph = nonEmptyLine.atLeast(1).map(Paragraph)
 
   lineToCodeLine = proc(x: string): CodeLine =
-    if x.strip.startsWith("{%"): CodeLineShortcode(shortcode.parse(x).value)
-    else: CodeLineRegular(x.strip(false))
+    let parsed = shortcode.parse(x)
+    case parsed.kind
+    of success: CodeLineShortcode(parsed.value)
+    of failure: CodeLineRegular(x.strip(leading = false))
   code = (codeOpenLine & (line << !codeCloseLine).many & line << codeCloseLine).map(x => Code(x[0], x[1 .. ^1].map(lineToCodeLine)))
 
   yamlFrontMatter = (yamlOpenClose >> (line << !yamlOpenClose).many & (line << yamlOpenClose)).map(YAMLFrontMatter)

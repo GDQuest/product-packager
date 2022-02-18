@@ -259,10 +259,12 @@ proc process(appSettings: AppSettings) =
     it.toLower.endsWith(MD_EXT) and
     (appSettings.courseDir & DirSep) in it
   ):
-    let fileOut = fileIn.multiReplace(
-      (appSettings.courseDir & DirSep, appSettings.distDir & DirSep),
-      (MD_EXT, HTML_EXT)
-    )
+    let
+      fileIn = appSettings.workingDir / fileIn
+      fileOut = appSettings.workingDir / fileIn.multiReplace(
+        (appSettings.courseDir & DirSep, appSettings.distDir & DirSep),
+        (MD_EXT, HTML_EXT)
+      )
 
     var processingMsg = fmt"Processing: `{fileIn}` -> `{fileOut}`..."
     if logger.levelThreshold == lvlAll:

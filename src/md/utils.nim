@@ -58,13 +58,14 @@ proc prepareCache*(workingDir, courseDir: string; ignoreDirs: openArray[string])
 
       var blockResult: seq[string]
 
-      for path in searchDirs.mapIt(walkDirRec(workingDir / it).toSeq).concat:
-        if (path.toLower.endsWith(GD_EXT) or path.toLower.endsWith(SHADER_EXT)):
-          blockResult.add path
+      for searchDir in searchDirs:
+        for path in walkDirRec(workingDir / searchDir, relative = true).toSeq.concat:
+          if (path.toLower.endsWith(GD_EXT) or path.toLower.endsWith(SHADER_EXT)):
+            blockResult.add searchDir / path
 
-      for path in walkDirRec(workingDir / courseDir):
+      for path in walkDirRec(workingDir / courseDir, relative = true):
         if path.toLower.endsWith(MD_EXT):
-          blockResult.add path
+          blockResult.add courseDir / path
 
       blockResult
 
@@ -95,7 +96,7 @@ proc prepareCache*(workingDir, courseDir: string; ignoreDirs: openArray[string])
       ).join(NL))
 
     elif name in cacheTable:
-      return cacheTable[name][0]
+      return workingDir / cacheTable[name][0]
 
     else:
-      return name
+      return workingDir / name
