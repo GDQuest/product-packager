@@ -125,14 +125,14 @@ proc getTempDir(workingDir: string): string =
 
 
 proc resolveWorkingDir(appSettings: AppSettings): AppSettings =
-  ## Tries to find the root directory of the course project
-  ## by checking for either `CFG_FILE` or `COURSE_DIR`.
+  ## Tries to find the root directory of the course project by checking
+  ## either `CFG_FILE` or `appSettings.courseDir` exist.
   ##
   ## If a valid course project was found it returns the updated
   ## `AppSettings.workingDir`.
   result = appSettings
   for dir in appSettings.inputDir.parentDirs:
-    if (dir / CFG_FILE).fileExists or (dir / COURSE_DIR).dirExists:
+    if (dir / CFG_FILE).fileExists or (dir / result.courseDir).dirExists:
       result.workingDir = dir
       break
 
@@ -145,10 +145,11 @@ proc resolveAppSettings(appSettings: AppSettings): AppSettings =
   ##
   ## *Note* that it also stops the execution if there was an error with
   ## the given values.
-  result = appSettings.resolveWorkingDir
+  result = appSettings
   if result.courseDir == "": result.courseDir = COURSE_DIR
   if result.distDir == "": result.distDir = DIST_DIR
   if result.pandocExe == "": result.pandocExe = PANDOC_EXE
+  result = resolveWorkingDir(result)
 
   if (result.workingDir / CFG_FILE).fileExists:
     let cfg = loadConfig(result.workingDir / CFG_FILE)
