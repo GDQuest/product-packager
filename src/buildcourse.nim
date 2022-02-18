@@ -113,7 +113,9 @@ proc getDepends(contents: string): seq[string] =
       try:
         cache.findFile(it)
       except ValueError:
-        warn getCurrentExceptionMsg()
+        warn [ "While looking for dependencies I got:"
+             , getCurrentExceptionMsg()
+             ].join(NL)
         ""
     ).filterIt(it != "")
 
