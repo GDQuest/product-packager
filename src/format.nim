@@ -7,7 +7,6 @@
 ## - Marks code blocks without a language as using `gdscript`.
 ## - Add <kbd> tags around keyboard shortcuts (the form needs to be Ctrl+F1).
 
-
 import std/
   [ parseopt
   , re
@@ -271,3 +270,4 @@ when isMainModule:
 
     else:
       echo formattedContent
+
