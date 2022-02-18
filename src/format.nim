@@ -1,12 +1,3 @@
-## Auto-formats GDQuest tutorials, saving manual formatting work:
-## 
-## - Converts space-based indentations to tabs in code blocks.
-## - Fills GDScript code comments as paragraphs.
-## - Wraps symbols and numeric values in code.
-## - Wraps other capitalized names, pascal case values into italics (we assume they're node names).
-## - Marks code blocks without a language as using `gdscript`.
-## - Add <kbd> tags around keyboard shortcuts (the form needs to be Ctrl+F1).
-
 import std/
   [ parseopt
   , re
@@ -24,7 +15,9 @@ import md/
   ]
 
 
-const HelpMessage = """
+const HELP_MESSAGE = """
+{getAppFilename().extractFilename} [options] file [file...]
+
 Auto-formats markdown documents, saving manual formatting work:
 
 - Converts space-based indentations to tabs in code blocks.
@@ -34,15 +27,10 @@ Auto-formats markdown documents, saving manual formatting work:
 - Marks code blocks without a language as using `gdscript`.
 - Add <kbd> tags around keyboard shortcuts (the form needs to be Ctrl+F1).
 
-How to use:
-
-format_tutorials [options] <input-file> [<input-file> ...]
-
 Options:
-
--i/--in-place: Overwrite the input files with the formatted output.
--o/--output-dir: Write the formatted output to the specified directory.
--h/--help: Prints this help message."""
+  -i, --in-place        overwrite the input files with the formatted output.
+  -h, --help            prints this help message.
+  -o, --output-dir:DIR  write the formatted output to the specified directory."""
 
 
 const
@@ -246,14 +234,14 @@ proc getAppSettings(): AppSettings =
 
     of cmdLongOption, cmdShortOption:
       case key
-      of "help", "h": HelpMessage.quit(QuitSuccess)
+      of "help", "h": HELP_MESSAGE.quit(QuitSuccess)
       of "in-place", "i": result.inPlace = true
       of "output-dir", "o":
         if isValidFilename(value): result.outputDir = value
-        else: [fmt"Invalid output directory: {value}", "", HelpMessage].join(NL).quit
-      else: [fmt"Invalid option: {key}", "", HelpMessage].join(NL).quit
+        else: [fmt"Invalid output directory: {value}", "", HELP_MESSAGE].join(NL).quit
+      else: [fmt"Invalid option: {key}", "", HELP_MESSAGE].join(NL).quit
 
-  if result.inputFiles.len == 0: ["No input files specified.", "", HelpMessage].join(NL).quit
+  if result.inputFiles.len == 0: ["No input files specified.", "", HELP_MESSAGE].join(NL).quit
 
 
 when isMainModule:

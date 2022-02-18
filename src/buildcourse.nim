@@ -57,7 +57,7 @@ Options:
   -f, --force           run Pandoc even if course files are older than
                         the existing output files.
                         Default: false.
-  -h, --help            this help message.
+  -h, --help            print this help message.
       --clean           remove Pandoc output directory.
                         Default: false.
   -i, --ignore-dir:DIR  add DIR to a list to ignore when caching Markdown,
