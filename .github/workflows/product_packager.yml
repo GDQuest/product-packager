@@ -17,8 +17,9 @@ jobs:
       - uses: egor-tensin/setup-mingw@v2
       - uses: jiro4989/setup-nim-action@v1
         with:
-          nim-version: '1.6.0'
+          nim-version: '1.6.4'
       - run: |
+          git clone https://github.com/godotengine/godot.git
           nimble -y build
           nimble -y build -d:mingw
       - name: Upload artifact
