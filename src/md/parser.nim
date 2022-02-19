@@ -87,7 +87,6 @@ func render*(b: Block): string =
 
 let
   newLine = regex(r"\R")
-  nonHorizontalWhitespace = regex(r"\H")
   nonNewLine = regex(r"\N")
   manySpaceOrTab = (c(' ') | c('\t')).many.join
   eol = manySpaceOrTab >> (newLine | eof)
