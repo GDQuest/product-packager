@@ -112,9 +112,8 @@ let
     (s("](") >> ((nonNewLine << !c(')')).many & nonNewLine).join) << c(')') << eol
   ).map(x => Image(x[0], x[1]))
 
-  shortcodeToken = manySpaceOrTab >> (nonHorizontalWhitespace.many << manySpaceOrTab << !s("%}")).join << manySpaceOrTab
-  shortcodeTokenLast = manySpaceOrTab >> nonHorizontalWhitespace.many.join << manySpaceOrTab << s("%}") << manySpaceOrTab
-  shortcodeSection* = manySpaceOrTab >> s("{%") >> (shortcodeToken.atLeast(1).filter(x => x.len > 0) & shortcodeTokenLast) << manySpaceOrTab
+  shortcodeToken = manySpaceOrTab >> (alphanumeric | c(r"./\-_")).many.join << manySpaceOrTab
+  shortcodeSection* = manySpaceOrTab >> s("{%") >> (shortcodeToken.atLeast(1).filter(x => x.len > 0)) << manySpaceOrTab << s("%}") << manySpaceOrTab
   shortcode = shortcodeSection.map(ShortcodeFromSeq) << eol
 
   paragraphSection* = (nonNewLine << !s("{%")).many.join << manySpaceOrTab

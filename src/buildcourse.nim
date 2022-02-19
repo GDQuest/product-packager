@@ -122,8 +122,8 @@ proc getDepends(contents: string): seq[string] =
 
 proc getTempDir(workingDir: string): string =
   ## Returns a random directory name in the `workingDir` folder.
-  ## For example: `workingDir/.tmp-12345678`.
-  workingDir / [".tmp-", urandom(RAND_LEN).join[0 ..< RAND_LEN]].join
+  ## For example: `workingDir/tmp-12345678`.
+  workingDir / ["tmp-", urandom(RAND_LEN).join[0 ..< RAND_LEN]].join
 
 
 proc resolveWorkingDir(appSettings: AppSettings): AppSettings =

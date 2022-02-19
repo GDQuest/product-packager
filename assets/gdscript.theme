@@ -26,16 +26,16 @@
             "underline": false
         },
         "SpecialChar": {
-            "text-color": "#049b0a",
-            "background-color": "#ff0000",
+            "text-color": "#e6db74",
+            "background-color": null,
             "bold": false,
             "italic": false,
             "underline": false
         },
         "Preprocessor": {
-            "text-color": null,
-            "background-color": "#ff0000",
-            "bold": true,
+            "text-color": "#f92672",
+            "background-color": null,
+            "bold": false,
             "italic": false,
             "underline": false
         },
@@ -166,15 +166,15 @@
             "underline": false
         },
         "DataType": {
-            "text-color": "#f8f8f2",
-            "background-color": "#ff0000",
+            "text-color": "#6ec42d",
+            "background-color": null,
             "bold": false,
             "italic": false,
-            "underline": true
+            "underline": false
         },
         "Char": {
             "text-color": "#e6db74",
-            "background-color": "#ff0000",
+            "background-color": null,
             "bold": false,
             "italic": false,
             "underline": false

@@ -82,17 +82,13 @@ proc prepareCache*(workingDir, courseDir: string; ignoreDirs: openArray[string])
           .sorted((x, y) => cmp(x.score, y.score), Descending)[0 .. min(5, filteredCandidates.len - 1)]
           .mapIt("\t" & it.path)
 
-      raise newException(ValueError, (
-        fmt"`{name}` doesn't exist. Possible candidates:" &
-        candidates &
-        "Skipping..."
-      ).join(NL))
+      raise newException(ValueError, (fmt"`{name}` doesn't exist. Possible candidates:" & candidates).join(NL))
 
     elif name in cacheTable and cacheTable[name].len != 1:
       raise newException(ValueError, (
         fmt"`{name}` is associated with multiple files:" &
         cacheTable[name] &
-        fmt"Relative to {workingDir}. Use a file path in your shortcode instead. Skipping..."
+        fmt"Relative to {workingDir}. Use a file path in your shortcode instead."
       ).join(NL))
 
     elif name in cacheTable:
