@@ -19,7 +19,10 @@ proc contentsShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): 
 
   if mdBlock.args.len > 1:
     result = mdBlock.render
-    error fmt"{result}: Got {mdBlock.args.len} number of arguments, but expected 1 or less. {SYNOPSIS}. Skipping..."
+    error fmt"{SYNOPSIS}:"
+    error [ fmt"{result}: Got {mdBlock.args.len}"
+          , "number of arguments, but expected 1 or less. Skipping..."
+          ].join(SPACE)
     return result
 
   let
@@ -28,7 +31,11 @@ proc contentsShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): 
         if mdBlock.args.len == 0: DEFAULT_LEVELS else: parseInt(mdBlock.args[0])
 
       except ValueError:
-        warn fmt"{mdBlock.render}: Got {mdBlock.args.join}, but expected integer argument. {SYNOPSIS}. Defaulting to `number = 3`."
+        error fmt"{SYNOPSIS}:"
+        error [ fmt"{mdBlock.render}: Got `{mdBlock.args.join}`,"
+              , "but expected integer argument."
+              , fmt"Defaulting to `number = {DEFAULT_LEVELS}`."
+              ].join(SPACE)
         DEFAULT_LEVELS
     )
     headingToAnchor = proc(b: Block): string = b.heading.toLower.multiReplace({SPACE: "-", "'": "", "?": "", "!": ""})
@@ -54,7 +61,10 @@ proc linkShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): stri
   const SYNOPSIS = "Synopsis: `{% link fileName[.md] %}`"
   if mdBlock.args.len != 1:
     result = mdBlock.render
-    error fmt"{result}: Got invalid number of arguments. {SYNOPSIS}. Skipping..."
+    error fmt"{SYNOPSIS}:"
+    error [ fmt"{result}: Got {mdBlock.args.len}"
+          , "number of arguments, but expected exactly 1 argument. Skipping..."
+          ].join(SPACE)
     return result
 
   try:
@@ -68,14 +78,15 @@ proc linkShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): stri
 
   except ValueError:
     result = mdBlock.render
-    error [fmt"{result}: {getCurrentExceptionMsg()}.", "{SYNOPSIS}. Skipping..."].join(NL)
+    error [fmt"{result}: {getCurrentExceptionMsg()}", "{SYNOPSIS}. Skipping..."].join(NL)
 
 
 proc includeShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): string =
-  const SYNOPSIS = "Synopsis: `{% include fileName(.gd | .shader) [anchorName] %}`"
+  const SYNOPSIS = "Synopsis: `{% include fileName(.gd|.shader) [anchorName] %}`"
   if mdBlock.args.len > 2:
     result = mdBlock.render
-    error fmt"{result}: Got {mdBlock.args.len} arguments, but expected 2 or less. {SYNOPSIS}."
+    error fmt"{SYNOPSIS}:"
+    error fmt"{result}: Got {mdBlock.args.len} arguments, but expected 2 or less. Skippinng..."
     return result
 
   try:
@@ -92,7 +103,7 @@ proc includeShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): s
 
       var matches: array[1, string]
       if not result.contains(regexAnchor, matches):
-        raise newException(ValueError, "Can't find matching contents for anchor. {SYNOPSIS}.")
+        raise newException(ValueError, "Can't find matching contents for anchor. {SYNOPSIS}")
 
       result = matches[0]
 
