@@ -55,7 +55,7 @@ proc preprocessCodeLine(cl: CodeLine, mdBlocks: seq[Block]; fileName: string): s
 proc preprocessBlock(mdBlock: Block, mdBlocks: seq[Block]; fileName: string): string =
   case mdBlock.kind
   of bkShortcode:
-    SHORTCODES.getOrDefault(mdBlock.name)(mdBlock, mdBlocks, fileName)
+    SHORTCODES.getOrDefault(mdBlock.name, noOpShortcode)(mdBlock, mdBlocks, fileName)
 
   of bkParagraph:
     mdBlock.body.mapIt(it.toParagraphLine.preprocessParagraphLine(mdBlocks, fileName)).join(NL)
