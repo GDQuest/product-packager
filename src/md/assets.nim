@@ -10,10 +10,9 @@ import std/
 const
   XML_EXT = ".xml"
   SVG_EXT = ".svg"
-  DIR_GODOT = currentSourcePath.parentDir / ".." / ".." / "godot"
-  DIR_GODOT_ICONS = DIR_GODOT / "editor" / "icons"
-  DIR_GODOT_DOC_CLASSES = DIR_GODOT / "doc" / "classes"
-  DIR_GODOT_MODULES = DIR_GODOT / "modules"
+  DIR_GODOT_ICONS = "../../godot/editor/icons"
+  DIR_GODOT_DOC_CLASSES = "../../godot/doc/classes"
+  DIR_GODOT_MODULES = "../../godot/modules"
 
   CACHE_GODOT_BUILTIN_CLASSES* = block:
     var result: seq[string]
