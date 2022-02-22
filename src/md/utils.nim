@@ -1,6 +1,5 @@
 import std/
   [ algorithm
-  , logging
   , os
   , sequtils
   , strformat
@@ -25,10 +24,6 @@ type Cache = tuple[ files: seq[string]
                   , table: Table[string, seq[string]]
                   , findFile: string -> string
                   ]
-
-
-let logger* = newConsoleLogger(lvlWarn, useStderr = true)
-addHandler(logger)
 
 
 var cache*: Cache ## |

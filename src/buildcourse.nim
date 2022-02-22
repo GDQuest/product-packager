@@ -9,12 +9,14 @@ import std/
   , strformat
   , strutils
   , sysrand
+  , terminal
   ]
 import md/
   [ preprocess
   , utils
   ]
 import assets
+import customlogger
 
 
 const
@@ -113,9 +115,11 @@ proc getDepends(contents: string): seq[string] =
       try:
         cache.findFile(it)
       except ValueError:
-        warn [ "While looking for dependencies I got:"
+        setForegroundColor(fgYellow)
+        warn [ fmt"While looking for dependencies I got:"
              , getCurrentExceptionMsg()
              ].join(NL)
+        setForegroundColor(fgDefault)
         ""
     ).filterIt(it != "")
 
@@ -320,4 +324,5 @@ when isMainModule:
     fmt"Removing `{appSettings.workingDir / appSettings.distDir}`. Exiting.".quit(QuitSuccess)
 
   process(appSettings)
+  stdout.resetAttributes()
 
