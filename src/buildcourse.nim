@@ -301,12 +301,15 @@ proc process(appSettings: AppSettings) =
                 , "-"
                 ].join(SPACE)
 
-      let pandocResult = execCmdEx(cmd, {poEchoCmd}, input = preprocess(fileIn, fileInContents))
+      let pandocResult = execCmdEx(cmd, {poEchoCmd, poStdErrToStdOut}, input = preprocess(fileIn, fileInContents))
       if pandocResult.output.strip != "" and pandocResult.exitCode == QuitSuccess:
-        info fmt"{fileIn}:{pandocResult.output}"
+        info fmt"{fileIn}:"
+        info "\t{pandocResult.output}".fmt
 
       elif pandocResult.exitCode != QuitSuccess:
-        error fmt"{fileIn}:{pandocResult.output.strip}. Skipping..."
+        error fmt"{fileIn}:"
+        error "\t{pandocResult.output.strip}".fmt
+        error "Skipping..."
 
     elif logger.levelThreshold == lvlAll:
       info processingMsg
