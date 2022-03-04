@@ -270,7 +270,7 @@ proc process(appSettings: AppSettings) =
         (MD_EXT, HTML_EXT)
       )
 
-    var processingMsg = fmt"Processing: `{fileIn}` -> `{fileOut}`..."
+    var processingMsg = fmt"Processing `{fileIn}` -> `{fileOut}`..."
     if logger.levelThreshold == lvlAll:
       info ""
       info processingMsg
@@ -287,7 +287,7 @@ proc process(appSettings: AppSettings) =
         fileInContents.getDepends.anyIt(it.fileNewer(fileOut))
       )
 
-    processingMsg = fmt"{fileIn} and its dependencies are older than {fileOut}. Skipping..."
+    processingMsg = fmt"`{fileIn}` and its dependencies are older than `{fileOut}`. Skipping..."
     if doProcess:
       createDir(fileOut.parentDir)
       info fmt"Creating output `{fileOut.parentDir}` directory..."
@@ -301,15 +301,15 @@ proc process(appSettings: AppSettings) =
                 , "-"
                 ].join(SPACE)
 
-      let pandocResult = execCmdEx(cmd, {poEchoCmd, poStdErrToStdOut}, input = preprocess(fileIn, fileInContents))
+      let
+        processOptions = if logger.levelThreshold == lvlAll: {poEchoCmd, poStdErrToStdOut} else: {poStdErrToStdOut}
+        pandocResult = execCmdEx(cmd, processOptions, input = preprocess(fileIn, fileInContents))
+
       if pandocResult.output.strip != "" and pandocResult.exitCode == QuitSuccess:
-        info fmt"{fileIn}:"
-        info "\t{pandocResult.output}".fmt
+        info [fmt"`{fileIn}`", "{pandocResult.output}".fmt].join(NL)
 
       elif pandocResult.exitCode != QuitSuccess:
-        error fmt"{fileIn}:"
-        error "\t{pandocResult.output.strip}".fmt
-        error "Skipping..."
+        error [fmt"`{fileIn}`", "{pandocResult.output.strip}".fmt, "Skipping..."].join(NL)
 
     elif logger.levelThreshold == lvlAll:
       info processingMsg

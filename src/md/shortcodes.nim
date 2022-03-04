@@ -61,10 +61,11 @@ proc linkShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): stri
   const SYNOPSIS = "Synopsis: `{% link fileName[.md] %}`"
   if mdBlock.args.len != 1:
     result = mdBlock.render
-    error fmt"{SYNOPSIS}:"
-    error [ fmt"{result}: Got {mdBlock.args.len}"
-          , "number of arguments, but expected exactly 1 argument. Skipping..."
-          ].join(SPACE)
+    error [ fmt"{SYNOPSIS}:"
+          , [ fmt"{result}: Got {mdBlock.args.len}"
+            , "number of arguments, but expected exactly 1 argument. Skipping..."
+            ].join(SPACE)
+          ].join(NL)
     return result
 
   try:
@@ -85,8 +86,9 @@ proc includeShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): s
   const SYNOPSIS = "Synopsis: `{% include fileName(.gd|.shader) [anchorName] %}`"
   if mdBlock.args.len > 2:
     result = mdBlock.render
-    error fmt"{SYNOPSIS}:"
-    error fmt"{result}: Got {mdBlock.args.len} arguments, but expected 2 or less. Skippinng..."
+    error [ fmt"{SYNOPSIS}:"
+          , fmt"{result}: Got {mdBlock.args.len} arguments, but expected 2 or less. Skippinng..."
+          ].join(NL)
     return result
 
   try:
