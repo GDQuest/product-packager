@@ -15,8 +15,8 @@ type
     bkCode = "Code",
     bkShortcode = "Shortcode",
     bkImage = "Image",
-    bkParagraph = "Paragraph",
     bkList = "List",
+    bkParagraph = "Paragraph",
     bkBlockQuote = "BlockQuote",
     bkYAMLFrontMatter = "YAMLFrontMatter",
     bkTable = "Table",
@@ -30,12 +30,14 @@ type
     of bkCode:
       language*: string
       code*: seq[CodeLine]
-    of bkImage:
-      alt*: string
-      path*: string
     of bkShortcode:
       name*: string
       args*: seq[string]
+    of bkImage:
+      alt*: string
+      path*: string
+    of bkList:
+      items*: seq[ListItem]
     of bkParagraph .. bkHTML:
       body*: seq[string]
     else: discard
@@ -49,6 +51,10 @@ type
     of clkShortcode: shortcode*: Block
     of clkRegular: line*: string
 
+  ListItem* = object
+    form*: string
+    item*: string
+
 func render*(b: Block): string
 
 func CodeLineRegular*(line: string): CodeLine = CodeLine(kind: clkRegular, line: line)
@@ -59,6 +65,8 @@ func render*(cl: CodeLine): string =
     of clkShortcode: cl.shortcode.render
     of clkRegular: cl.line
 
+func render*(li: ListItem): string = [li.form, li.item].join(SPACE)
+
 
 func Blank*(): Block = Block(kind: bkBlank)
 func Heading*(level: int, heading: string): Block = Block(kind: bkHeading, level: level, heading: heading.strip)
@@ -67,8 +75,8 @@ func Image*(alt: string, path: string): Block = Block(kind: bkImage, alt: alt, p
 func Shortcode*(name: string, args: seq[string]): Block = Block(kind: bkShortcode, name: name, args: args)
 func ShortcodeFromSeq*(x: seq[string]): Block =
   if x.len == 0: Shortcode("", @[]) else: Shortcode(x[0], x[1..^1])
+func List*(items: seq[ListItem]): Block = Block(kind: bkList, items: items)
 func Paragraph*(body: seq[string]): Block = Block(kind: bkParagraph, body: body)
-func List*(body: seq[string]): Block = Block(kind: bkList, body: body)
 func BlockQuote*(body: seq[string]): Block = Block(kind: bkBlockQuote, body: body)
 func YAMLFrontMatter*(body: seq[string]): Block = Block(kind: bkYAMLFrontMatter, body: body)
 func Table*(body: seq[string]): Block = Block(kind: bkTable, body: body)
@@ -81,6 +89,7 @@ func render*(b: Block): string =
     of bkCode: (@["```" & b.language] & b.code.map(render) & @["```"]).join(NL)
     of bkImage: "![" & b.alt & "](" & b.path & ")"
     of bkShortcode: ["{%", (@[b.name] & b.args).join(SPACE), "%}"].join(SPACE)
+    of bkList: b.items.map(render).join(NL)
     of bkYAMLFrontMatter: (@["---"] & b.body & @["---"]).join(NL)
     else: b.body.join(NL)
 
@@ -93,9 +102,10 @@ let
 
 
 let
-  nonEmptyLine = nonNewLine.atLeast(1).join << eol
+  nonEmptyLine = (nonNewLine.atLeast(1).join << eol).map(x => x.strip(leading = false))
   line = eol | nonEmptyLine
-  listLine = (manySpaceOrTab & regex(r"-\h+?|([a-z]|[0-9]|#)+\.\h+?") & nonEmptyLine).join
+  listStart = (manySpaceOrTab & regex(r"-\h+?|([a-z]|[0-9]|#)+\.\h+?").map(x => x.strip)).join
+  listItem = (listStart & nonEmptyLine & (!listStart >> manySpaceOrTab >> nonEmptyLine).many).map(x => ListItem(form: x[0], item: x[1 .. ^1].join(SPACE)))
   blockQuoteLine = (s(">") & manySpaceOrTab & nonEmptyLine).join
   (codeOpenLine, codeCloseLine) = (s("```") >> nonNewLine.many.join << newLine, s("```") << eol)
   yamlOpenClose = (s("---") << eol)
@@ -104,7 +114,7 @@ let
 let
   blank = eol.result(Blank())
   heading = ((c('#').atLeast(1).join << manySpaceOrTab) & nonEmptyLine).map(x => Heading(x[0].len, x[1]))
-  list = listLine.atLeast(1).map(List)
+  list = listItem.atLeast(1).map(List)
   blockQuote = blockQuoteLine.atLeast(1).map(BlockQuote)
   image = (
     s("![") >> ((nonNewLine << !c(']')).many & nonNewLine).optional.join &
@@ -136,4 +146,3 @@ proc parse*(contents: string): seq[Block] =
     case parsed.kind
         of failure: error parsed.error
         of success: return parsed.value
-

@@ -142,28 +142,7 @@ proc formatLine(line: string): string =
       line = rest
 
 
-proc formatList(lines: seq[string]): seq[string] =
-  ## Returns the formatted sequence of `lines` using the GDQuest standard.
-  ##
-  ## `lines` is a sequence representing a markdown list. One item can span
-  ## multiple lines, in which case they get concatenated before formatting.
-  var
-    lines = lines
-    linesStart: seq[string]
-    i = 0
-
-  while i < lines.len:
-    let bound = lines[i].matchLen(RegexStartOfList)
-    if bound != -1:
-      linesStart.add(lines[i][0 ..< bound])
-      lines[i] = lines[i][bound .. ^1]
-      i.inc
-    elif i > 0:
-      lines[i - 1].add SPACE & lines[i].strip()
-      lines.delete(i)
-
-  for (lineStart, line) in zip(linesStart, lines):
-    result.add(lineStart & line.formatLine)
+proc formatList(items: seq[ListItem]): seq[string] = items.mapIt([it.form, it.item.formatLine].join(SPACE))
 
 
 proc formatCodeLine(codeLine: CodeLine): string =
@@ -190,7 +169,7 @@ proc formatCodeLine(codeLine: CodeLine): string =
 
     codeLine.line[bound .. ^1]
       .strip.wrapWords(wrapLen, splitLongWords=false)
-      .splitLines.map(x => [indent, x].join(sep))
+      .splitLines.mapIt([indent, it].join(sep))
       .join(NL)
 
 
@@ -207,7 +186,7 @@ proc formatBlock(mdBlock: Block): string =
     partialResult.add OPEN_CLOSE
 
   of bkList:
-    partialResult.add mdBlock.body.formatList
+    partialResult.add mdBlock.items.formatList
 
   of bkParagraph:
     partialResult.add mdBlock.body.map(formatLine)

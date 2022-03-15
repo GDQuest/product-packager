@@ -61,7 +61,7 @@ proc preprocessBlock(mdBlock: Block, mdBlocks: seq[Block]; fileName: string): st
     mdBlock.body.mapIt(it.toParagraphLine.preprocessParagraphLine(mdBlocks, fileName)).join(NL)
 
   of bkList:
-    mdBlock.body.map(addGodotIcon).join(NL)
+    mdBlock.items.mapIt(it.render.addGodotIcon).join(NL)
 
   of bkCode:
     [ fmt"```{mdBlock.language}"

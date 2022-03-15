@@ -38,22 +38,20 @@ proc contentsShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): 
               ].join(SPACE)
         DEFAULT_LEVELS
     )
-    headingToAnchor = proc(b: Block): string = b.heading.toLower.multiReplace({SPACE: "-", "'": "", "?": "", "!": ""})
-    listBody = collect:
+    headingToAnchor = proc(b: Block): string = b.heading.toLower.multiReplace({SPACE: "-", "'": "", "?": "", "!": "", ":": ""})
+    listItems = collect:
       for mdBlock in mdBlocks:
         if mdBlock.kind == bkHeading and mdBlock.level in levels:
-          [ spaces(2 * (mdBlock.level - 2))
-          , fmt"- [{mdBlock.heading}](#{mdBlock.headingToAnchor})"
-          ].join
+          ListItem(form: spaces(2 * (mdBlock.level - 2)), item: fmt"- [{mdBlock.heading}](#{mdBlock.headingToAnchor})")
 
-  if listBody.len == 0:
+  if listItems.len == 0:
     result = mdBlock.render
     warn fmt"{result}: No valid headings found for ToC. Skipping..."
 
   else:
     result = @[ Paragraph(@["Contents:"])
               , Blank()
-              , List(listBody)
+              , List(listItems)
               ].map(render).join(NL)
 
 

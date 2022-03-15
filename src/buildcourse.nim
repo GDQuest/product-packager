@@ -185,7 +185,7 @@ proc resolveAppSettings(appSettings: AppSettings): AppSettings =
 proc getAppSettings(): AppSettings =
   ## Returns an `AppSettings` object with appropriate values. It stops the
   ## execution if invalid values were found.
-  result.inputDir = "."
+  result.inputDir = ".".absolutePath
   result.workingDir = result.inputDir
 
   for kind, key, value in getopt(
@@ -196,7 +196,7 @@ proc getAppSettings(): AppSettings =
     of cmdEnd: break
 
     of cmdArgument:
-      if dirExists(key): result.inputDir = key
+      if dirExists(key): result.inputDir = key.absolutePath
       else: fmt"Invalid input directory: `{key}`".quit
 
     of cmdLongOption, cmdShortOption:
@@ -265,7 +265,7 @@ proc process(appSettings: AppSettings) =
   ):
     let
       fileIn = appSettings.workingDir / fileIn
-      fileOut = appSettings.workingDir / fileIn.multiReplace(
+      fileOut = fileIn.multiReplace(
         (appSettings.courseDir & DirSep, appSettings.distDir & DirSep),
         (MD_EXT, HTML_EXT)
       )

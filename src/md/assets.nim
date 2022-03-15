@@ -41,6 +41,10 @@ const
 
     result
 
-  CACHE_BLACKLIST* = [ "Godot"
+  CACHE_BLACKLIST* = [ "2D"
+                     , "3D"
+                     , "Godot"
                      , "GDScript"
-                     ]
+                     , "GDQuest"
+                     , "UI"
+                     ].sorted((x, y) => cmp(x.len, y.len), Descending)
