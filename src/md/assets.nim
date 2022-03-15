@@ -40,3 +40,7 @@ const
         result[path.splitFile.name] = staticRead(fmt"../../{path}")
 
     result
+
+  CACHE_BLACKLIST* = [ "Godot"
+                     , "GDScript"
+                     ]

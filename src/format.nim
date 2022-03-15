@@ -79,10 +79,11 @@ func regexWrap(regexes: seq[Regex], pair: (string, string)): string -> (string, 
   ## The function returns a tuple:
   ## - `(text wrapped by pair, rest of text)` if there's a regex match.
   ## - `("", text)` if there's no regex match.
+  let RegexBlacklist = re([r"\b(", CACHE_BLACKLIST.join("|"), r")\b"].join)
   return func(text: string): (string, string) =
     for regex in regexes:
       let bound = text.matchLen(regex)
-      if bound == -1: continue
+      if bound == -1 or text.match(RegexBlacklist): continue
       return (pair[0] & text[0 ..< bound] & pair[1], text[bound .. ^1])
     return ("", text)
 
@@ -157,7 +158,7 @@ proc formatList(lines: seq[string]): seq[string] =
       linesStart.add(lines[i][0 ..< bound])
       lines[i] = lines[i][bound .. ^1]
       i.inc
-    else:
+    elif i > 0:
       lines[i - 1].add SPACE & lines[i].strip()
       lines.delete(i)
 

@@ -95,7 +95,7 @@ let
 let
   nonEmptyLine = nonNewLine.atLeast(1).join << eol
   line = eol | nonEmptyLine
-  listLine = (manySpaceOrTab & regex(r"-|([a-z]|[0-9]|#)+\.") & nonEmptyLine).join
+  listLine = (manySpaceOrTab & regex(r"-\h+?|([a-z]|[0-9]|#)+\.\h+?") & nonEmptyLine).join
   blockQuoteLine = (s(">") & manySpaceOrTab & nonEmptyLine).join
   (codeOpenLine, codeCloseLine) = (s("```") >> nonNewLine.many.join << newLine, s("```") << eol)
   yamlOpenClose = (s("---") << eol)
