@@ -37,7 +37,7 @@ proc prepareCache*(workingDir, courseDir: string; ignoreDirs: openArray[string])
   ##                     base names and values being a sequence of paths.
   ##                     One key can have multiple paths associated with it in
   ##                     which case it isn't clear which to use with
-  ##                     `{% link ... %}` and `{% include ... %}` shortcodes.
+  ##                     `{{ link ... }}` and `{{ include ... }}` shortcodes.
   ##   - `return.findFile`: `string -> string` is the function that searches for
   ##                        paths in both `return.files` and `return.table`.
   ##                        It raises a `ValueError` if:

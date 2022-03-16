@@ -14,7 +14,7 @@ import utils
 
 proc contentsShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): string =
   const
-    SYNOPSIS = "Synopsis: `{% contents [maxLevel] %}`"
+    SYNOPSIS = "Synopsis: `{{ contents [maxLevel] }}`"
     DEFAULT_MAX_LEVEL = 3
 
   if mdBlock.args.len > 1:
@@ -55,7 +55,7 @@ proc contentsShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): 
 
 
 proc linkShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): string =
-  const SYNOPSIS = "Synopsis: `{% link fileName[.md] [text] %}`"
+  const SYNOPSIS = "Synopsis: `{{ link fileName[.md] [text] }}`"
   if mdBlock.args.len == 0:
     result = mdBlock.render
     error [ fmt"{SYNOPSIS}:"
@@ -79,7 +79,7 @@ proc linkShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): stri
 
 
 proc includeShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): string =
-  const SYNOPSIS = "Synopsis: `{% include fileName(.gd|.shader) [anchorName] %}`"
+  const SYNOPSIS = "Synopsis: `{{ include fileName(.gd|.shader) [anchorName] }}`"
   if mdBlock.args.len > 2:
     result = mdBlock.render
     error [ fmt"{SYNOPSIS}:"

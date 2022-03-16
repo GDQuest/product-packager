@@ -75,7 +75,7 @@ Options:
   -v, --verbose         print extra information when building the course.
 
 Shortcodes:
-  {{% contents [maxLevel] %}}
+  {{{{ contents [maxLevel] }}}}
     This shortcode is replaced by a Table of Contents (ToC) with links generated
     from the available headings.
 
@@ -84,7 +84,7 @@ Shortcodes:
 
     Note that the ToC does not include the title-level heading.
 
-  {{% link fileName[.md] [text [text]] %}}
+  {{{{ link fileName[.md] [text [text]] }}}}
     This shortcode is replaced by a link of the form:
     `[fileName](path-to-fileName.html)`.
 
@@ -92,10 +92,10 @@ Shortcodes:
     `[text](path-to-fileName.html)`.
 
     Note that `text` can be a multi-word string, for example
-    {{% link learn-to-code-how-to-ask-questions How to ask questions %}} will result in:
+    {{{{ link learn-to-code-how-to-ask-questions How to ask questions }}}} will result in:
     `[How to ask questions](path-to-learn-to-code-how-to-ask-questions.html)`
 
-  {{% include fileName(.gd|.shader) [anchorName] %}}
+  {{{{ include fileName(.gd|.shader) [anchorName] }}}}
     This shortcode is replaced by the contents of `fileName(.gd|.shader)`.
 
     If the `anchorName` optional argument is given, the contents within the named anchor
@@ -112,9 +112,9 @@ Shortcodes:
     For `.shader` files replace # with //."""
 
 
-let RegexDepends = re"{%\h*include\h*(\H+).*\h*%}" ## |
+let RegexDepends = re"{(%|{)\h*include\h*(\H+).*\h*(%|})}" ## |
   ## Extract the file name or path to calculate GDScript/Shader dependencies
-  ## based on the `{% include ... %}` shortcode.
+  ## based on the `{{ include ... }}` shortcode.
 
 
 type AppSettings = object
@@ -144,7 +144,7 @@ func `$`(appSettings: AppSettings): string =
 
 proc getDepends(contents: string): seq[string] =
   ## Finds course files GDScript and Shader dependencies based on
-  ## the `{% include ... %}` shortcode.
+  ## the `{{ include ... }}` shortcode.
   contents
     .findAll(RegexDepends)
     .mapIt(it.replacef(RegexDepends, "$1")).deduplicate

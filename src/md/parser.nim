@@ -88,7 +88,7 @@ func render*(b: Block): string =
     of bkHeading: '#'.repeat(b.level) & SPACE & b.heading
     of bkCode: (@["```" & b.language] & b.code.map(render) & @["```"]).join(NL)
     of bkImage: "![" & b.alt & "](" & b.path & ")"
-    of bkShortcode: ["{%", (@[b.name] & b.args).join(SPACE), "%}"].join(SPACE)
+    of bkShortcode: ["{{", (@[b.name] & b.args).join(SPACE), "}}"].join(SPACE)
     of bkList: b.items.map(render).join(NL)
     of bkYAMLFrontMatter: (@["---"] & b.body & @["---"]).join(NL)
     else: b.body.join(NL)
@@ -122,10 +122,10 @@ let
   ).map(x => Image(x[0], x[1]))
 
   shortcodeToken = manySpaceOrTab >> (alphanumeric | c(r"./\-_")).many.join << manySpaceOrTab
-  shortcodeSection* = manySpaceOrTab >> s("{%") >> (shortcodeToken.atLeast(1).filter(x => x.len > 0)) << manySpaceOrTab << s("%}") << manySpaceOrTab
+  shortcodeSection* = manySpaceOrTab >> (s("{%") | s("{{")) >> (shortcodeToken.atLeast(1).filter(x => x.len > 0)) << manySpaceOrTab << (s("%}") | s("}}")) << manySpaceOrTab
   shortcode = shortcodeSection.map(ShortcodeFromSeq) << eol
 
-  paragraphSection* = (nonNewLine << !s("{%")).many.join << manySpaceOrTab
+  paragraphSection* = (nonNewLine << !(s("{%") | s("{{"))).many.join << manySpaceOrTab
   paragraph = nonEmptyLine.atLeast(1).map(Paragraph)
 
   lineToCodeLine = proc(x: string): CodeLine =
@@ -146,3 +146,9 @@ proc parse*(contents: string): seq[Block] =
     case parsed.kind
         of failure: error parsed.error
         of success: return parsed.value
+
+
+when isMainModule:
+  const C = """
+{% include test.gd blah %}"""
+  echo shortcode.parse(C)
