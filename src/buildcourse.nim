@@ -72,7 +72,44 @@ Options:
                           - The Pandoc outut directory is automatically
                             added to the ignored list.
   -p, --pandoc-exe:PATH Pandoc executable path or name.
-  -v, --verbose         print extra information when building the course."""
+  -v, --verbose         print extra information when building the course.
+
+Shortcodes:
+  {{% contents [maxLevel] %}}
+    This shortcode is replaced by a Table of Contents (ToC) with links generated
+    from the available headings.
+
+    The optional `maxLevel` argument denotes the maximum heading level to include
+    in the ToC.
+
+    Note that the ToC does not include the title-level heading.
+
+  {{% link fileName[.md] [text [text]] %}}
+    This shortcode is replaced by a link of the form:
+    `[fileName](path-to-fileName.html)`.
+
+    If the `text` optional argument is given, the link will take the form:
+    `[text](path-to-fileName.html)`.
+
+    Note that `text` can be a multi-word string, for example
+    {{% link learn-to-code-how-to-ask-questions How to ask questions %}} will result in:
+    `[How to ask questions](path-to-learn-to-code-how-to-ask-questions.html)`
+
+  {{% include fileName(.gd|.shader) [anchorName] %}}
+    This shortcode is replaced by the contents of `fileName(.gd|.shader)`.
+
+    If the `anchorName` optional argument is given, the contents within the named anchor
+    is included instead of the whole file.
+
+    Note that the anchor format for `.gd` files is:
+
+    ```
+    # ANCHOR: anchorName
+    relevant content in fileName.gd
+    # END: anchorName
+    ```
+
+    For `.shader` files replace # with //."""
 
 
 let RegexDepends = re"{%\h*include\h*(\H+).*\h*%}" ## |
