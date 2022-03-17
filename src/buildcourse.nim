@@ -112,7 +112,7 @@ Shortcodes:
     For `.shader` files replace # with //."""
 
 
-let RegexDepends = re"{(%|{)\h*include\h*(\H+).*\h*(%|})}" ## |
+let RegexDepends = re"{(?:%|{)\h*include\h*(\H+).*\h*(?:%|})}" ## |
   ## Extract the file name or path to calculate GDScript/Shader dependencies
   ## based on the `{{ include ... }}` shortcode.
 
