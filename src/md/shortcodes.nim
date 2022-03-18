@@ -12,6 +12,9 @@ import parser
 import utils
 
 
+let regexAnchorLine = r"\h*(#|\/\/)\h*(ANCHOR|END):.*?(\v|$)".re({reMultiLine, reDotAll})
+
+
 proc contentsShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): string =
   const
     SYNOPSIS = "Synopsis: `{{ contents [maxLevel] }}`"
@@ -93,17 +96,17 @@ proc includeShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): s
       includeFileName = cache.findFile(argName)
 
     result = readFile(includeFileName)
-
     if mdBlock.args.len == 2:
       let
         argAnchor = mdBlock.args[1]
-        regexAnchor = fmt"\h*(?:#|\/\/)\h*ANCHOR:\h*{argAnchor}\s*(.*?)\s*(?:#|\/\/)\h*END:\h*{argAnchor}".re({reDotAll})
+        regexAnchorContent = fmt"\h*(?:#|\/\/)\h*ANCHOR:\h*{argAnchor}\s*(.*?)\s*(?:#|\/\/)\h*END:\h*{argAnchor}".re({reDotAll})
 
       var matches: array[1, string]
-      if not result.contains(regexAnchor, matches):
+      if not result.contains(regexAnchorContent, matches):
         raise newException(ValueError, "Can't find matching contents for anchor. {SYNOPSIS}")
 
       result = matches[0]
+    result = result.replace(regexAnchorLine)
 
   except ValueError:
     result = mdBlock.render
