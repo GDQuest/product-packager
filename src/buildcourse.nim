@@ -52,6 +52,7 @@ Options:
                         Default: {COURSE_DIR}.
                         *Note* that DIR is relative to the course project
                         root directory.
+  -e, --exec:CMD
   -d, --dist-dir:DIR    directory name for Pandoc output.
                         Default: {DIST_DIR}.
                         *Note* that DIR is relative to the course project
@@ -127,6 +128,7 @@ type AppSettings = object
   pandocAssetsDir: string
   isCleaning: bool
   isForced: bool
+  exec: seq[string]
 
 func `$`(appSettings: AppSettings): string =
   [ "AppSettings:"
@@ -139,6 +141,7 @@ func `$`(appSettings: AppSettings): string =
   , "\tpandocAssetsDir: {appSettings.pandocAssetsDir}".fmt
   , "\tisCleaning: {appSettings.isCleaning}".fmt
   , "\tisForced: {appSettings.isForced}".fmt
+  , "\texec: {appSettings.exec}".fmt
   ].join(NL)
 
 
@@ -201,6 +204,7 @@ proc resolveAppSettings(appSettings: AppSettings): AppSettings =
     if result.ignoreDirs.len == 0: result.ignoreDirs = cfg.getSectionValue("", "ignoreDirs").split(",").mapIt(it.strip)
     if result.pandocExe == "": result.pandocExe = cfg.getSectionValue("", "pandocExe", PANDOC_EXE)
     if result.pandocAssetsDir == "": result.pandocAssetsDir = cfg.getSectionValue("", "pandocAssetsDir")
+    if result.exec.len == 0: result.exec = cfg.getSectionValue("", "exec").split(",").mapIt(it.strip)
 
   if not result.isCleaning:
     if findExe(result.pandocExe) == "":
@@ -242,6 +246,7 @@ proc getAppSettings(): AppSettings =
       of "clean", "": result.isCleaning = true
       of "course-dir", "c": result.courseDir = value
       of "dist-dir", "d": result.distDir = value
+      of "exec", "e": result.exec.add value
       of "force", "f": result.isForced = true
       of "ignore-dir", "i": result.ignoreDirs.add value
       of "pandoc-exe", "p": result.pandocExe = value
@@ -362,6 +367,26 @@ when isMainModule:
   if appSettings.isCleaning:
     removeDir(appSettings.workingDir / appSettings.distDir)
     fmt"Removing `{appSettings.workingDir / appSettings.distDir}`. Exiting.".quit(QuitSuccess)
+
+  if appSettings.exec.len > 0:
+    for cmd in appSettings.exec:
+      let processingMsg = fmt"Running `{cmd}`..."
+      if logger.levelThreshold == lvlAll:
+        info ""
+        info processingMsg
+      else:
+        echo ""
+        echo processingMsg
+
+      let
+          processOptions = if logger.levelThreshold == lvlAll: {poEchoCmd, poStdErrToStdOut} else: {poStdErrToStdOut}
+          execResult = execCmdEx(cmd, processOptions, workingDir = appSettings.workingDir)
+
+      if execResult.output.strip != "" and execResult.exitCode == QuitSuccess:
+        info execResult.output
+
+      elif execResult.exitCode != QuitSuccess:
+        error [execResult.output, "Skipping..."].join(NL)
 
   process(appSettings)
   stdout.resetAttributes()
