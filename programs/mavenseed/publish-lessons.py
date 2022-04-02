@@ -213,6 +213,7 @@ class NewLesson:
         if title:
             return title.group(1)
         else:
+            print(self.slug)
             return self.slug.replace("-", " ").title()
 
 
@@ -263,16 +264,12 @@ class Lesson:
 def get_lesson_title(filepath: Path) -> str:
     lesson_title: str = ""
     with open(filepath) as f:
-        while True:
-            line = f.readline()
-            if re.search(r"<title>", line):
-                lesson_title = re.search(r"<title>(.*)</title>", line).group(1)
-                break
-            if re.search(r"<h1.*?>", line):
-                lesson_title = re.search(r"<h1.*?>(.*)</h1>", line).group(1)
-                break
-            if not line:
-                break
+        content = f.read()
+        match = re.search(r"<title>(.*?)</title>", content, flags=re.DOTALL)
+        if not match:
+            match = re.search(r"<h1.*?>(.*?)</h1>", content, flags=re.DOTALL)
+        if match:
+            lesson_title = match.group(1).replace("\n", " ").strip()
     assert lesson_title != "", (
         f"Unable to find the <title>or <h1> HTML tag in file {filepath}.\n"
         "This is required for the program to work."
@@ -517,7 +514,7 @@ def create_and_update_course(auth_token: str, args: Args) -> None:
                     content = f.read()
                     return (
                         re.search(r"<title>.*</title>", content) is not None
-                        or re.search(r"<h1.*?>.*</h1>", content) is not None
+                        or re.search(r"<h1.*?>.*</h1>", content, flags=re.DOTALL) is not None
                     )
 
             return [filepath for filepath in files if is_valid_file(filepath)]
