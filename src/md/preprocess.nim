@@ -42,7 +42,7 @@ proc preprocessParagraphLine(pl: seq[ParagraphLineSection], mdBlocks: seq[Block]
     of plskShortcode:
       SHORTCODES.getOrDefault(it.shortcode.name, noOpShortcode)(it.shortcode, mdBlocks, fileName)
     of plskRegular: it.render
-  ).join(SPACE).addGodotIcon
+  ).join.addGodotIcon
 
 
 proc preprocessCodeLine(cl: CodeLine, mdBlocks: seq[Block]; fileName: string): string =

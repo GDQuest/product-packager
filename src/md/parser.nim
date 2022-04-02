@@ -122,10 +122,10 @@ let
   ).map(x => Image(x[0], x[1]))
 
   shortcodeToken = manySpaceOrTab >> (alphanumeric | c(r"./\-_")).many.join << manySpaceOrTab
-  shortcodeSection* = manySpaceOrTab >> (s("{%") | s("{{")) >> (shortcodeToken.atLeast(1).filter(x => x.len > 0)) << manySpaceOrTab << (s("%}") | s("}}")) << manySpaceOrTab
-  shortcode = shortcodeSection.map(ShortcodeFromSeq) << eol
+  shortcodeSection* = (s("{%") | s("{{")) >> (shortcodeToken.atLeast(1).filter(x => x.len > 0)) << manySpaceOrTab << (s("%}") | s("}}"))
+  shortcode = manySpaceOrTab >> shortcodeSection.map(ShortcodeFromSeq) << eol
 
-  paragraphSection* = (nonNewLine << !(s("{%") | s("{{"))).many.join << manySpaceOrTab
+  paragraphSection* = ((nonNewLine << !(s("{%") | s("{{"))).many & manySpaceOrTab).join
   paragraph = nonEmptyLine.atLeast(1).map(Paragraph)
 
   lineToCodeLine = proc(x: string): CodeLine =
