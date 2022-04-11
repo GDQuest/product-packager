@@ -13,6 +13,7 @@ import std/
   ]
 import md/
   [ preprocess
+  , shortcodes
   , utils
   ]
 import assets
@@ -26,6 +27,7 @@ const
 
   COURSE_DIR = "content"
   DIST_DIR = "dist"
+  GODOT_PROJECT_DIRS = @["godot-project"]
   PANDOC_EXE = "pandoc"
   CFG_FILE = "course.cfg"
   HELP_MESSAGE = """
@@ -52,7 +54,7 @@ Options:
                         Default: {COURSE_DIR}.
                         *Note* that DIR is relative to the course project
                         root directory.
-  -e, --exec:CMD
+  -e, --exec:CMD        Arbitrary command to run before building the course.
   -d, --dist-dir:DIR    directory name for Pandoc output.
                         Default: {DIST_DIR}.
                         *Note* that DIR is relative to the course project
@@ -60,6 +62,14 @@ Options:
   -f, --force           run Pandoc even if course files are older than
                         the existing output files.
                         Default: false.
+  -g, --godot-project-dir:DIR
+                        add DIR to a list for copying to {DIST_DIR}. All
+                        anchor comments will be removed from the GDScript
+                        source files.
+                        *Note*
+                          - That DIR is relative to the course project
+                            root directory.
+                        Default: {GODOT_PROJECT_DIRS}.
   -h, --help            print this help message.
       --clean           remove Pandoc output directory.
                         Default: false.
@@ -123,6 +133,7 @@ type AppSettings = object
   workingDir: string
   courseDir: string
   distDir: string
+  godotProjectDirs: seq[string]
   ignoreDirs: seq[string]
   pandocExe: string
   pandocAssetsDir: string
@@ -136,6 +147,7 @@ func `$`(appSettings: AppSettings): string =
   , "\tworkingDir: {appSettings.workingDir}".fmt
   , "\tcourseDir: {appSettings.courseDir}".fmt
   , "\tdistDir: {appSettings.distDir}".fmt
+  , "\tgodotProjectDirs: {appSettings.godotProjectDirs}".fmt
   , "\tignoreDirs: {appSettings.ignoreDirs.join(\", \")}".fmt
   , "\tpandocExe: {appSettings.pandocExe}".fmt
   , "\tpandocAssetsDir: {appSettings.pandocAssetsDir}".fmt
@@ -194,6 +206,7 @@ proc resolveAppSettings(appSettings: AppSettings): AppSettings =
   result = appSettings
   if result.courseDir == "": result.courseDir = COURSE_DIR
   if result.distDir == "": result.distDir = DIST_DIR
+  if result.godotProjectDirs.len == 0: result.godotProjectDirs = GODOT_PROJECT_DIRS
   if result.pandocExe == "": result.pandocExe = PANDOC_EXE
   result = resolveWorkingDir(result)
 
@@ -201,6 +214,7 @@ proc resolveAppSettings(appSettings: AppSettings): AppSettings =
     let cfg = loadConfig(result.workingDir / CFG_FILE)
     if result.courseDir == "": result.courseDir = cfg.getSectionValue("", "courseDir", COURSE_DIR)
     if result.distDir == "": result.distDir = cfg.getSectionValue("", "distDir", DIST_DIR)
+    if result.godotProjectDirs.len == 0: result.godotProjectDirs = cfg.getSectionValue("", "godotProjectDirs").split(",").mapIt(it.strip)
     if result.ignoreDirs.len == 0: result.ignoreDirs = cfg.getSectionValue("", "ignoreDirs").split(",").mapIt(it.strip)
     if result.pandocExe == "": result.pandocExe = cfg.getSectionValue("", "pandocExe", PANDOC_EXE)
     if result.pandocAssetsDir == "": result.pandocAssetsDir = cfg.getSectionValue("", "pandocAssetsDir")
@@ -248,6 +262,7 @@ proc getAppSettings(): AppSettings =
       of "dist-dir", "d": result.distDir = value
       of "exec", "e": result.exec.add value
       of "force", "f": result.isForced = true
+      of "godot-project-dir", "g": result.godotProjectDirs.add value
       of "ignore-dir", "i": result.ignoreDirs.add value
       of "pandoc-exe", "p": result.pandocExe = value
       of "pandoc-assets-dir", "a": result.pandocAssetsDir = value 
@@ -360,6 +375,27 @@ proc process(appSettings: AppSettings) =
       echo processingMsg
 
 
+proc copyGodotProjectDirs(appSettings: AppSettings) =
+  for godotProjectDir in appSettings.godotProjectDirs:
+    let sourceDir = appSettings.workingDir / godotProjectDir
+    let distDir = appSettings.workingDir / appSettings.distDir / godotProjectDir
+
+    var msg = "Copying `{godotProjectDir}` to `{appSettings.distDir}` and removing anchor comments from GDScript files...".fmt
+    if logger.levelThreshold == lvlAll:
+      info ""
+      info msg
+    else:
+      echo ""
+      echo msg
+
+    removeDir(distDir)
+    copyDir(sourceDir, distDir)
+    for path in walkDirRec(distDir):
+      if path.endsWith(GD_EXT):
+        let contents = readFile(path)
+        writeFile(path, contents.replace(regexAnchorLine))
+
+
 when isMainModule:
   let appSettings = getAppSettings()
   info appSettings
@@ -389,5 +425,6 @@ when isMainModule:
         error [execResult.output, "Skipping..."].join(NL)
 
   process(appSettings)
+  copyGodotProjectDirs(appSettings)
   stdout.resetAttributes()
 

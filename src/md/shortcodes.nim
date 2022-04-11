@@ -12,7 +12,7 @@ import parser
 import utils
 
 
-let regexAnchorLine = r"\h*(#|\/\/)\h*(ANCHOR|END):.*?(\v|$)".re({reMultiLine, reDotAll})
+let regexAnchorLine* = r"\h*(#|\/\/)\h*(ANCHOR|END):.*?(\v|$)".re({reMultiLine, reDotAll})
 
 
 proc contentsShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): string =
