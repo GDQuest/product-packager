@@ -280,6 +280,7 @@ proc getAppSettings(): AppSettings =
 proc process(appSettings: AppSettings) =
   ## Main function that processes the Markdown files from
   ## `appSettings.courseDir` with Pandoc and the internal preprocessor.
+  var report = Report()
   let
     tmpDir = getTempDir(appSettings.workingDir)
     pandocAssetsCmdOptions = block:
@@ -327,12 +328,10 @@ proc process(appSettings: AppSettings) =
         (MD_EXT, HTML_EXT)
       )
 
-    var processingMsg = fmt"Processing `{fileIn}` -> `{fileOut}`..."
+    var processingMsg = fmt"Processing `{fileIn.relativePath(appSettings.workingDir)}` -> `{fileOut.relativePath(appSettings.workingDir)}`..."
     if logger.levelThreshold == lvlAll:
-      info ""
       info processingMsg
     else:
-      echo ""
       echo processingMsg
 
     let
@@ -362,17 +361,20 @@ proc process(appSettings: AppSettings) =
         processOptions = if logger.levelThreshold == lvlAll: {poEchoCmd, poStdErrToStdOut} else: {poStdErrToStdOut}
         pandocResult = execCmdEx(cmd, processOptions, input = preprocess(fileIn, fileInContents))
 
-      if pandocResult.output.strip != "" and pandocResult.exitCode == QuitSuccess:
-        info [fmt"`{fileIn}`", "{pandocResult.output}".fmt].join(NL)
+      if pandocResult.exitCode == QuitSuccess:
+        report.built.inc
+        if pandocResult.output.strip != "":
+          info [fmt"`{fileIn.relativePath(appSettings.workingDir)}`", "{pandocResult.output}".fmt].join(NL)
 
       elif pandocResult.exitCode != QuitSuccess:
-        error [fmt"`{fileIn}`", "{pandocResult.output.strip}".fmt, "Skipping..."].join(NL)
-
-    elif logger.levelThreshold == lvlAll:
-      info processingMsg
+        report.errors.inc
+        error [fmt"`{fileIn.relativePath(appSettings.workingDir)}`", "{pandocResult.output.strip}".fmt, "Skipping..."].join(NL)
 
     else:
-      echo processingMsg
+      report.skipped.inc
+      info processingMsg
+
+  echo report
 
 
 proc copyGodotProjectDirs(appSettings: AppSettings) =
@@ -381,12 +383,7 @@ proc copyGodotProjectDirs(appSettings: AppSettings) =
     let distDir = appSettings.workingDir / appSettings.distDir / godotProjectDir
 
     var msg = "Copying `{godotProjectDir}` to `{appSettings.distDir}` and removing anchor comments from GDScript files...".fmt
-    if logger.levelThreshold == lvlAll:
-      info ""
-      info msg
-    else:
-      echo ""
-      echo msg
+    if logger.levelThreshold == lvlAll: info msg else: echo msg
 
     removeDir(distDir)
     copyDir(sourceDir, distDir)

@@ -20,14 +20,23 @@ const
   HTML_EXT* = ".html"
 
 
-type Cache = tuple[ files: seq[string]
-                  , table: Table[string, seq[string]]
-                  , findFile: string -> string
-                  ]
+type
+  Cache = tuple[ files: seq[string]
+               , table: Table[string, seq[string]]
+               , findFile: string -> string
+               ]
+  Report* = object
+    built*: int
+    errors*: int
+    skipped*: int
 
 
 var cache*: Cache ## |
   ## Global cache that has to be initialized with `prepareCache()`.
+
+
+proc `$`*(r: Report): string = fmt"Summary: {r.built} built, {r.errors} errors, {r.skipped} skipped."
+
 
 proc prepareCache*(workingDir, courseDir: string; ignoreDirs: openArray[string]): Cache =
   ## Retruns a `Cache` object with:
