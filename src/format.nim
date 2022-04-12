@@ -58,7 +58,7 @@ let
   RegexHexValue = re"(0x|#)[0-9a-fA-F]+"
   RegexCodeIdentifier = re([PatternFunctionOrConstructorCall, PatternVariablesAndProperties].join("|"))
   RegexGodotBuiltIns = re([r"\b(", CACHE_GODOT_BUILTIN_CLASSES.join("|"), r")\b"].join)
-  RegexSkip = re"""({{.*?}}|{%.*?%}|_.+?_|\*\*[^*]+?\*\*|\*[^*]+?\*|`.+?`|".+?"|'.+?'|\!?\[.+?\)|\[.+?\])\s*|\s+|$"""
+  RegexSkip = re"""({{.*?}}|{%.*?%}|_.+?_|\*\*[^*]+?\*\*|\*[^*]+?\*|`.+?`|".+?"|'(?![sr\h]).+?'|\!?\[.+?\)|\[.+?\])\s*|\s+|$"""
   RegexStartOfSentence = re"\s*\p{Lu}"
   RegexEndOfSentence = re"[.!?:]\s+"
   RegexFourSpaces = re" {4}"
@@ -228,13 +228,13 @@ when isMainModule:
   let appSettings = getAppSettings()
 
   for filename in appSettings.inputFiles:
-    let formattedContent = filename.readFile.formatContent
+    let formattedContent = readFile(filename).formatContent
     if appSettings.inPlace:
-      filename.writeFile(formattedContent)
+      writeFile(filename, formattedContent)
 
     elif appSettings.outputDir != "":
-      appSettings.outputDir.createDir
-      (appSettings.outputDir / filename.extractFilename).writeFile(formattedContent)
+      createDir(appSettings.outputDir)
+      writeFile(appSettings.outputDir / filename.extractFilename, formattedContent)
 
     else:
       echo formattedContent
