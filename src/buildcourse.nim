@@ -204,10 +204,6 @@ proc resolveAppSettings(appSettings: AppSettings): AppSettings =
   ## *Note* that it also stops the execution if there was an error with
   ## the given values.
   result = appSettings
-  if result.courseDir == "": result.courseDir = COURSE_DIR
-  if result.distDir == "": result.distDir = DIST_DIR
-  if result.godotProjectDirs.len == 0: result.godotProjectDirs = GODOT_PROJECT_DIRS
-  if result.pandocExe == "": result.pandocExe = PANDOC_EXE
   result = resolveWorkingDir(result)
 
   if (result.workingDir / CFG_FILE).fileExists:
@@ -219,6 +215,11 @@ proc resolveAppSettings(appSettings: AppSettings): AppSettings =
     if result.pandocExe == "": result.pandocExe = cfg.getSectionValue("", "pandocExe", PANDOC_EXE)
     if result.pandocAssetsDir == "": result.pandocAssetsDir = cfg.getSectionValue("", "pandocAssetsDir")
     if result.exec.len == 0: result.exec = cfg.getSectionValue("", "exec").split(",").mapIt(it.strip)
+
+  if result.courseDir == "": result.courseDir = COURSE_DIR
+  if result.godotProjectDirs.len == 0: result.godotProjectDirs = GODOT_PROJECT_DIRS
+  if result.distDir == "": result.distDir = DIST_DIR
+  if result.pandocExe == "": result.pandocExe = PANDOC_EXE
 
   if not result.isCleaning:
     if findExe(result.pandocExe) == "":
