@@ -5,6 +5,7 @@ import std/
   , strformat
   , strutils
   , tables
+  , unicode
   ]
 import assets
 import parser
@@ -13,16 +14,17 @@ import shortcodes
 import utils
 
 
-let RegexGodotBuiltIns = ["(`(", CACHE_GODOT_BUILTIN_CLASSES.join("|"), ")`)"].join.re
+let regexGodotBuiltIns = ["(`(", CACHE_GODOT_BUILTIN_CLASSES.join("|"), ")`)"].join.re
+let regexCapital = re"([A-Z])"
 
 
 proc addGodotIcon(line: string): string =
   var
     line = line
-    bounds = line.findBounds(RegexGodotBuiltIns)
+    bounds = line.findBounds(regexGodotBuiltIns)
 
   while bounds != (-1, 0):
-    let class = line[bounds.first ..< bounds.last].strip(chars = {'`'})
+    let class = ["icon", line[bounds.first ..< bounds.last].strip(chars = {'`'}).replacef(regexCapital, "_$#")].join.toLower
 
     if class in CACHE_GODOT_ICONS:
       result.add [line[0 ..< bounds.first], """<span class="godot-icon-class">""", CACHE_GODOT_ICONS[class], line[bounds.first .. bounds.last], "</span>"].join
@@ -31,7 +33,7 @@ proc addGodotIcon(line: string): string =
       result.add line[0 .. bounds.last]
 
     line = line[bounds.last + 1 .. ^1]
-    bounds = line.findBounds(RegexGodotBuiltIns)
+    bounds = line.findBounds(regexGodotBuiltIns)
 
   result.add line
 
@@ -76,3 +78,4 @@ proc preprocessBlock(mdBlock: Block, mdBlocks: seq[Block]; fileName: string): st
 proc preprocess*(fileName, contents: string): string =
   let mdBlocks = contents.parse
   mdBlocks.mapIt(preprocessBlock(it, mdBlocks, fileName)).join(NL)
+
