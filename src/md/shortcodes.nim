@@ -99,7 +99,7 @@ proc includeShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): s
     if mdBlock.args.len == 2:
       let
         argAnchor = mdBlock.args[1]
-        regexAnchorContent = fmt"\h*(?:#|\/\/)\h*ANCHOR:\h*{argAnchor}\h*\v(.*?)\s*(?:#|\/\/)\h*END:\h*{argAnchor}".re({reDotAll})
+        regexAnchorContent = fmt"\h*(?:#|\/\/)\h*ANCHOR:\h*\b{argAnchor}\b\h*\v(.*?)\s*(?:#|\/\/)\h*END:\h*\b{argAnchor}\b".re({reDotAll})
 
       var matches: array[1, string]
       if not result.contains(regexAnchorContent, matches):
