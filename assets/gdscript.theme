@@ -54,7 +54,7 @@
             "underline": false
         },
         "Comment": {
-            "text-color": "#75715e",
+            "text-color": "#9a9a88",
             "background-color": null,
             "bold": false,
             "italic": false,
