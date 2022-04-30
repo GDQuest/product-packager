@@ -15,7 +15,7 @@ import utils
 
 
 let regexGodotBuiltIns = ["(`(", CACHE_GODOT_BUILTIN_CLASSES.join("|"), ")`)"].join.re
-let regexCapital = re"([A-Z])"
+let regexCapital = re"([23]D|[A-Z])"
 
 
 proc addGodotIcon(line: string): string =
