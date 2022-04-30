@@ -38,9 +38,10 @@ const
   PatternFilenameOnly = r"(\w+\.(" & SupportedExtensions.join("|") & "))"
   PatternDirPath = r"((res|user)://)?/?([\w]+/)+(\w*\.\w+)?"
   PatternFileAtRoot = r"(res|user)://\w+\.\w+"
-  PatternModifierKeys = r"Ctrl|Alt|Shift|CTRL|ALT|SHIFT|Super|SUPER"
-  PatternKeyboardSingleCharacterKey = r"[A-Z0-9!@#$%^&*()_\-{}|\[\]\\;':,\./<>?]"
-  PatternOtherKeys = r"F\d{1,2}|Tab|Up|Down|Left|Right|LMB|MMB|RMB|Backspace|Delete"
+  PatternModifierKeys = r"Ctrl|Alt|Shift|Super|CTRL|ALT|SHIFT|SUPER"
+  PatternKeyboardSingleCharacterKey = r"[a-zA-Z0-9!@#$%^&*()_\-{}|\[\]\\;':,\./<>?]"
+  PatternFKeys = r"F\d{1,2}"
+  PatternOtherKeys = PatternFKeys & r"|Tab|Up|Down|Left|Right|Backspace|Delete|TAB|UP|DOWN|LEFT|RIGHT|BACKSPACE|DELETE|LMB|MMB|RMB"
   PatternFunctionOrConstructorCall = r"\w+(\.\w+)*\(.*?\)"
   PatternVariablesAndProperties = r"_\w+|[a-zA-Z0-9]+([\._]\w+)+"
 
@@ -52,6 +53,7 @@ let
   RegexOnePascalCaseWordStrict = re"[A-Z0-9]\w+[A-Z]\w+"
   RegexMenuOrPropertyEntry = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )+[A-Z][a-zA-Z0-9]+( [A-Z][a-zA-Z0-9]*)*(\.\.\.)?)+"
   RegexCapitalWordSequence = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )?[A-Z][a-zA-Z0-9]+(\.\.\.)?)+"
+  RegexKeyboardFShortcut = re(PatternFKeys)
   RegexKeyboardShortcut = re("((" & PatternModifierKeys & r") ?\+ ?)+(" & PatternOtherKeys & "|" & PatternKeyboardSingleCharacterKey & ")")
   RegexOneKeyboardKey = re("(" & [PatternModifierKeys, PatternOtherKeys, PatternKeyboardSingleCharacterKey].join("|") & ")")
   RegexNumber = re"\d+(D|px)|\d+(x\d+)*"
@@ -105,6 +107,7 @@ func regexWrapEach(regexAll, regexOne: Regex; pair: (string, string)): string ->
 
 let formatters =
   { "any": regexWrapEach(RegexKeyboardShortcut, RegexOneKeyboardKey, ("<kbd>", "</kbd>"))
+  , "any": regexWrap(@[RegexKeyboardFShortcut], ("<kbd>", "</kbd>"))
   , "any": regexWrap(@[RegexFilePath], ("`", "`"))
   , "any": regexWrap(@[RegexMenuOrPropertyEntry], ("*", "*"))
   , "any": regexWrap(@[RegexCodeIdentifier, RegexGodotBuiltIns], ("`", "`"))
