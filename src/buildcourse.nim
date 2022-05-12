@@ -12,13 +12,10 @@ import std/
   , terminal
   ]
 import md/
-  [ preprocess
-  , shortcodes
+  [ shortcodes
   , utils
   ]
-import assets
-import customlogger
-
+import assets, customlogger, parallel, types
 
 const
   RAND_LEN = 8 ## |
@@ -127,19 +124,6 @@ let RegexDepends = re"{(?:%|{)\h*include\h*(\H+).*\h*(?:%|})}" ## |
   ## Extract the file name or path to calculate GDScript/Shader dependencies
   ## based on the `{{ include ... }}` shortcode.
 
-
-type AppSettings = object
-  inputDir: string
-  workingDir: string
-  courseDir: string
-  distDir: string
-  godotProjectDirs: seq[string]
-  ignoreDirs: seq[string]
-  pandocExe: string
-  pandocAssetsDir: string
-  isCleaning: bool
-  isForced: bool
-  exec: seq[string]
 
 func `$`(appSettings: AppSettings): string =
   [ "AppSettings:"
@@ -281,7 +265,10 @@ proc getAppSettings(): AppSettings =
 proc process(appSettings: AppSettings) =
   ## Main function that processes the Markdown files from
   ## `appSettings.courseDir` with Pandoc and the internal preprocessor.
-  var report = Report()
+  var
+    report = Report()
+    runner = PandocRunner.init(appSettings)
+
   let
     tmpDir = getTempDir(appSettings.workingDir)
     pandocAssetsCmdOptions = block:
@@ -346,34 +333,12 @@ proc process(appSettings: AppSettings) =
 
     processingMsg = fmt"`{fileIn}` and its dependencies are older than `{fileOut}`. Skipping..."
     if doProcess:
-      createDir(fileOut.parentDir)
-      info fmt"Creating output `{fileOut.parentDir}` directory..."
-
-      let cmd = [ appSettings.pandocExe
-                , "--self-contained"
-                , "--resource-path=\"{fileIn.parentDir}\"".fmt
-                , "--metadata=title:\"{fileOut.splitFile.name}\"".fmt
-                , "--output=\"{fileOut}\"".fmt
-                , pandocAssetsCmdOptions
-                , "-"
-                ].join(SPACE)
-
-      let
-        processOptions = if logger.levelThreshold == lvlAll: {poEchoCmd, poStdErrToStdOut} else: {poStdErrToStdOut}
-        pandocResult = execCmdEx(cmd, processOptions, input = preprocess(fileIn, fileInContents))
-
-      if pandocResult.exitCode == QuitSuccess:
-        report.built.inc
-        if pandocResult.output.strip != "":
-          info [fmt"`{fileIn.relativePath(appSettings.workingDir)}`", "{pandocResult.output}".fmt].join(NL)
-
-      elif pandocResult.exitCode != QuitSuccess:
-        report.errors.inc
-        error [fmt"`{fileIn.relativePath(appSettings.workingDir)}`", "{pandocResult.output.strip}".fmt, "Skipping..."].join(NL)
-
+      runner.addJob(fileIn, fileOut, fileInContents, pandocAssetsCmdOptions)
     else:
       report.skipped.inc
       info processingMsg
+
+  runner.waitForJobs(report)
 
   echo report
 
