@@ -35,7 +35,7 @@ Options:
 
 const
   SupportedExtensions = ["png", "jpe?g", "mp4", "mkv", "t?res", "t?scn", "gd", "py", "shader", ]
-  PatternFilenameOnly = r"(\w+\.(" & SupportedExtensions.join("|") & "))"
+  PatternFilenameOnly = r"\b(\w+\.(" & SupportedExtensions.join("|") & "))\b"
   PatternDirPath = r"((res|user)://)?/?([\w]+/)+(\w*\.\w+)?"
   PatternFileAtRoot = r"(res|user)://\w+\.\w+"
   PatternModifierKeys = r"Ctrl|Alt|Shift|Super|CTRL|ALT|SHIFT|SUPER"
