@@ -60,7 +60,7 @@ let
   RegexHexValue = re"(0x|#)[0-9a-fA-F]+"
   RegexCodeIdentifier = re([PatternFunctionOrConstructorCall, PatternVariablesAndProperties].join("|"))
   RegexGodotBuiltIns = re([r"\b(", CACHE_GODOT_BUILTIN_CLASSES.join("|"), r")\b"].join)
-  RegexSkip = re"""({{.*?}}|{%.*?%}|_.+?_|\*\*[^*]+?\*\*|\*[^*]+?\*|`.+?`|".+?"|'(?![sr\h]).+?'|\!?\[.+?\)|\[.+?\])\s*|\s+|$"""
+  RegexSkip = re"""({{.*?}}|{%.*?%}|_.+?_|\*\*[^*]+?\*\*|\*[^*]+?\*|`.+?`|".+?"|'(?![vsr\h]).+?'|\!?\[.+?\)|\[.+?\])\s*|\s+|$"""
   RegexStartOfSentence = re"\s*\p{Lu}"
   RegexEndOfSentence = re"[.!?:]\s+"
   RegexFourSpaces = re" {4}"
