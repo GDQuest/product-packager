@@ -81,7 +81,7 @@ func regexWrap(regexes: seq[Regex], pair: (string, string)): string -> (string, 
   ## The function returns a tuple:
   ## - `(text wrapped by pair, rest of text)` if there's a regex match.
   ## - `("", text)` if there's no regex match.
-  let RegexBlacklist = re([r"\b(", CACHE_BLACKLIST.join("|"), r")\b"].join)
+  let RegexBlacklist = re([r"\b(", CACHE_BLACKLIST.join("|"), r")\b\s"].join)
   return func(text: string): (string, string) =
     for regex in regexes:
       let bound = text.matchLen(regex)
