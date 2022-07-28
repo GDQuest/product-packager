@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """A command-line tool for publishing lessons and chapters to the web.
 
 The tool uses our course builds to generate a web page for each lesson, and
@@ -16,7 +17,7 @@ from typing import List, Sequence, Set, Generator, Dict, Tuple
 import requests
 from datargs import arg, parse
 
-dotenv.load_dotenv()
+dotenv.load_dotenv(".env")
 
 YOUR_MAVENSEED_URL: str = os.environ.get("MAVENSEED_URL", "")
 YOUR_EMAIL: str = os.environ.get("MAVENSEED_EMAIL", "")
@@ -32,7 +33,8 @@ ERROR_NO_VALID_LESSON_FILES: int = 1
 ERROR_COURSE_NOT_FOUND: int = 2
 ERROR_CACHE_FILE_EMPTY: int = 3
 
-CACHE_FILE: Path = Path(".cache") / "courses.json"
+THIS_DIRECTORY = Path(__file__).parent
+CACHE_FILE: Path = THIS_DIRECTORY / ".cache" / "courses.json"
 
 
 class Status(Enum):
