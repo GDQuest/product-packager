@@ -115,7 +115,9 @@ proc includeShortcode(mdBlock: Block, mdBlocks: seq[Block], fileName: string): s
 
 proc noOpShortcode*(mdBlock: Block, mdBlocks: seq[Block], fileName: string): string =
   result = mdBlock.render
-  error fmt"{result}: Got malformed shortcode. Skipping..."
+  # Temporary measure for `buildcoursev2` app so it doesn't output errors for { contents } & { link } shortcodes.
+  if mdBlock.name notin ["contents", "link"]:
+    error fmt"{result}: Got malformed shortcode. Skipping..."
 
 
 const SHORTCODES* =
@@ -124,3 +126,6 @@ const SHORTCODES* =
   , "contents": contentsShortcode
   }.toTable
 
+const SHORTCODESv2* =
+  { "include": includeShortcode
+  }.toTable

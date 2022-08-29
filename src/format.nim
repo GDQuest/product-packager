@@ -13,6 +13,7 @@ import md/
   , parser
   , utils
   ]
+import types
 
 
 const HELP_MESSAGE = """
@@ -65,13 +66,6 @@ let
   RegexEndOfSentence = re"[.!?:]\s+"
   RegexFourSpaces = re" {4}"
   RegexCodeCommentSymbol = re"#{3,}|/+"
-
-
-type
-  AppSettings = object
-    inputFiles: seq[string]
-    inPlace: bool
-    outputDir: string
 
 
 func regexWrap(regexes: seq[Regex], pair: (string, string)): string -> (string, string) =
@@ -206,7 +200,7 @@ proc formatContent*(content: string): string =
   parse(content).map(formatBlock).join(NL).strip & NL
 
 
-proc getAppSettings(): AppSettings =
+proc getAppSettings(): AppSettingsFormat =
   for kind, key, value in getopt(shortNoVal = {'h', 'i'}, longNoVal = @["help", "in-place"]):
     case kind
     of cmdEnd: break
@@ -219,9 +213,7 @@ proc getAppSettings(): AppSettings =
       case key
       of "help", "h": HELP_MESSAGE.quit(QuitSuccess)
       of "in-place", "i": result.inPlace = true
-      of "output-dir", "o":
-        if isValidFilename(value): result.outputDir = value
-        else: [fmt"Invalid output directory: {value}", "", HELP_MESSAGE].join(NL).quit
+      of "output-dir", "o": result.outputDir = value
       else: [fmt"Invalid option: {key}", "", HELP_MESSAGE].join(NL).quit
 
   if result.inputFiles.len == 0: ["No input files specified.", "", HELP_MESSAGE].join(NL).quit

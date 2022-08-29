@@ -1,4 +1,3 @@
-
 # Utilities for running pandoc jobs in parallel
 
 import std/
@@ -18,11 +17,11 @@ import customlogger, types
 
 type
   PandocRunner* = object
-    settings: AppSettings
+    settings: AppSettingsBuildCourse
     processes: seq[tuple[fileIn: string, process: Process]]
 
 
-proc init*(_: typedesc[PandocRunner], settings: AppSettings): PandocRunner =
+proc init*(_: typedesc[PandocRunner], settings: AppSettingsBuildCourse): PandocRunner =
   result.settings = settings
 
 
@@ -58,6 +57,7 @@ proc waitForJobs*(runner: PandocRunner, report: var Report) =
   for job in runner.processes:
     var outputFile: File
     discard outputFile.open(job.process.outputHandle, fmRead)
+
     let
       output = outputFile.readAll()
       exitCode = job.process.waitForExit()
