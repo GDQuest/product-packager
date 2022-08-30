@@ -26,7 +26,7 @@ type
     isForced*: bool
     exec*: seq[string]
 
-  AppSettingsBuildCoursev2* = object
+  AppSettingsBuildGDSchool* = object
     inputDir*: string
     workingDir*: string
     courseDir*: string
@@ -61,7 +61,7 @@ func `$`*(appSettings: AppSettingsBuildCourse): string =
   ].join(NL)
 
 
-func `$`*(appSettings: AppSettingsBuildCoursev2): string =
+func `$`*(appSettings: AppSettingsBuildGDSchool): string =
   [ "AppSettings:"
   , "\tinputDir: {appSettings.inputDir}".fmt
   , "\tworkingDir: {appSettings.workingDir}".fmt

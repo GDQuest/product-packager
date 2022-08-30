@@ -10,17 +10,18 @@ import std/
   , terminal
   ]
 import md/
-  [ preprocessv2
+  [ preprocessgdschool
   , utils
   ]
 import customlogger, types
 
 
 const
+  SPECIAL_FILENAME = "_index.md"
   COURSE_DIR = "content"
-  DIST_DIR = "distv2"
+  DIST_DIR = "dist"
   GODOT_PROJECT_DIRS = @["godot-project"]
-  CFG_FILE = "course.cfg"
+  CFG_FILE = "gdschool.cfg"
   HELP_MESSAGE = """
 {getAppFilename().extractFilename} [options] [dir]
 
@@ -108,12 +109,12 @@ proc getDepends(contents: string): seq[string] =
     ).filterIt(it != "")
 
 
-proc resolveWorkingDir(appSettings: AppSettingsBuildCoursev2): AppSettingsBuildCoursev2 =
+proc resolveWorkingDir(appSettings: AppSettingsBuildGDSchool): AppSettingsBuildGDSchool =
   ## Tries to find the root directory of the course project by checking
   ## either `CFG_FILE` or `appSettings.courseDir` exist.
   ##
   ## If a valid course project was found it returns the updated
-  ## `AppSettingsBuildCoursev2.workingDir`.
+  ## `AppSettingsBuildGDSchool.workingDir`.
   result = appSettings
   for dir in appSettings.inputDir.parentDirs:
     if (dir / CFG_FILE).fileExists or (dir / result.courseDir).dirExists:
@@ -121,11 +122,11 @@ proc resolveWorkingDir(appSettings: AppSettingsBuildCoursev2): AppSettingsBuildC
       break
 
 
-proc resolveAppSettings(appSettings: AppSettingsBuildCoursev2): AppSettingsBuildCoursev2 =
-  ## Fills `AppSettingsBuildCoursev2` with either defaults or values found in `CFG_FILE`
+proc resolveAppSettings(appSettings: AppSettingsBuildGDSchool): AppSettingsBuildGDSchool =
+  ## Fills `AppSettingsBuildGDSchool` with either defaults or values found in `CFG_FILE`
   ## if it exists and there were no matching command line arguments given.
   ##
-  ## Returns the updated `AppSettingsBuildCoursev2` object.
+  ## Returns the updated `AppSettingsBuildGDSchool` object.
   ##
   ## *Note* that it also stops the execution if there was an error with
   ## the given values.
@@ -157,8 +158,8 @@ proc resolveAppSettings(appSettings: AppSettingsBuildCoursev2): AppSettingsBuild
     result.ignoreDirs.add result.distDir
 
 
-proc getAppSettings(): AppSettingsBuildCoursev2 =
-  ## Returns an `AppSettingsBuildCoursev2` object with appropriate values. It stops the
+proc getAppSettings(): AppSettingsBuildGDSchool =
+  ## Returns an `AppSettingsBuildGDSchool` object with appropriate values. It stops the
   ## execution if invalid values were found.
   result.inputDir = ".".absolutePath
   result.workingDir = result.inputDir
@@ -194,7 +195,7 @@ proc getAppSettings(): AppSettingsBuildCoursev2 =
   result = result.resolveAppSettings
 
 
-proc process(appSettings: AppSettingsBuildCoursev2) =
+proc process(appSettings: AppSettingsBuildGDSchool) =
   cache = prepareCache(appSettings.workingDir, appSettings.courseDir, appSettings.ignoreDirs)
   for fileIn in cache.files.filterIt(
     it.toLower.endsWith(MD_EXT) and
@@ -203,7 +204,7 @@ proc process(appSettings: AppSettingsBuildCoursev2) =
     let
       fileIn = appSettings.workingDir / fileIn
       fileOut = fileIn.replace(appSettings.courseDir & DirSep, appSettings.distDir & DirSep)
-
+    
     var processingMsg = fmt"Processing `{fileIn.relativePath(appSettings.workingDir)}` -> `{fileOut.relativePath(appSettings.workingDir)}`..."
     if logger.levelThreshold == lvlAll:
       info processingMsg
@@ -222,7 +223,12 @@ proc process(appSettings: AppSettingsBuildCoursev2) =
     if doProcess:
       createDir(fileOut.parentDir)
       info fmt"Creating output `{fileOut.parentDir}` directory..."
-      writeFile(fileOut, preprocess(fileIn, fileInContents))
+
+      if fileIn.endsWith(SPECIAL_FILENAME):
+        copyFile(fileIn, fileOut)
+      else:
+        writeFile(fileOut, preprocess(fileIn, fileInContents))
+
     else:
       info processingMsg
 

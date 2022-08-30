@@ -8,7 +8,7 @@ srcDir      = "src"
 namedBin    =
   { "format": "bin/gdquest-format"
   , "buildcourse": "bin/gdquest-build-course"
-  , "buildcoursev2": "bin/gdquest-build-coursev2"
+  , "preprocessgdschool": "bin/gdschool-preprocess-course"
   }.toTable
 
 # Dependencies
