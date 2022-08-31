@@ -1,5 +1,7 @@
 import std/
-  [ logging
+  [ algorithm
+  , logging
+  , os
   , re
   , sequtils
   , strformat
@@ -14,8 +16,16 @@ import shortcodes
 import utils
 
 
-let regexGodotBuiltIns = ["(`(", CACHE_GODOT_BUILTIN_CLASSES.join("|"), ")`)"].join.re
-let regexCapital = re"([23]D|[A-Z])"
+const
+  META_MDFILE* = "_index.md"
+  SERVER_DIR = "courses"
+
+let
+  regexGodotBuiltIns = ["(`(", CACHE_GODOT_BUILTIN_CLASSES.join("|"), ")`)"].join.re
+  regexCapital = re"([23]D|[A-Z])"
+  regexSlug = re"slug: *"
+
+var cacheSlug: Table[string, seq[string]]
 
 
 proc addGodotIcon(line: string): string =
@@ -54,6 +64,29 @@ proc preprocessCodeLine(cl: CodeLine, mdBlocks: seq[Block]; fileName: string): s
   of clkRegular: cl.line
 
 
+proc computeImageSlugs(fileName: string): seq[string] =
+  if fileName in cacheSlug:
+    return cacheSlug[fileName]
+
+  for dir in fileName.parentDirs(inclusive = false):
+    let meta_mdpath = dir / META_MDFILE
+    if meta_mdpath.fileExists:
+      for mdYAMLFrontMatter in readFile(meta_mdpath).parse.filterIt(it.kind == bkYAMLFrontMatter):
+        for line in mdYAMLFrontMatter.body:
+          if line.startsWith(regexSlug):
+            result.add line.replace(regexSlug, "")
+
+  result = result.reversed
+  cacheSlug[fileName] = result
+
+
+proc preprocessImage(img: Block, mdBlocks: seq[Block], fileName: string): string =
+  var img = img
+  img.path.removePrefix("./")
+  img.path = (@["", SERVER_DIR] & computeImageSlugs(fileName) & img.path.split(AltSep)).join($AltSep)
+  img.render
+
+
 proc preprocessBlock(mdBlock: Block, mdBlocks: seq[Block]; fileName: string): string =
   case mdBlock.kind
   of bkShortcode:
@@ -70,6 +103,9 @@ proc preprocessBlock(mdBlock: Block, mdBlocks: seq[Block]; fileName: string): st
     , mdBlock.code.mapIt(it.preprocessCodeLine(mdBlocks, fileName)).join(NL)
     , "```"
     ].join(NL)
+  
+  of bkImage:
+    mdBlock.preprocessImage(mdBlocks, fileName)
 
   else:
     mdBlock.render

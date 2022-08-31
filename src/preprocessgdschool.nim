@@ -17,7 +17,7 @@ import customlogger, types
 
 
 const
-  SPECIAL_FILENAME = "_index.md"
+  META_MDFILE = "_index.md"
   COURSE_DIR = "content"
   DIST_DIR = "dist"
   GODOT_PROJECT_DIRS = @["godot-project"]
@@ -85,7 +85,9 @@ Shortcodes:
     For `.shader` files replace # with //."""
 
 
-let RegexDepends = re"{(?:%|{)\h*include\h*(\H+).*\h*(?:%|})}" ## |
+let
+  RegexSlug = re"slug: *"
+  RegexDepends = re"{(?:%|{)\h*include\h*(\H+).*\h*(?:%|})}" ## |
   ## Extract the file name or path to calculate GDScript/Shader dependencies
   ## based on the `{{ include ... }}` shortcode.
 
@@ -196,6 +198,12 @@ proc getAppSettings(): AppSettingsBuildGDSchool =
 
 
 proc process(appSettings: AppSettingsBuildGDSchool) =
+  # Copy asset/all subfolders
+  createDir(appSettings.distDir)
+  for dirIn in walkDirs(appSettings.workingDir / appSettings.courseDir / "**" / "*"):
+    let dirOut = dirIn.replace(appSettings.courseDir & DirSep, appSettings.distDir & DirSep)
+    copyDir(dirIn, dirOut)
+  
   cache = prepareCache(appSettings.workingDir, appSettings.courseDir, appSettings.ignoreDirs)
   for fileIn in cache.files.filterIt(
     it.toLower.endsWith(MD_EXT) and
@@ -224,7 +232,7 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
       createDir(fileOut.parentDir)
       info fmt"Creating output `{fileOut.parentDir}` directory..."
 
-      if fileIn.endsWith(SPECIAL_FILENAME):
+      if fileIn.endsWith(META_MDFILE):
         copyFile(fileIn, fileOut)
       else:
         writeFile(fileOut, preprocess(fileIn, fileInContents))

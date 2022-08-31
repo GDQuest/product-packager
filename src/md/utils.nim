@@ -73,7 +73,7 @@ proc prepareCache*(workingDir, courseDir: string; ignoreDirs: openArray[string])
 
       blockResult
 
-    cacheTable = collect(for k, v in cacheFiles.groupBy((s) => extractFilename(s)): (k, v)).toTable
+    cacheTable = collect(for k, v in cacheFiles.groupBy((s) => extractFilename(s)): {k: v})
 
   result.files = cacheFiles
   result.table = cacheTable

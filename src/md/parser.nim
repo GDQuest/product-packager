@@ -147,8 +147,3 @@ proc parse*(contents: string): seq[Block] =
         of failure: error parsed.error
         of success: return parsed.value
 
-
-when isMainModule:
-  const C = """
-{% include test.gd blah %}"""
-  echo shortcode.parse(C)
