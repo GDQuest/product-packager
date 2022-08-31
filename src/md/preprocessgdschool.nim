@@ -57,6 +57,13 @@ proc preprocessParagraphLine(pl: seq[ParagraphLineSection], mdBlocks: seq[Block]
   ).join.addGodotIcon
 
 
+func computeCodeBlockAnnotation(mdBlock: Block): string =
+  for cl in mdBlock.code:
+    if cl.kind == clkShortcode and cl.shortcode.name == "include" and cl.shortcode.args.len > 0:
+      result = ":" & cl.shortcode.args[0]
+      break
+
+
 proc preprocessCodeLine(cl: CodeLine, mdBlocks: seq[Block]; fileName: string): string =
   case cl.kind
   of clkShortcode:
@@ -99,7 +106,7 @@ proc preprocessBlock(mdBlock: Block, mdBlocks: seq[Block]; fileName: string): st
     mdBlock.items.mapIt(it.render.addGodotIcon).join(NL)
 
   of bkCode:
-    [ fmt"```{mdBlock.language}"
+    [ fmt"```{mdBlock.language}" & computeCodeBlockAnnotation(mdBlock)
     , mdBlock.code.mapIt(it.preprocessCodeLine(mdBlocks, fileName)).join(NL)
     , "```"
     ].join(NL)
