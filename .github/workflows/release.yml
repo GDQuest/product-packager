@@ -24,7 +24,14 @@ jobs:
           nimble -y build
           nimble -y build -d:mingw
       - name: Generate Changelog
-        run: echo "GDQuest Product Manager" > ${{ github.workspace }}-CHANGELOG.txt
+        run: |
+          export TAG_VERSION="${GITHUB_REF#refs/*/}"
+          export TAG_MESSAGE=$(git tag -l --format='%(contents:subject)' $TAG_VERSION)
+          export COMMIT_SHA="${{ github.sha }}"
+          export FILE="${{ github.workspace }}-CHANGELOG.txt"
+          echo "# GDQuest Product Manager" > $FILE
+          echo "commit: $COMMIT_SHA" >> $FILE
+          echo "$TAG_VERSION: $TAG_MESSAGE" >> $FILE
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
@@ -33,6 +40,3 @@ jobs:
           files: |
             gdquest-product-packager
           body_path: ${{ github.workspace }}-CHANGELOG.txt
-          token: ${{ secrets.CUSTOM_GITHUB_TOKEN }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
