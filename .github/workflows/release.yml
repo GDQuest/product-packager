@@ -23,6 +23,14 @@ jobs:
           git clone -b '3.4' --single-branch https://github.com/godotengine/godot.git
           nimble -y build
           nimble -y build -d:mingw
+      - name: Rname and Compress files
+        # find . -type f  ! -name "*.*" -exec mv {} {}.x86_64 \;
+        run: |
+          export TAG_VERSION="${GITHUB_REF#refs/*/}"
+          export ZIP_NAME="product_packager-$TAG_VERSION"
+          cd bin
+          zip -r "$ZIP_NAME-windows.zip" *.exe
+          find . -type f  ! -name "*.*" | zip "$ZIP_NAME-linux.zip" -@
       - name: Generate Changelog
         run: |
           export TAG_VERSION="${GITHUB_REF#refs/*/}"
@@ -32,11 +40,12 @@ jobs:
           echo "# GDQuest Product Manager" > $FILE
           echo "commit: $COMMIT_SHA" >> $FILE
           echo "$TAG_VERSION: $TAG_MESSAGE" >> $FILE
+          echo "" >> $FILE
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           generate_release_notes: true
           append_body: true
           files: |
-            gdquest-product-packager
+            bin/*.zip
           body_path: ${{ github.workspace }}-CHANGELOG.txt
