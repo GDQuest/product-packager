@@ -1,36 +1,31 @@
 import std/
   [ logging
   , os
-  , osproc
   , parseopt
   , parsecfg
   , re
   , sequtils
   , strformat
   , strutils
-  , sysrand
   , terminal
   ]
 import md/
-  [ shortcodes
+  [ preprocessgdschool
   , utils
   ]
-import assets, customlogger, parallel, types
+import customlogger, types
+
 
 const
-  RAND_LEN = 8 ## |
-    ## `RAND_LEN` is the length of the random number sequence used to
-    ## generate the temporary directory for the built-in Pandoc assets.
-
+  META_MDFILE = "_index.md"
   COURSE_DIR = "content"
   DIST_DIR = "dist"
   GODOT_PROJECT_DIRS = @["godot-project"]
-  PANDOC_EXE = "pandoc"
-  CFG_FILE = "course.cfg"
+  CFG_FILE = "gdschool.cfg"
   HELP_MESSAGE = """
 {getAppFilename().extractFilename} [options] [dir]
 
-Build Godot courses from Markdown files using Pandoc.
+Build GDQuest-formatted Godot courses from Markdown.
 
 [dir] is optional and can be a subdirectory of the course project. It defaults
 to the current directory.
@@ -39,24 +34,15 @@ This app finds the project root directory based on --course-dir value or if it
 finds {CFG_FILE}. Command line options take priority over {CFG_FILE}.
 
 Options:
-  -a, --pandoc-assets-dir:DIR
-                        search for required Pandoc asset files in DIR:
-                          - {CACHE_COURSE_CSS_NAME}
-                          - {CACHE_GDSCRIPT_DEF_NAME}
-                          - {CACHE_GDSCRIPT_THEME_NAME}
-                        Default: internal assets specific to GDQuest.
-                        *Note* that DIR isn't relative to the course
-                        project root directory.
   -c, --course-dir:DIR  course project directory name.
                         Default: {COURSE_DIR}.
                         *Note* that DIR is relative to the course project
                         root directory.
-  -e, --exec:CMD        Arbitrary command to run before building the course.
-  -d, --dist-dir:DIR    directory name for Pandoc output.
+  -d, --dist-dir:DIR    directory name for output.
                         Default: {DIST_DIR}.
                         *Note* that DIR is relative to the course project
                         root directory.
-  -f, --force           run Pandoc even if course files are older than
+  -f, --force           run even if course files are older than
                         the existing output files.
                         Default: false.
   -g, --godot-project-dir:DIR
@@ -68,7 +54,7 @@ Options:
                             root directory.
                         Default: {GODOT_PROJECT_DIRS}.
   -h, --help            print this help message.
-      --clean           remove Pandoc output directory.
+      --clean           remove output directory.
                         Default: false.
   -i, --ignore-dir:DIR  add DIR to a list to ignore when caching Markdown,
                         GDScript and Shader files. This option can be
@@ -77,32 +63,11 @@ Options:
                         *Note*
                           - That DIR is relative to the course project
                             root directory.
-                          - The Pandoc outut directory is automatically
+                          - The outut directory is automatically
                             added to the ignored list.
-  -p, --pandoc-exe:PATH Pandoc executable path or name.
   -v, --verbose         print extra information when building the course.
 
 Shortcodes:
-  {{{{ contents [maxLevel] }}}}
-    This shortcode is replaced by a Table of Contents (ToC) with links generated
-    from the available headings.
-
-    The optional `maxLevel` argument denotes the maximum heading level to include
-    in the ToC.
-
-    Note that the ToC does not include the title-level heading.
-
-  {{{{ link fileName[.md] [text [text]] }}}}
-    This shortcode is replaced by a link of the form:
-    `[fileName](path-to-fileName.html)`.
-
-    If the `text` optional argument is given, the link will take the form:
-    `[text](path-to-fileName.html)`.
-
-    Note that `text` can be a multi-word string, for example
-    {{{{ link learn-to-code-how-to-ask-questions How to ask questions }}}} will result in:
-    `[How to ask questions](path-to-learn-to-code-how-to-ask-questions.html)`
-
   {{{{ include fileName(.gd|.shader) [anchorName] }}}}
     This shortcode is replaced by the contents of `fileName(.gd|.shader)`.
 
@@ -120,7 +85,9 @@ Shortcodes:
     For `.shader` files replace # with //."""
 
 
-let RegexDepends = re"{(?:%|{)\h*include\h*(\H+).*\h*(?:%|})}" ## |
+let
+  RegexSlug = re"slug: *"
+  RegexDepends = re"{(?:%|{)\h*include\h*(\H+).*\h*(?:%|})}" ## |
   ## Extract the file name or path to calculate GDScript/Shader dependencies
   ## based on the `{{ include ... }}` shortcode.
 
@@ -144,18 +111,12 @@ proc getDepends(contents: string): seq[string] =
     ).filterIt(it != "")
 
 
-proc getTempDir(workingDir: string): string =
-  ## Returns a random directory name in the `workingDir` folder.
-  ## For example: `workingDir/tmp-12345678`.
-  workingDir / ["tmp-", urandom(RAND_LEN).join[0 ..< RAND_LEN]].join
-
-
-proc resolveWorkingDir(appSettings: AppSettingsBuildCourse): AppSettingsBuildCourse =
+proc resolveWorkingDir(appSettings: AppSettingsBuildGDSchool): AppSettingsBuildGDSchool =
   ## Tries to find the root directory of the course project by checking
   ## either `CFG_FILE` or `appSettings.courseDir` exist.
   ##
   ## If a valid course project was found it returns the updated
-  ## `AppSettingsBuildCourse.workingDir`.
+  ## `AppSettingsBuildGDSchool.workingDir`.
   result = appSettings
   for dir in appSettings.inputDir.parentDirs:
     if (dir / CFG_FILE).fileExists or (dir / result.courseDir).dirExists:
@@ -163,11 +124,11 @@ proc resolveWorkingDir(appSettings: AppSettingsBuildCourse): AppSettingsBuildCou
       break
 
 
-proc resolveAppSettings(appSettings: AppSettingsBuildCourse): AppSettingsBuildCourse =
-  ## Fills `AppSettingsBuildCourse` with either defaults or values found in `CFG_FILE`
+proc resolveAppSettings(appSettings: AppSettingsBuildGDSchool): AppSettingsBuildGDSchool =
+  ## Fills `AppSettingsBuildGDSchool` with either defaults or values found in `CFG_FILE`
   ## if it exists and there were no matching command line arguments given.
   ##
-  ## Returns the updated `AppSettingsBuildCourse` object.
+  ## Returns the updated `AppSettingsBuildGDSchool` object.
   ##
   ## *Note* that it also stops the execution if there was an error with
   ## the given values.
@@ -180,19 +141,12 @@ proc resolveAppSettings(appSettings: AppSettingsBuildCourse): AppSettingsBuildCo
     if result.distDir == "": result.distDir = cfg.getSectionValue("", "distDir", DIST_DIR)
     if result.godotProjectDirs.len == 0: result.godotProjectDirs = cfg.getSectionValue("", "godotProjectDirs").split(",").mapIt(it.strip)
     if result.ignoreDirs.len == 0: result.ignoreDirs = cfg.getSectionValue("", "ignoreDirs").split(",").mapIt(it.strip)
-    if result.pandocExe == "": result.pandocExe = cfg.getSectionValue("", "pandocExe", PANDOC_EXE)
-    if result.pandocAssetsDir == "": result.pandocAssetsDir = cfg.getSectionValue("", "pandocAssetsDir")
-    if result.exec.len == 0: result.exec = cfg.getSectionValue("", "exec").split(",").mapIt(it.strip)
 
   if result.courseDir == "": result.courseDir = COURSE_DIR
   if result.godotProjectDirs.len == 0: result.godotProjectDirs = GODOT_PROJECT_DIRS
   if result.distDir == "": result.distDir = DIST_DIR
-  if result.pandocExe == "": result.pandocExe = PANDOC_EXE
 
   if not result.isCleaning:
-    if findExe(result.pandocExe) == "":
-      fmt"Can't find `{result.pandocExe}` on your system. Exiting.".quit
-
     if not dirExists(result.workingDir / result.courseDir):
       fmt"Can't find course directory `{result.workingDir / result.courseDir}`. Exiting.".quit
 
@@ -206,8 +160,8 @@ proc resolveAppSettings(appSettings: AppSettingsBuildCourse): AppSettingsBuildCo
     result.ignoreDirs.add result.distDir
 
 
-proc getAppSettings(): AppSettingsBuildCourse =
-  ## Returns an `AppSettingsBuildCourse` object with appropriate values. It stops the
+proc getAppSettings(): AppSettingsBuildGDSchool =
+  ## Returns an `AppSettingsBuildGDSchool` object with appropriate values. It stops the
   ## execution if invalid values were found.
   result.inputDir = ".".absolutePath
   result.workingDir = result.inputDir
@@ -229,12 +183,9 @@ proc getAppSettings(): AppSettingsBuildCourse =
       of "clean", "": result.isCleaning = true
       of "course-dir", "c": result.courseDir = value
       of "dist-dir", "d": result.distDir = value
-      of "exec", "e": result.exec.add value
       of "force", "f": result.isForced = true
       of "godot-project-dir", "g": result.godotProjectDirs.add value
       of "ignore-dir", "i": result.ignoreDirs.add value
-      of "pandoc-exe", "p": result.pandocExe = value
-      of "pandoc-assets-dir", "a": result.pandocAssetsDir = value 
       of "verbose", "v": logger.levelThreshold = lvlAll
       else: [ fmt"Unrecognized command line option: `{key}`."
             , ""
@@ -246,48 +197,13 @@ proc getAppSettings(): AppSettingsBuildCourse =
   result = result.resolveAppSettings
 
 
-proc process(appSettings: AppSettingsBuildCourse) =
-  ## Main function that processes the Markdown files from
-  ## `appSettings.courseDir` with Pandoc and the internal preprocessor.
-  var
-    report = Report()
-    runner = PandocRunner.init(appSettings)
-
-  let
-    tmpDir = getTempDir(appSettings.workingDir)
-    pandocAssetsCmdOptions = block:
-      if appSettings.pandocAssetsDir == "":
-        let
-          courseCssFile = tmpDir / CACHE_COURSE_CSS_NAME
-          gdscriptDefFile = tmpDir / CACHE_GDSCRIPT_DEF_NAME
-          gdscriptThemeFile = tmpDir / CACHE_GDSCRIPT_THEME_NAME
-
-        createDir(tmpDir)
-        info fmt"Creating temporary directory `{tmpDir}`..."
-
-        writeFile(courseCssFile, CACHE_COURSE_CSS)
-        writeFile(gdscriptDefFile, CACHE_GDSCRIPT_DEF)
-        writeFile(gdscriptThemeFile, CACHE_GDSCRIPT_THEME)
-
-        [ "--css=\"{courseCssFile}\"".fmt
-        , "--syntax-definition=\"{gdscriptDefFile}\"".fmt
-        , "--highlight-style=\"{gdscriptThemeFile}\"".fmt
-        ].join(SPACE)
-
-      else:
-        [ "--css=\"{appSettings.pandocAssetsDir / CACHE_COURSE_CSS_NAME}\"".fmt
-        , "--syntax-definition=\"{appSettings.pandocAssetsDir / CACHE_GDSCRIPT_DEF_NAME}\"".fmt
-        , "--highlight-style=\"{appSettings.pandocAssetsDir / CACHE_GDSCRIPT_THEME_NAME}\"".fmt
-        ].join(SPACE)
-
-  defer:
-    # The `defer` block always run at the end of the function.
-    if dirExists(tmpDir):
-      info ""
-      info fmt"Removing temporary directory `{tmpDir}`..."
-      removeDir(tmpDir)
-
-  # Prepare the global `cache` for `appSettings.workingDir`.
+proc process(appSettings: AppSettingsBuildGDSchool) =
+  # Copy asset/all subfolders
+  createDir(appSettings.distDir)
+  for dirIn in walkDirs(appSettings.workingDir / appSettings.courseDir / "**" / "*"):
+    let dirOut = dirIn.replace(appSettings.courseDir & DirSep, appSettings.distDir & DirSep)
+    copyDir(dirIn, dirOut)
+  
   cache = prepareCache(appSettings.workingDir, appSettings.courseDir, appSettings.ignoreDirs)
   for fileIn in cache.files.filterIt(
     it.toLower.endsWith(MD_EXT) and
@@ -295,11 +211,8 @@ proc process(appSettings: AppSettingsBuildCourse) =
   ):
     let
       fileIn = appSettings.workingDir / fileIn
-      fileOut = fileIn.multiReplace(
-        (appSettings.courseDir & DirSep, appSettings.distDir & DirSep),
-        (MD_EXT, HTML_EXT)
-      )
-
+      fileOut = fileIn.replace(appSettings.courseDir & DirSep, appSettings.distDir & DirSep)
+    
     var processingMsg = fmt"Processing `{fileIn.relativePath(appSettings.workingDir)}` -> `{fileOut.relativePath(appSettings.workingDir)}`..."
     if logger.levelThreshold == lvlAll:
       info processingMsg
@@ -315,63 +228,27 @@ proc process(appSettings: AppSettingsBuildCourse) =
         fileInContents.getDepends.anyIt(it.fileNewer(fileOut))
       )
 
-    processingMsg = fmt"`{fileIn}` and its dependencies are older than `{fileOut}`. Skipping..."
     if doProcess:
-      runner.addJob(fileIn, fileOut, fileInContents, pandocAssetsCmdOptions)
+      createDir(fileOut.parentDir)
+      info fmt"Creating output `{fileOut.parentDir}` directory..."
+
+      if fileIn.endsWith(META_MDFILE):
+        copyFile(fileIn, fileOut)
+      else:
+        writeFile(fileOut, preprocess(fileIn, fileInContents))
+
     else:
-      report.skipped.inc
       info processingMsg
-
-  runner.waitForJobs(report)
-
-  echo report
-
-
-proc copyGodotProjectDirs(appSettings: AppSettingsBuildCourse) =
-  for godotProjectDir in appSettings.godotProjectDirs:
-    let sourceDir = appSettings.workingDir / godotProjectDir
-    let distDir = appSettings.workingDir / appSettings.distDir / godotProjectDir
-
-    var msg = "Copying `{godotProjectDir}` to `{appSettings.distDir}` and removing anchor comments from GDScript files...".fmt
-    if logger.levelThreshold == lvlAll: info msg else: echo msg
-
-    removeDir(distDir)
-    copyDir(sourceDir, distDir)
-    for path in walkDirRec(distDir):
-      if path.endsWith(GD_EXT):
-        let contents = readFile(path)
-        writeFile(path, contents.replace(regexAnchorLine))
 
 
 when isMainModule:
   let appSettings = getAppSettings()
-  info appSettings
 
   if appSettings.isCleaning:
     removeDir(appSettings.workingDir / appSettings.distDir)
     fmt"Removing `{appSettings.workingDir / appSettings.distDir}`. Exiting.".quit(QuitSuccess)
 
-  if appSettings.exec.len > 0:
-    for cmd in appSettings.exec:
-      let processingMsg = fmt"Running `{cmd}`..."
-      if logger.levelThreshold == lvlAll:
-        info ""
-        info processingMsg
-      else:
-        echo ""
-        echo processingMsg
-
-      let
-          processOptions = if logger.levelThreshold == lvlAll: {poEchoCmd, poStdErrToStdOut} else: {poStdErrToStdOut}
-          execResult = execCmdEx(cmd, processOptions, workingDir = appSettings.workingDir)
-
-      if execResult.output.strip != "" and execResult.exitCode == QuitSuccess:
-        info execResult.output
-
-      elif execResult.exitCode != QuitSuccess:
-        error [execResult.output, "Skipping..."].join(NL)
-
+  echo appSettings
   process(appSettings)
-  copyGodotProjectDirs(appSettings)
   stdout.resetAttributes()
 
