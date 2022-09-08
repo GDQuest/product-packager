@@ -23,7 +23,7 @@ jobs:
           git clone -b '3.4' --single-branch https://github.com/godotengine/godot.git
           nimble -y build
           nimble -y build -d:mingw
-      - name: Rname and Compress files
+      - name: Rename and Compress files
         # find . -type f  ! -name "*.*" -exec mv {} {}.x86_64 \;
         run: |
           export TAG_VERSION="${GITHUB_REF#refs/*/}"
