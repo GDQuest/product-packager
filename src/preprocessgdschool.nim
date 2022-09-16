@@ -17,7 +17,6 @@ import customlogger, types
 
 
 const
-  META_MDFILE = "_index.md"
   COURSE_DIR = "content"
   DIST_DIR = "dist"
   GODOT_PROJECT_DIRS = @["godot-project"]
@@ -231,11 +230,7 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
     if doProcess:
       createDir(fileOut.parentDir)
       info fmt"Creating output `{fileOut.parentDir}` directory..."
-
-      if fileIn.endsWith(META_MDFILE):
-        copyFile(fileIn, fileOut)
-      else:
-        writeFile(fileOut, preprocess(fileIn, fileInContents))
+      writeFile(fileOut, preprocess(fileIn, fileInContents))
 
     else:
       info processingMsg
