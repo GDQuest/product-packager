@@ -18,7 +18,7 @@ import utils
 
 const
   META_MDFILE* = "_index.md"
-  SERVER_DIR = "courses"
+  ROOT_SECTION_FOLDERS = @["courses", "bundles", "pages", "posts"]
 
 let
   regexGodotBuiltIns = ["(`(", CACHE_GODOT_BUILTIN_CLASSES.join("|"), ")`)"].join.re
@@ -71,30 +71,42 @@ proc preprocessCodeLine(cl: CodeLine, mdBlocks: seq[Block]; fileName: string): s
   of clkRegular: cl.line
 
 
-proc computeImageSlugs(fileName: string): seq[string] =
+proc computeImageSlugs(fileName: string, rootSectionFolder: string): seq[string] =
   if fileName in cacheSlug:
     return cacheSlug[fileName]
 
   for dir in fileName.parentDirs(inclusive = false):
+    if dir.endsWith(rootSectionFolder):
+      break
+
     let meta_mdpath = dir / META_MDFILE
     if meta_mdpath.fileExists:
       for mdYAMLFrontMatter in readFile(meta_mdpath).parse.filterIt(it.kind == bkYAMLFrontMatter):
         for line in mdYAMLFrontMatter.body:
           if line.startsWith(regexSlug):
             result.add line.replace(regexSlug, "")
+    else:
+      result.add(dir.lastPathPart())
 
   result = result.reversed
   cacheSlug[fileName] = result
 
 
-proc preprocessImage(img: Block, mdBlocks: seq[Block], fileName: string): string =
+proc preprocessImage(img: Block, mdBlocks: seq[Block], fileName: string, rootSectionFolder: string): string =
   var img = img
   img.path.removePrefix("./")
-  img.path = (@["", SERVER_DIR] & computeImageSlugs(fileName) & img.path.split(AltSep)).join($AltSep)
+  img.path = (@["", rootSectionFolder] & computeImageSlugs(fileName, rootSectionFolder) & img.path.split(AltSep)).join($AltSep)
   img.render
 
 
-proc preprocessBlock(mdBlock: Block, mdBlocks: seq[Block]; fileName: string): string =
+proc getRootSectionFolder(fileName: string): string =
+  for folderName in ROOT_SECTION_FOLDERS:
+    if folderName & AltSep in fileName:
+      return folderName
+  return ""
+
+
+proc preprocessBlock(mdBlock: Block, mdBlocks: seq[Block]; fileName: string, rootSectionFolder: string): string =
   case mdBlock.kind
   of bkShortcode:
     SHORTCODESv2.getOrDefault(mdBlock.name, noOpShortcode)(mdBlock, mdBlocks, fileName)
@@ -112,7 +124,7 @@ proc preprocessBlock(mdBlock: Block, mdBlocks: seq[Block]; fileName: string): st
     ].join(NL)
   
   of bkImage:
-    mdBlock.preprocessImage(mdBlocks, fileName)
+    mdBlock.preprocessImage(mdBlocks, fileName, rootSectionFolder)
 
   else:
     mdBlock.render
@@ -120,5 +132,7 @@ proc preprocessBlock(mdBlock: Block, mdBlocks: seq[Block]; fileName: string): st
 
 proc preprocess*(fileName, contents: string): string =
   let mdBlocks = contents.parse
-  mdBlocks.mapIt(preprocessBlock(it, mdBlocks, fileName)).join(NL)
-
+  let rootSectionFolder = getRootSectionFolder(fileName)
+  if rootSectionFolder.isEmptyOrWhitespace():
+    error fmt"The file {fileName} should be in one of the following folders: {ROOT_SECTION_FOLDERS}"
+  mdBlocks.mapIt(preprocessBlock(it, mdBlocks, fileName, rootSectionFolder)).join(NL)
