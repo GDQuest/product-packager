@@ -145,7 +145,9 @@ def process_course_content_files(args: Args):
         slug = os.path.basename(path)
         chapter_dir = os.path.basename(os.path.dirname(path))
         target_markdown_file = os.path.join(args.output_folder, chapter_dir, slug)
-        new_file_path = Utils.copy_markdown_file_and_dependencies(path, target_markdown_file)
+        new_file_path = Utils.copy_markdown_file_and_dependencies(
+            path, target_markdown_file
+        )
         created_markdown_files.append(new_file_path)
         print(new_file_path)
 
@@ -192,7 +194,7 @@ class Utils:
             os.path.join(folder, f)
             for folder, _, files in os.walk(content_folder)
             for f in files
-            if f.endswith(".md") and f != "_index.md"
+            if f.endswith(".md")
         ]
 
     @staticmethod
