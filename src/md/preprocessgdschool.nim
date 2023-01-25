@@ -71,12 +71,12 @@ proc preprocessCodeLine(cl: CodeLine, mdBlocks: seq[Block]; fileName: string): s
   of clkRegular: cl.line
 
 
-proc computeImageSlugs(fileName: string, rootSectionFolder: string): seq[string] =
+proc computeImageSlugs(fileName: string, imagePathPrefix: string): seq[string] =
   if fileName in cacheSlug:
     return cacheSlug[fileName]
 
   for dir in fileName.parentDirs(inclusive = false):
-    if dir.endsWith(rootSectionFolder):
+    if dir.endsWith(imagePathPrefix):
       break
 
     let meta_mdpath = dir / META_MDFILE
@@ -92,14 +92,14 @@ proc computeImageSlugs(fileName: string, rootSectionFolder: string): seq[string]
   cacheSlug[fileName] = result
 
 
-proc preprocessImage(img: Block, mdBlocks: seq[Block], fileName: string, rootSectionFolder: string): string =
+proc preprocessImage(img: Block, mdBlocks: seq[Block], fileName: string, imagePathPrefix: string): string =
   var img = img
   img.path.removePrefix("./")
-  img.path = (@["", rootSectionFolder] & computeImageSlugs(fileName, rootSectionFolder) & img.path.split(AltSep)).join($AltSep)
+  img.path = (@["", imagePathPrefix] & computeImageSlugs(fileName, imagePathPrefix) & img.path.split(AltSep)).join($AltSep)
   img.render
 
 
-proc preprocessBlock(mdBlock: Block, mdBlocks: seq[Block]; fileName: string, rootSectionFolder: string): string =
+proc preprocessBlock(mdBlock: Block, mdBlocks: seq[Block]; fileName: string, imagePathPrefix: string): string =
   case mdBlock.kind
   of bkShortcode:
     SHORTCODESv2.getOrDefault(mdBlock.name, noOpShortcode)(mdBlock, mdBlocks, fileName)
@@ -117,21 +117,22 @@ proc preprocessBlock(mdBlock: Block, mdBlocks: seq[Block]; fileName: string, roo
     ].join(NL)
   
   of bkImage:
-    mdBlock.preprocessImage(mdBlocks, fileName, rootSectionFolder)
+    mdBlock.preprocessImage(mdBlocks, fileName, imagePathPrefix)
 
   else:
     mdBlock.render
 
 
-proc preprocess*(fileName, contents: string, courseName: string): string =
+proc preprocess*(fileName, contents: string, imagePathPrefix: string): string =
   let mdBlocks = contents.parse
 
-  var rootSectionFolder = courseName
-  for folderName in ROOT_SECTION_FOLDERS:
-    if folderName & AltSep in fileName:
-      rootSectionFolder = folderName
-      break
+  var prefix = imagePathPrefix
+  if prefix == "":
+    for folderName in ROOT_SECTION_FOLDERS:
+      if folderName & AltSep in fileName:
+        prefix = folderName
+        break
+    if prefix.isEmptyOrWhitespace():
+      error fmt"The file {fileName} should be in one of the following folders: {ROOT_SECTION_FOLDERS}"
 
-  if rootSectionFolder.isEmptyOrWhitespace():
-    error fmt"The file {fileName} should be in one of the following folders: {ROOT_SECTION_FOLDERS}"
-  mdBlocks.mapIt(preprocessBlock(it, mdBlocks, fileName, rootSectionFolder)).join(NL)
+  mdBlocks.mapIt(preprocessBlock(it, mdBlocks, fileName, prefix)).join(NL)

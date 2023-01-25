@@ -152,13 +152,13 @@ proc getTempDir(workingDir: string): string =
 
 proc resolveWorkingDir(appSettings: AppSettingsBuildCourse): AppSettingsBuildCourse =
   ## Tries to find the root directory of the course project by checking
-  ## either `CFG_FILE` or `appSettings.courseDir` exist.
+  ## either `CFG_FILE` or `appSettings.contentDir` exist.
   ##
   ## If a valid course project was found it returns the updated
   ## `AppSettingsBuildCourse.workingDir`.
   result = appSettings
   for dir in appSettings.inputDir.parentDirs:
-    if (dir / CFG_FILE).fileExists or (dir / result.courseDir).dirExists:
+    if (dir / CFG_FILE).fileExists or (dir / result.contentDir).dirExists:
       result.workingDir = dir
       break
 
@@ -176,7 +176,7 @@ proc resolveAppSettings(appSettings: AppSettingsBuildCourse): AppSettingsBuildCo
 
   if (result.workingDir / CFG_FILE).fileExists:
     let cfg = loadConfig(result.workingDir / CFG_FILE)
-    if result.courseDir == "": result.courseDir = cfg.getSectionValue("", "courseDir", COURSE_DIR)
+    if result.contentDir == "": result.contentDir = cfg.getSectionValue("", "contentDir", COURSE_DIR)
     if result.distDir == "": result.distDir = cfg.getSectionValue("", "distDir", DIST_DIR)
     if result.godotProjectDirs.len == 0: result.godotProjectDirs = cfg.getSectionValue("", "godotProjectDirs").split(",").mapIt(it.strip)
     if result.ignoreDirs.len == 0: result.ignoreDirs = cfg.getSectionValue("", "ignoreDirs").split(",").mapIt(it.strip)
@@ -184,7 +184,7 @@ proc resolveAppSettings(appSettings: AppSettingsBuildCourse): AppSettingsBuildCo
     if result.pandocAssetsDir == "": result.pandocAssetsDir = cfg.getSectionValue("", "pandocAssetsDir")
     if result.exec.len == 0: result.exec = cfg.getSectionValue("", "exec").split(",").mapIt(it.strip)
 
-  if result.courseDir == "": result.courseDir = COURSE_DIR
+  if result.contentDir == "": result.contentDir = COURSE_DIR
   if result.godotProjectDirs.len == 0: result.godotProjectDirs = GODOT_PROJECT_DIRS
   if result.distDir == "": result.distDir = DIST_DIR
   if result.pandocExe == "": result.pandocExe = PANDOC_EXE
@@ -193,8 +193,8 @@ proc resolveAppSettings(appSettings: AppSettingsBuildCourse): AppSettingsBuildCo
     if findExe(result.pandocExe) == "":
       fmt"Can't find `{result.pandocExe}` on your system. Exiting.".quit
 
-    if not dirExists(result.workingDir / result.courseDir):
-      fmt"Can't find course directory `{result.workingDir / result.courseDir}`. Exiting.".quit
+    if not dirExists(result.workingDir / result.contentDir):
+      fmt"Can't find course directory `{result.workingDir / result.contentDir}`. Exiting.".quit
 
     let ignoreDirsErrors = result.ignoreDirs
       .filterIt(not dirExists(result.workingDir / it))
@@ -227,7 +227,7 @@ proc getAppSettings(): AppSettingsBuildCourse =
       case key
       of "help", "h": HELP_MESSAGE.fmt.quit(QuitSuccess)
       of "clean", "": result.isCleaning = true
-      of "course-dir", "c": result.courseDir = value
+      of "course-dir", "c": result.contentDir = value
       of "dist-dir", "d": result.distDir = value
       of "exec", "e": result.exec.add value
       of "force", "f": result.isForced = true
@@ -248,7 +248,7 @@ proc getAppSettings(): AppSettingsBuildCourse =
 
 proc process(appSettings: AppSettingsBuildCourse) =
   ## Main function that processes the Markdown files from
-  ## `appSettings.courseDir` with Pandoc and the internal preprocessor.
+  ## `appSettings.contentDir` with Pandoc and the internal preprocessor.
   var
     report = Report()
     runner = PandocRunner.init(appSettings)
@@ -288,15 +288,15 @@ proc process(appSettings: AppSettingsBuildCourse) =
       removeDir(tmpDir)
 
   # Prepare the global `cache` for `appSettings.workingDir`.
-  cache = prepareCache(appSettings.workingDir, appSettings.courseDir, appSettings.ignoreDirs)
+  cache = prepareCache(appSettings.workingDir, appSettings.contentDir, appSettings.ignoreDirs)
   for fileIn in cache.files.filterIt(
     it.toLower.endsWith(MD_EXT) and
-    (appSettings.courseDir & DirSep) in it
+    (appSettings.contentDir & DirSep) in it
   ):
     let
       fileIn = appSettings.workingDir / fileIn
       fileOut = fileIn.multiReplace(
-        (appSettings.courseDir & DirSep, appSettings.distDir & DirSep),
+        (appSettings.contentDir & DirSep, appSettings.distDir & DirSep),
         (MD_EXT, HTML_EXT)
       )
 

@@ -41,9 +41,6 @@ Options:
                         Default: {DIST_DIR}.
                         *Note* that DIR is relative to the course project
                         root directory.
-  -f, --force           run even if course files are older than
-                        the existing output files.
-                        Default: false.
   -g, --godot-project-dir:DIR
                         add DIR to a list for copying to {DIST_DIR}. All
                         anchor comments will be removed from the GDScript
@@ -65,6 +62,7 @@ Options:
                           - The outut directory is automatically
                             added to the ignored list.
   -v, --verbose         print extra information when building the course.
+  -q, --quiet           suppress output
 
 Shortcodes:
   {{{{ include fileName(.gd|.shader) [anchorName] }}}}
@@ -112,13 +110,13 @@ proc getDepends(contents: string): seq[string] =
 
 proc resolveWorkingDir(appSettings: AppSettingsBuildGDSchool): AppSettingsBuildGDSchool =
   ## Tries to find the root directory of the course project by checking
-  ## either `CFG_FILE` or `appSettings.courseDir` exist.
+  ## either `CFG_FILE` or `appSettings.contentDir` exist.
   ##
   ## If a valid course project was found it returns the updated
   ## `AppSettingsBuildGDSchool.workingDir`.
   result = appSettings
   for dir in appSettings.inputDir.parentDirs:
-    if (dir / CFG_FILE).fileExists or (dir / result.courseDir).dirExists:
+    if (dir / CFG_FILE).fileExists or (dir / result.contentDir).dirExists:
       result.workingDir = dir
       break
 
@@ -135,19 +133,20 @@ proc resolveAppSettings(appSettings: AppSettingsBuildGDSchool): AppSettingsBuild
   result = resolveWorkingDir(result)
 
   if (result.workingDir / CFG_FILE).fileExists:
-    let cfg = loadConfig(result.workingDir / CFG_FILE)
-    if result.courseDir == "": result.courseDir = cfg.getSectionValue("", "courseDir", COURSE_DIR)
-    if result.distDir == "": result.distDir = cfg.getSectionValue("", "distDir", DIST_DIR)
-    if result.godotProjectDirs.len == 0: result.godotProjectDirs = cfg.getSectionValue("", "godotProjectDirs").split(",").mapIt(it.strip)
-    if result.ignoreDirs.len == 0: result.ignoreDirs = cfg.getSectionValue("", "ignoreDirs").split(",").mapIt(it.strip)
+    let config = loadConfig(result.workingDir / CFG_FILE)
+    if result.contentDir == "": result.contentDir = config.getSectionValue("", "contentDir", COURSE_DIR)
+    if result.distDir == "": result.distDir = config.getSectionValue("", "distDir", DIST_DIR)
+    if result.ignoreDirs.len == 0: result.ignoreDirs = config.getSectionValue("", "ignoreDirs").split(",").mapIt(it.strip)
+    result.imagePathPrefix = config.getSectionValue("", "imagePathPrefix")
+    if result.imagePathPrefix == "":
+      warn(fmt"Missing imagePathPrefix key in {CFG_FILE}. The program will calculate a prefix to generate absolute file paths in markdown files, but this prefix will not work for courses. Exiting...")
 
-  if result.courseDir == "": result.courseDir = COURSE_DIR
-  if result.godotProjectDirs.len == 0: result.godotProjectDirs = GODOT_PROJECT_DIRS
+  if result.contentDir == "": result.contentDir = COURSE_DIR
   if result.distDir == "": result.distDir = DIST_DIR
 
   if not result.isCleaning:
-    if not dirExists(result.workingDir / result.courseDir):
-      fmt"Can't find course directory `{result.workingDir / result.courseDir}`. Exiting.".quit
+    if not dirExists(result.workingDir / result.contentDir):
+      fmt"Can't find course directory `{result.workingDir / result.contentDir}`. Exiting.".quit
 
     let ignoreDirsErrors = result.ignoreDirs
       .filterIt(not dirExists(result.workingDir / it))
@@ -166,8 +165,8 @@ proc getAppSettings(): AppSettingsBuildGDSchool =
   result.workingDir = result.inputDir
 
   for kind, key, value in getopt(
-    shortNoVal = {'f', 'h', 'v'},
-    longNoVal = @["clean", "force", "help", "verbose"]
+    shortNoVal = {'h', 'v', 'q'},
+    longNoVal = @["clean", "help", "verbose", "quiet"]
   ):
     case kind
     of cmdEnd: break
@@ -180,12 +179,11 @@ proc getAppSettings(): AppSettingsBuildGDSchool =
       case key
       of "help", "h": HELP_MESSAGE.fmt.quit(QuitSuccess)
       of "clean", "": result.isCleaning = true
-      of "course-dir", "c": result.courseDir = value
+      of "course-dir", "c": result.contentDir = value
       of "dist-dir", "d": result.distDir = value
-      of "force", "f": result.isForced = true
-      of "godot-project-dir", "g": result.godotProjectDirs.add value
       of "ignore-dir", "i": result.ignoreDirs.add value
       of "verbose", "v": logger.levelThreshold = lvlAll
+      of "quiet", "q": result.isQuiet = true
       else: [ fmt"Unrecognized command line option: `{key}`."
             , ""
             , "Help:"
@@ -199,41 +197,32 @@ proc getAppSettings(): AppSettingsBuildGDSchool =
 proc process(appSettings: AppSettingsBuildGDSchool) =
   # Copy asset/all subfolders
   createDir(appSettings.distDir)
-  for dirIn in walkDirs(appSettings.workingDir / appSettings.courseDir / "**" / "*"):
-    let dirOut = dirIn.replace(appSettings.courseDir & DirSep, appSettings.distDir & DirSep)
+  for dirIn in walkDirs(appSettings.workingDir / appSettings.contentDir / "**" / "*"):
+    let dirOut = dirIn.replace(appSettings.contentDir & DirSep, appSettings.distDir & DirSep)
     copyDir(dirIn, dirOut)
   
-  cache = prepareCache(appSettings.workingDir, appSettings.courseDir, appSettings.ignoreDirs)
+  cache = prepareCache(appSettings.workingDir, appSettings.contentDir, appSettings.ignoreDirs)
   for fileIn in cache.files.filterIt(
     it.toLower.endsWith(MD_EXT) and
-    (appSettings.courseDir & DirSep) in it
+    (appSettings.contentDir & DirSep) in it
   ):
     let
       fileIn = appSettings.workingDir / fileIn
-      fileOut = fileIn.replace(appSettings.courseDir & DirSep, appSettings.distDir & DirSep)
-    
-    var processingMsg = fmt"Processing `{fileIn.relativePath(appSettings.workingDir)}` -> `{fileOut.relativePath(appSettings.workingDir)}`..."
-    if logger.levelThreshold == lvlAll:
-      info processingMsg
-    else:
-      echo processingMsg
+      fileOut = fileIn.replace(appSettings.contentDir & DirSep, appSettings.distDir & DirSep)
 
-    let
-      fileInContents = readFile(fileIn)
-      doProcess = (
-        appSettings.isForced or
-        not fileExists(fileOut) or
-        fileIn.fileNewer(fileOut) or
-        fileInContents.getDepends.anyIt(it.fileNewer(fileOut))
-      )
+    if not appSettings.isQuiet:
+      let processingMsg = fmt"Processing `{fileIn.relativePath(appSettings.workingDir)}` -> `{fileOut.relativePath(appSettings.workingDir)}`..."
+      if logger.levelThreshold == lvlAll:
+        info processingMsg
+      else:
+        echo processingMsg
 
-    if doProcess:
-      createDir(fileOut.parentDir)
+    let fileInContents = readFile(fileIn)
+    createDir(fileOut.parentDir)
+    if not appSettings.isQuiet:
       info fmt"Creating output `{fileOut.parentDir}` directory..."
-      writeFile(fileOut, preprocess(fileIn, fileInContents, appSettings.courseDir))
 
-    else:
-      info processingMsg
+    writeFile(fileOut, preprocess(fileIn, fileInContents, appSettings.imagePathPrefix))
 
 
 when isMainModule:

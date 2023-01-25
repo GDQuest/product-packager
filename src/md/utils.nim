@@ -38,7 +38,7 @@ var cache*: Cache ## |
 proc `$`*(r: Report): string = fmt"Summary: {r.built} built, {r.errors} errors, {r.skipped} skipped."
 
 
-proc prepareCache*(workingDir, courseDir: string; ignoreDirs: openArray[string]): Cache =
+proc prepareCache*(workingDir, contentDir: string; ignoreDirs: openArray[string]): Cache =
   ## Retruns a `Cache` object with:
   ##   - `return.files`: `seq[string]` stores all Markdown, GDScript and Shader
   ##                     paths.
@@ -67,9 +67,9 @@ proc prepareCache*(workingDir, courseDir: string; ignoreDirs: openArray[string])
           if (path.toLower.endsWith(GD_EXT) or path.toLower.endsWith(SHADER_EXT)):
             blockResult.add searchDir / path
 
-      for path in walkDirRec(workingDir / courseDir, relative = true):
+      for path in walkDirRec(workingDir / contentDir, relative = true):
         if path.toLower.endsWith(MD_EXT):
-          blockResult.add courseDir / path
+          blockResult.add contentDir / path
 
       blockResult
 

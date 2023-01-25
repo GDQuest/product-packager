@@ -16,7 +16,7 @@ type
   AppSettingsBuildCourse* = object
     inputDir*: string
     workingDir*: string
-    courseDir*: string
+    contentDir*: string
     distDir*: string
     godotProjectDirs*: seq[string]
     ignoreDirs*: seq[string]
@@ -29,12 +29,15 @@ type
   AppSettingsBuildGDSchool* = object
     inputDir*: string
     workingDir*: string
-    courseDir*: string
+    contentDir*: string
     distDir*: string
     godotProjectDirs*: seq[string]
     ignoreDirs*: seq[string]
     isCleaning*: bool
     isForced*: bool
+    isQuiet*: bool
+    # Prefix to preprend to markdown image urls when making them absolute for GDSchool.
+    imagePathPrefix*: string
 
 
 func `$`*(appSettings: AppSettingsFormat): string =
@@ -49,7 +52,7 @@ func `$`*(appSettings: AppSettingsBuildCourse): string =
   [ "AppSettings:"
   , "\tinputDir: {appSettings.inputDir}".fmt
   , "\tworkingDir: {appSettings.workingDir}".fmt
-  , "\tcourseDir: {appSettings.courseDir}".fmt
+  , "\tcontentDir: {appSettings.contentDir}".fmt
   , "\tdistDir: {appSettings.distDir}".fmt
   , "\tgodotProjectDirs: {appSettings.godotProjectDirs}".fmt
   , "\tignoreDirs: {appSettings.ignoreDirs.join(\", \")}".fmt
@@ -65,7 +68,7 @@ func `$`*(appSettings: AppSettingsBuildGDSchool): string =
   [ "AppSettings:"
   , "\tinputDir: {appSettings.inputDir}".fmt
   , "\tworkingDir: {appSettings.workingDir}".fmt
-  , "\tcourseDir: {appSettings.courseDir}".fmt
+  , "\tcontentDir: {appSettings.contentDir}".fmt
   , "\tdistDir: {appSettings.distDir}".fmt
   , "\tgodotProjectDirs: {appSettings.godotProjectDirs}".fmt
   , "\tignoreDirs: {appSettings.ignoreDirs.join(\", \")}".fmt
