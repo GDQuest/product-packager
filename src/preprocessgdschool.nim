@@ -230,7 +230,7 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
     if doProcess:
       createDir(fileOut.parentDir)
       info fmt"Creating output `{fileOut.parentDir}` directory..."
-      writeFile(fileOut, preprocess(fileIn, fileInContents))
+      writeFile(fileOut, preprocess(fileIn, fileInContents, appSettings.courseDir))
 
     else:
       info processingMsg

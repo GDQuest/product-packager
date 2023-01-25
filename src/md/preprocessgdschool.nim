@@ -99,13 +99,6 @@ proc preprocessImage(img: Block, mdBlocks: seq[Block], fileName: string, rootSec
   img.render
 
 
-proc getRootSectionFolder(fileName: string): string =
-  for folderName in ROOT_SECTION_FOLDERS:
-    if folderName & AltSep in fileName:
-      return folderName
-  return ""
-
-
 proc preprocessBlock(mdBlock: Block, mdBlocks: seq[Block]; fileName: string, rootSectionFolder: string): string =
   case mdBlock.kind
   of bkShortcode:
@@ -130,9 +123,15 @@ proc preprocessBlock(mdBlock: Block, mdBlocks: seq[Block]; fileName: string, roo
     mdBlock.render
 
 
-proc preprocess*(fileName, contents: string): string =
+proc preprocess*(fileName, contents: string, courseName: string): string =
   let mdBlocks = contents.parse
-  let rootSectionFolder = getRootSectionFolder(fileName)
+
+  var rootSectionFolder = courseName
+  for folderName in ROOT_SECTION_FOLDERS:
+    if folderName & AltSep in fileName:
+      rootSectionFolder = folderName
+      break
+
   if rootSectionFolder.isEmptyOrWhitespace():
     error fmt"The file {fileName} should be in one of the following folders: {ROOT_SECTION_FOLDERS}"
   mdBlocks.mapIt(preprocessBlock(it, mdBlocks, fileName, rootSectionFolder)).join(NL)

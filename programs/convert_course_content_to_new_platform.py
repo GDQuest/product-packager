@@ -328,7 +328,7 @@ class Utils:
             os.makedirs(output_images_folder)
 
         # Copy files to output path
-        MEDIA_FILE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".mp4")
+        MEDIA_FILE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".mp4")
         for folder, _, files in os.walk(input_folder):
             for file in files:
                 file_path = os.path.join(folder, file)

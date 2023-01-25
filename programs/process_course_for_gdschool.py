@@ -56,7 +56,7 @@ def main():
         ".",
         converted_content_directory,
     ]
-    nim_preprocessor_command = ["preprocessgdschool", "--course-dir:converted_content"]
+    nim_preprocessor_command = ["preprocessgdschool", "-f", "--course-dir:converted_content"]
     print(f"Executing: {' '.join(convert_command)}")
 
     # Convert content, then preprocess using the nim preprocessor
@@ -64,13 +64,13 @@ def main():
     subprocess.run(nim_preprocessor_command, cwd=args.input_directory_path)
 
     # # Copy files to GDSchool
-    gdschool_target_directory = os.path.join(args.gdschool_repository_path, "markdown", "courses", os.path.basename(args.input_directory_path))
+    gdschool_target_directory = os.path.join(args.gdschool_repository_path, "markdown", "courses")
     if os.path.exists(gdschool_target_directory):
         shutil.rmtree(gdschool_target_directory)
-    output = shutil.copytree(os.path.join(args.input_directory_path, converted_content_directory), gdschool_target_directory)
+    output = shutil.copytree(os.path.join(args.input_directory_path, "dist", "courses"), gdschool_target_directory)
 
     # Rename output directory to course name
-    os.rename(output, os.path.join(gdschool_target_directory, os.path.basename(args.input_directory_path)))
+    # os.rename(output, os.path.join(gdschool_target_directory, os.path.basename(args.input_directory_path)))
 
 if __name__ == "__main__":
     main()
