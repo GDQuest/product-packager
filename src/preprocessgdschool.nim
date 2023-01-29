@@ -221,8 +221,10 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
     createDir(fileOut.parentDir)
     if not appSettings.isQuiet:
       info fmt"Creating output `{fileOut.parentDir}` directory..."
-
-    writeFile(fileOut, preprocess(fileIn, fileInContents, appSettings.imagePathPrefix))
+    if fileIn.endsWith("_index.md"):
+      writeFile(fileOut, fileInContents)
+    else:
+      writeFile(fileOut, processContent(fileInContents, fileIn, appSettings.imagePathPrefix))
 
 
 when isMainModule:
