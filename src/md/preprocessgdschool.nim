@@ -17,6 +17,7 @@ var cacheSlug: Table[string, seq[string]]
 let
   regexShortcodeInclude = re"{{ *include.+}}"
   regexMarkdownImage = re"!\[(?P<alt>.*)\]\((?P<path>.+)\)"
+  regexHtmlImage = re"""<\s*img.+src="(?P<path>.+?)".*\/>"""
   regexMarkdownCodeBlock = re"(?m)(?s)```(?P<language>\w+?)?\n(?P<body>.+?)```"
   regexShortcodeArgsInclude = re"{{ *include (?P<file>.+?\.[a-zA-Z0-9]+) *(?P<anchor>\w+)? *}}"
   regexGodotBuiltIns = ["(`(?P<class>", CACHE_GODOT_BUILTIN_CLASSES.join("|"), ")`)"].join.re
@@ -99,13 +100,20 @@ proc makePathsAbsolute(content: string, fileName: string, pathPrefix = ""): stri
 
     result = (@[pathPrefix] & slug & relativePath.split(AltSep)).join($AltSep)
 
-  proc replaceImagePaths(match: RegexMatch): string =
+  proc replaceMarkdownImagePaths(match: RegexMatch): string =
     let
       parts = match.captures.toTable()
       alt = parts.getOrDefault("alt", "")
       pathAbsolute = makeUrlAbsolute(parts["path"])
 
     result = fmt"![{alt}]({pathAbsolute})"
+
+  proc replaceHtmlImagePaths(match: RegexMatch): string =
+    let
+      parts = match.captures.toTable()
+      path = parts["path"]
+
+    result = match.match.replace(path, makeUrlAbsolute(path))
 
   proc replaceDownloadPaths(match: RegexMatch): string =
 
@@ -116,7 +124,8 @@ proc makePathsAbsolute(content: string, fileName: string, pathPrefix = ""): stri
     result = match.match.replace(regexDownloadsSingleFile, replaceDownloadPath)
     result = result.replace(regexDownloadsMultipleFiles, replaceDownloadPath)
 
-  result = content.replace(regexMarkdownImage, replaceImagePaths)
+  result = content.replace(regexMarkdownImage, replaceMarkdownImagePaths)
+  result = content.replace(regexHtmlImage, replaceHtmlImagePaths)
   result = result.replace(regexDownloads, replaceDownloadPaths)
 
 
