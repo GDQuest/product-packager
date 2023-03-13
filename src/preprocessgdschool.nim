@@ -221,7 +221,9 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
     createDir(fileOut.parentDir)
     if not appSettings.isQuiet:
       info fmt"Creating output `{fileOut.parentDir}` directory..."
-    if fileIn.endsWith("_index.md"):
+    # We want to process the root _index.md file only because it is the sales
+    # page. But other _index.md pages are only section metadata files
+    if fileIn.endsWith("_index.md") and not(fileIn.parentDir.endsWith(appSettings.contentDir)):
       writeFile(fileOut, fileInContents)
     else:
       writeFile(fileOut, processContent(fileInContents, fileIn, appSettings.imagePathPrefix))
