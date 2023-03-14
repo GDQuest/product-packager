@@ -125,7 +125,7 @@ proc makePathsAbsolute(content: string, fileName: string, pathPrefix = ""): stri
     result = result.replace(regexDownloadsMultipleFiles, replaceDownloadPath)
 
   result = content.replace(regexMarkdownImage, replaceMarkdownImagePaths)
-  result = content.replace(regexHtmlImage, replaceHtmlImagePaths)
+  result = result.replace(regexHtmlImage, replaceHtmlImagePaths)
   result = result.replace(regexDownloads, replaceDownloadPaths)
 
 
