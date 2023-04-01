@@ -197,7 +197,7 @@ proc getAppSettings(): AppSettingsBuildGDSchool =
 proc process(appSettings: AppSettingsBuildGDSchool) =
   # Copy asset/all subfolders
   createDir(appSettings.distDir)
-  for dirIn in walkDirs(appSettings.workingDir / appSettings.contentDir / "**" / "*"):
+  for dirIn in walkDirs(appSettings.workingDir / appSettings.contentDir / "**"):
     let dirOut = dirIn.replace(appSettings.contentDir & DirSep, appSettings.distDir & DirSep)
     copyDir(dirIn, dirOut)
   
