@@ -115,18 +115,8 @@ proc makePathsAbsolute(content: string, fileName: string, pathPrefix = ""): stri
 
     result = match.match.replace(path, makeUrlAbsolute(path))
 
-  proc replaceDownloadPaths(match: RegexMatch): string =
-
-    proc replaceDownloadPath(fileMatch: RegexMatch): string =
-      let url = fileMatch.captures.toTable()["url"]
-      result = fileMatch.match.replace(url, makeUrlAbsolute(url))
-
-    result = match.match.replace(regexDownloadsSingleFile, replaceDownloadPath)
-    result = result.replace(regexDownloadsMultipleFiles, replaceDownloadPath)
-
   result = content.replace(regexMarkdownImage, replaceMarkdownImagePaths)
   result = result.replace(regexHtmlImage, replaceHtmlImagePaths)
-  result = result.replace(regexDownloads, replaceDownloadPaths)
 
 
 proc addGodotIcons(content: string): string =
