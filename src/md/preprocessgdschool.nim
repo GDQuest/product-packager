@@ -23,6 +23,7 @@ let
   regexGodotBuiltIns = ["(`(?P<class>", CACHE_GODOT_BUILTIN_CLASSES.join("|"), ")`)"].join.re
   regexCapital = re"([23]D|[A-Z])"
   regexAnchorLine = re"(?m)(?s)\h*(#|\/\/)\h*(ANCHOR|END):.*?(\v|$)"
+  regexVersionSuffix = re"(_v[0-9]+)"
 
   regexDownloads = re"(?m)(?s)<Downloads .+?>"
   regexDownloadsSingleFile = re("file=\"(?P<url>.+?)\">")
@@ -66,7 +67,15 @@ proc preprocessCodeListings(content: string): string =
   proc replaceMarkdownCodeBlock(match: RegexMatch): string =
     let parts = match.captures.toTable()
     let language = parts.getOrDefault("language", "gdscript")
-    result = "```" & language & "\n" & parts["body"].replace(regexShortcodeInclude, replaceIncludeShortcode) & "```"
+
+    result = "```" & language
+
+    let includeArgsMatch = find(parts["body"], regexShortcodeArgsInclude)
+    if includeArgsMatch.isSome():
+      let captures = includeArgsMatch.get.captures.toTable()
+      result = result & ":" & captures["file"].replace(regexVersionSuffix, "")
+      echo result
+    result = result & "\n" & parts["body"].replace(regexShortcodeInclude, replaceIncludeShortcode) & "```"
     
   result = content.replace(regexMarkdownCodeBlock, replaceMarkdownCodeBlock)
 
