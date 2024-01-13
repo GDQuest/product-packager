@@ -1,10 +1,9 @@
-## Program to preprocess markdown and MDX files for GDSchool.
+## This module contains the main logic for processing mdx content for GDSchool.
 ## It find and replaces include shortcodes in code blocks and adds Godot icons
 ## for built-in class names in inline code marks.
 ## Also, produces a css file with the list of all Godot icons used in the content.
 import std /
   [logging
-  , os
   , nre
   , strformat
   , strutils
@@ -90,17 +89,5 @@ proc addGodotIcons(content: string): string =
   result = content.replace(regexGodotBuiltIns, replaceGodotIcon)
 
 
-proc processContent*(fileContent: string, fileName: string,
-    pathPrefix = ""): string =
-  const ROOT_SECTION_FOLDERS = @["courses", "bundles", "pages", "posts"]
-
-  var prefix = pathPrefix
-  if prefix == "":
-    for folderName in ROOT_SECTION_FOLDERS:
-      if folderName & AltSep in fileName:
-        prefix = folderName
-        break
-    if prefix.isEmptyOrWhitespace():
-      error fmt"The file {fileName} should be in one of the following folders: {ROOT_SECTION_FOLDERS}"
-
+proc processContent*(fileContent: string): string =
   result = fileContent.preprocessCodeListings().addGodotIcons()

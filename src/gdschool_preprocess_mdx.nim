@@ -1,16 +1,18 @@
+## Program to preprocess mdx files for GDQuest courses on GDSchool.
+## Replaces include shortcodes with the contents of the included source code files.
+## It also inserts components representing Godot icons in front of Godot class names.
 import std/
   [ logging
   , os
   , parseopt
   , parsecfg
-  , re
   , sequtils
   , strformat
   , strutils
   , terminal
   ]
 import md/
-  [ preprocessgdschool
+  [ gdschool_preprocessor
   , utils
   ]
 import customlogger, types
@@ -82,32 +84,6 @@ Shortcodes:
     For `.shader` files replace # with //."""
 
 
-let
-  RegexSlug = re"slug: *"
-  RegexDepends = re"{(?:%|{)\h*include\h*(\H+).*\h*(?:%|})}" ## |
-  ## Extract the file name or path to calculate GDScript/Shader dependencies
-  ## based on the `{{ include ... }}` shortcode.
-
-
-proc getDepends(contents: string): seq[string] =
-  ## Finds course files GDScript and Shader dependencies based on
-  ## the `{{ include ... }}` shortcode.
-  contents
-    .findAll(RegexDepends)
-    .mapIt(it.replacef(RegexDepends, "$1")).deduplicate
-    .mapIt(
-      try:
-        cache.findFile(it)
-      except ValueError:
-        setForegroundColor(fgYellow)
-        warn [ fmt"While looking for dependencies I got:"
-             , getCurrentExceptionMsg()
-             ].join(NL)
-        setForegroundColor(fgDefault)
-        ""
-    ).filterIt(it != "")
-
-
 proc resolveWorkingDir(appSettings: AppSettingsBuildGDSchool): AppSettingsBuildGDSchool =
   ## Tries to find the root directory of the course project by checking
   ## either `CFG_FILE` or `appSettings.contentDir` exist.
@@ -137,9 +113,6 @@ proc resolveAppSettings(appSettings: AppSettingsBuildGDSchool): AppSettingsBuild
     if result.contentDir == "": result.contentDir = config.getSectionValue("", "contentDir", COURSE_DIR)
     if result.distDir == "": result.distDir = config.getSectionValue("", "distDir", DIST_DIR)
     if result.ignoreDirs.len == 0: result.ignoreDirs = config.getSectionValue("", "ignoreDirs").split(",").mapIt(it.strip)
-    result.imagePathPrefix = config.getSectionValue("", "imagePathPrefix")
-    if result.imagePathPrefix == "":
-      warn(fmt"Missing imagePathPrefix key in {CFG_FILE}. The program will calculate a prefix to generate absolute file paths in markdown files, but this prefix will not work for courses. Exiting...")
 
   if result.contentDir == "": result.contentDir = COURSE_DIR
   if result.distDir == "": result.distDir = DIST_DIR
@@ -221,12 +194,8 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
     createDir(fileOut.parentDir)
     if not appSettings.isQuiet:
       info fmt"Creating output `{fileOut.parentDir}` directory..."
-    # We want to process the root _index.md file only because it is the sales
-    # page. But other _index.md pages are only section metadata files
-    if fileIn.endsWith("_index.md") and not(fileIn.parentDir.endsWith(appSettings.contentDir)):
-      writeFile(fileOut, fileInContents)
-    else:
-      writeFile(fileOut, processContent(fileInContents, fileIn, appSettings.imagePathPrefix))
+
+    writeFile(fileOut, processContent(fileInContents))
 
 
 when isMainModule:
