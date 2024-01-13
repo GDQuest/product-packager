@@ -51,7 +51,7 @@ proc preprocessCodeListings(content: string): string =
         else:
           raise newException(ValueError, "Can't find matching contents for anchor. {SYNOPSIS}")
 
-      result = result.replace(regexAnchorLine, "")
+      result = result.replace(regexAnchorLine, "").strip(chars = {'\n'})
     else:
       error ["Synopsis: `{{ include fileName(.gd|.shader) [anchorName] }}`"
         , fmt"{result}: Incorrect include arguments. Expected 1 or 2 arguments. Skipping..."
@@ -64,11 +64,13 @@ proc preprocessCodeListings(content: string): string =
 
     result = "```" & language
 
-    let includeArgsMatch = find(parts["body"], regexShortcodeArgsInclude)
-    if includeArgsMatch.isSome():
-      let captures = includeArgsMatch.get.captures.toTable()
-      result = result & ":" & captures["file"].replace(regexVersionSuffix, "")
-      echo result
+    # Check if there's an included file in the code block, and if so,
+    # append the filename on the first line.
+    # let includeArgsMatch = find(parts["body"], regexShortcodeArgsInclude)
+    # if includeArgsMatch.isSome():
+    #   let captures = includeArgsMatch.get.captures.toTable()
+    #   result = result & ":" & captures["file"].replace(regexVersionSuffix, "")
+
     result = result & "\n" & parts["body"].replace(regexShortcodeInclude,
         replaceIncludeShortcode) & "```"
 

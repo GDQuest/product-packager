@@ -16,6 +16,7 @@ const
   NL* = "\n"
   GD_EXT* = ".gd"
   MD_EXT* = ".md"
+  MDX_EXT* = ".mdx"
   SHADER_EXT* = ".shader"
   HTML_EXT* = ".html"
 
@@ -68,7 +69,7 @@ proc prepareCache*(workingDir, contentDir: string; ignoreDirs: openArray[string]
             blockResult.add searchDir / path
 
       for path in walkDirRec(workingDir / contentDir, relative = true):
-        if path.toLower.endsWith(MD_EXT):
+        if path.toLower.endsWith(MDX_EXT) or path.toLower.endsWith(MD_EXT):
           blockResult.add contentDir / path
 
       blockResult

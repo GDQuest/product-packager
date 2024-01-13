@@ -176,7 +176,7 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
   
   cache = prepareCache(appSettings.workingDir, appSettings.contentDir, appSettings.ignoreDirs)
   for fileIn in cache.files.filterIt(
-    it.toLower.endsWith(MD_EXT) and
+    (it.toLower.endsWith(MDX_EXT) or it.toLower.endsWith(MD_EXT)) and
     (appSettings.contentDir & DirSep) in it
   ):
     let
