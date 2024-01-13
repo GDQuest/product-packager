@@ -50,7 +50,7 @@ const
   PatternFKeys = r"F\d{1,2}"
   PatternOtherKeys = PatternFKeys & r"|Tab|Up|Down|Left|Right|Backspace|Delete|TAB|UP|DOWN|LEFT|RIGHT|BACKSPACE|DELETE|LMB|MMB|RMB"
   PatternFunctionOrConstructorCall = r"\w+(\.\w+)*\(.*?\)"
-  PatternVariablesAndProperties = r"_\w+|[a-zA-Z0-9]+([\._]\w+)+"
+  PatternVariablesAndProperties = r"((?!_\w+(\s[a-zA-Z0-9]+)+_)(?!_\w+_)_\w+)|[a-zA-Z0-9]+([\._]\w+)+"
 
 let
   RegexFilePath = re([PatternDirPath, PatternFileAtRoot, PatternFilenameOnly].join("|"))
