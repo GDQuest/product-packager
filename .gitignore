@@ -8,3 +8,4 @@ archive.zip
 .vscode/
 .env
 .cache
+src/godot/
