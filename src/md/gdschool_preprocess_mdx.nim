@@ -1,6 +1,8 @@
-import std/
-  [ algorithm
-  , logging
+## Program to preprocess markdown and MDX files for GDSchool.
+## It find and replaces include shortcodes in code blocks and adds Godot icons
+## for built-in class names in inline code marks.
+import std /
+  [logging
   , os
   , nre
   , strformat
@@ -12,22 +14,15 @@ import assets
 import utils
 
 
-var cacheSlug: Table[string, seq[string]]
-
 let
-  regexShortcodeInclude = re"{{ *include.+}}"
-  regexMarkdownImage = re"!\[(?P<alt>.*)\]\((?P<path>.+)\)"
-  regexHtmlImage = re"""<\s*img.+src="(?P<path>.+?)".*\/>"""
+  regexShortcodeInclude = re"< *Include.+/>"
   regexMarkdownCodeBlock = re"(?m)(?s)```(?P<language>\w+?)?\n(?P<body>.+?)```"
-  regexShortcodeArgsInclude = re"{{ *include (?P<file>.+?\.[a-zA-Z0-9]+) *(?P<anchor>\w+)? *}}"
-  regexGodotBuiltIns = ["(`(?P<class>", CACHE_GODOT_BUILTIN_CLASSES.join("|"), ")`)"].join.re
+  regexShortcodeArgsInclude = re(r"""< *Include file=["'](?P<file>.+?\.[a-zA-Z0-9]+)["'] *(anchor=["'](?P<anchor>\w+)["'])? *\/>""")
+  regexGodotBuiltIns = ["(`(?P<class>", CACHE_GODOT_BUILTIN_CLASSES.join("|"),
+      ")`)"].join.re()
   regexCapital = re"([23]D|[A-Z])"
   regexAnchorLine = re"(?m)(?s)\h*(#|\/\/)\h*(ANCHOR|END):.*?(\v|$)"
   regexVersionSuffix = re"(_v[0-9]+)"
-
-  regexDownloads = re"(?m)(?s)<Downloads .+?>"
-  regexDownloadsSingleFile = re("file=\"(?P<url>.+?)\">")
-  regexDownloadsMultipleFiles = re("url: *\"(?P<url>.+?)\">")
 
 
 proc preprocessCodeListings(content: string): string =
@@ -59,9 +54,9 @@ proc preprocessCodeListings(content: string): string =
 
       result = result.replace(regexAnchorLine, "")
     else:
-      error [ "Synopsis: `{{ include fileName(.gd|.shader) [anchorName] }}`"
-            , fmt"{result}: Incorrect include arguments. Expected 1 or 2 arguments. Skipping..."
-            ].join(NL)
+      error ["Synopsis: `{{ include fileName(.gd|.shader) [anchorName] }}`"
+        , fmt"{result}: Incorrect include arguments. Expected 1 or 2 arguments. Skipping..."
+        ].join(NL)
       return match.match
 
   proc replaceMarkdownCodeBlock(match: RegexMatch): string =
@@ -75,63 +70,16 @@ proc preprocessCodeListings(content: string): string =
       let captures = includeArgsMatch.get.captures.toTable()
       result = result & ":" & captures["file"].replace(regexVersionSuffix, "")
       echo result
-    result = result & "\n" & parts["body"].replace(regexShortcodeInclude, replaceIncludeShortcode) & "```"
-    
+    result = result & "\n" & parts["body"].replace(regexShortcodeInclude,
+        replaceIncludeShortcode) & "```"
+
   result = content.replace(regexMarkdownCodeBlock, replaceMarkdownCodeBlock)
-
-
-proc makePathsAbsolute(content: string, fileName: string, pathPrefix = ""): string =
-  ## Find image paths and download file paths and turns relative paths into absolute paths.
-  ## pathPrefix is an optional prefix to preprend to the file path.
-
-  proc makeUrlAbsolute(relativePath: string): string =
-    ## Calculates and returns an absolute url for a relative file path.
-    const META_MDFILE = "_index.md"
-
-    var slug: seq[string]
-    if fileName in cacheSlug:
-      slug = cacheSlug[fileName]
-    else:
-      for directory in fileName.parentDirs(inclusive = false):
-        if directory.endsWith("content"):
-          break
-
-        let meta_mdpath = directory / META_MDFILE
-        if meta_mdpath.fileExists:
-          for line in readFile(meta_mdpath).split("\n"):
-            if line.startsWith("slug: "):
-              slug.add(line.replace("slug: ", ""))
-              break
-        else:
-          slug.add(directory.lastPathPart())
-      slug = slug.reversed
-      cacheSlug[fileName] = slug
-
-    result = (@[pathPrefix] & slug & relativePath.split(AltSep)).join($AltSep)
-
-  proc replaceMarkdownImagePaths(match: RegexMatch): string =
-    let
-      parts = match.captures.toTable()
-      alt = parts.getOrDefault("alt", "")
-      pathAbsolute = makeUrlAbsolute(parts["path"])
-
-    result = fmt"![{alt}]({pathAbsolute})"
-
-  proc replaceHtmlImagePaths(match: RegexMatch): string =
-    let
-      parts = match.captures.toTable()
-      path = parts["path"]
-
-    result = match.match.replace(path, makeUrlAbsolute(path))
-
-  result = content.replace(regexMarkdownImage, replaceMarkdownImagePaths)
-  result = result.replace(regexHtmlImage, replaceHtmlImagePaths)
-
 
 proc addGodotIcons(content: string): string =
   proc replaceGodotIcon(match: RegexMatch): string =
     let className = match.captures.toTable()["class"]
-    let cssClass = ["icon", className.strip(chars = {'`'}).replace(regexCapital, "_$#")].join().toLower()
+    let cssClass = ["icon", className.strip(chars = {'`'}).replace(regexCapital,
+        "_$#")].join().toLower()
     if cssClass in CACHE_GODOT_ICONS:
       result = "<Icon name=\"" & cssClass & "\"/>"
     else:
@@ -141,7 +89,8 @@ proc addGodotIcons(content: string): string =
   result = content.replace(regexGodotBuiltIns, replaceGodotIcon)
 
 
-proc processContent*(fileContent: string, fileName: string, pathPrefix = ""): string =
+proc processContent*(fileContent: string, fileName: string,
+    pathPrefix = ""): string =
   const ROOT_SECTION_FOLDERS = @["courses", "bundles", "pages", "posts"]
 
   var prefix = pathPrefix
@@ -153,4 +102,4 @@ proc processContent*(fileContent: string, fileName: string, pathPrefix = ""): st
     if prefix.isEmptyOrWhitespace():
       error fmt"The file {fileName} should be in one of the following folders: {ROOT_SECTION_FOLDERS}"
 
-  result = fileContent.preprocessCodeListings().makePathsAbsolute(fileName, pathPrefix).addGodotIcons()
+  result = fileContent.preprocessCodeListings().addGodotIcons()
