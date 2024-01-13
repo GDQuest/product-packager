@@ -14,7 +14,7 @@ const
   DIR_GODOT_ICONS = "godot/editor/icons"
   DIR_GODOT_MODULES = "godot/modules"
   DIR_GODOT_DOC_CLASSES = "godot/doc/classes"
-
+  
   CACHE_GODOT_BUILTIN_CLASSES* = block:
     var result: seq[string]
 
@@ -33,11 +33,11 @@ const
 
     for node in walkDir(DIR_GODOT_ICONS):
       if node.kind == pcFile and node.path.toLower.endsWith(SVG_EXT):
-        result[node.path.splitFile.name] = staticRead(fmt"../../{node.path}")
+        result[node.path.splitFile.name] = staticRead(fmt"../{node.path}")
 
     for path in walkDirRec(DIR_GODOT_MODULES):
       if "icons" in path and path.toLower.endsWith(SVG_EXT):
-        result[path.splitFile.name] = staticRead(fmt"../../{path}")
+        result[path.splitFile.name] = staticRead(fmt"../{path}")
 
     result
 

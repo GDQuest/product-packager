@@ -1,3 +1,9 @@
+## Auto-formats markdown documents, saving manual formatting work:
+## - Converts space-based indentations to tabs in code blocks.
+## - Fills GDScript code comments as paragraphs.
+## - Wraps symbols and numeric values in code.
+## - Detects names of Godot built-in classes and wraps them in code.
+## - Wraps other capitalized names, pascal case values into italics (we assume they're node names).
 import std/
   [ parseopt
   , re
@@ -48,7 +54,6 @@ const
 
 let
   RegexFilePath = re([PatternDirPath, PatternFileAtRoot, PatternFilenameOnly].join("|"))
-  RegexStartOfList = re"\s*(- |\d+\. )"
   RegexMaybeCodeCommentLine = re"\s*[#/]*"
   RegexOnePascalCaseWord = re"[A-Z0-9]\w+[A-Z]\w+|[A-Z][a-zA-Z0-9]+(\.\.\.)?"
   RegexOnePascalCaseWordStrict = re"[A-Z0-9]\w+[A-Z]\w+"
@@ -60,7 +65,8 @@ let
   RegexNumber = re"\d+(D|px)|\d+(x\d+)*"
   RegexHexValue = re"(0x|#)[0-9a-fA-F]+"
   RegexCodeIdentifier = re([PatternFunctionOrConstructorCall, PatternVariablesAndProperties].join("|"))
-  RegexGodotBuiltIns = re([r"\b(", CACHE_GODOT_BUILTIN_CLASSES.join("|"), r")\b"].join)
+  # NOTE: Requires folders from Godot to work. See the file assets.nim.
+  RegexGodotBuiltIns = re([r"\b(", assets.CACHE_GODOT_BUILTIN_CLASSES.join("|"), r")\b"].join)
   RegexSkip = re"""({{.*?}}|{%.*?%}|_.+?_|\*\*[^*]+?\*\*|\*[^*]+?\*|`.+?`|".+?"|'(?![vsr\h]).+?'|\!?\[.+?\)|\[.+?\])\s*|\s+|$"""
   RegexStartOfSentence = re"\s*\p{Lu}"
   RegexEndOfSentence = re"[.!?:]\s+"
@@ -104,6 +110,8 @@ let formatters =
   , "any": regexWrap(@[RegexKeyboardFShortcut], ("<kbd>", "</kbd>"))
   , "any": regexWrap(@[RegexFilePath], ("`", "`"))
   , "any": regexWrap(@[RegexMenuOrPropertyEntry], ("*", "*"))
+  # NOTE: Godot built-ins are pulled from the Godot engine source files. Ensure you have them to compile.
+  # See assets.nim for reference.
   , "any": regexWrap(@[RegexCodeIdentifier, RegexGodotBuiltIns], ("`", "`"))
   , "any": regexWrap(@[RegexNumber, RegexHexValue], ("`", "`"))
   , "any": regexWrap(@[RegexOnePascalCaseWordStrict], ("*", "*"))
