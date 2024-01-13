@@ -1,6 +1,7 @@
 ## Program to preprocess markdown and MDX files for GDSchool.
 ## It find and replaces include shortcodes in code blocks and adds Godot icons
 ## for built-in class names in inline code marks.
+## Also, produces a css file with the list of all Godot icons used in the content.
 import std /
   [logging
   , os
@@ -20,7 +21,6 @@ let
   regexShortcodeArgsInclude = re(r"""< *Include file=["'](?P<file>.+?\.[a-zA-Z0-9]+)["'] *(anchor=["'](?P<anchor>\w+)["'])? *\/>""")
   regexGodotBuiltIns = ["(`(?P<class>", CACHE_GODOT_BUILTIN_CLASSES.join("|"),
       ")`)"].join.re()
-  regexCapital = re"([23]D|[A-Z])"
   regexAnchorLine = re"(?m)(?s)\h*(#|\/\/)\h*(ANCHOR|END):.*?(\v|$)"
   regexVersionSuffix = re"(_v[0-9]+)"
 
@@ -75,15 +75,16 @@ proc preprocessCodeListings(content: string): string =
 
   result = content.replace(regexMarkdownCodeBlock, replaceMarkdownCodeBlock)
 
+
+## Appends a react component for each Godot class name used in the markdown content, in inline code marks.
+## For example, it transforms `Node` to <IconGodot name="Node"/>.
 proc addGodotIcons(content: string): string =
   proc replaceGodotIcon(match: RegexMatch): string =
-    let className = match.captures.toTable()["class"]
-    let cssClass = ["icon", className.strip(chars = {'`'}).replace(regexCapital,
-        "_$#")].join().toLower()
-    if cssClass in CACHE_GODOT_ICONS:
-      result = "<Icon name=\"" & cssClass & "\"/>"
+    let className = match.captures.toTable()["class"].strip(chars = {'`'})
+    if className in CACHE_GODOT_ICONS:
+      result = "<IconGodot name=\"" & className & "\"/> " & match.match
     else:
-      info fmt"Couldn't find icon for `{cssClass}`. Skipping..."
+      info fmt"Couldn't find icon for `{className}`. Skipping..."
       result = match.match
 
   result = content.replace(regexGodotBuiltIns, replaceGodotIcon)
