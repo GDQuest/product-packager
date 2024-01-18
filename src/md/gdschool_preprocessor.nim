@@ -16,7 +16,7 @@ import utils
 
 let
   regexShortcodeInclude = re"(?P<prefix>.*)< *Include.+/>"
-  regexMarkdownCodeBlock = re"(?m)(?s)```(?P<language>\w+?)?\n(?P<body>.+?)```"
+  regexMarkdownCodeBlock = re"(?m)(?s)```(?P<language>[\w\-]+?)?\n(?P<body>.+?)```"
   regexShortcodeArgsInclude = re(r""".*< *Include file=["'](?P<file>.+?\.[a-zA-Z0-9]+)["'] *(anchor=["'](?P<anchor>\w+)["'])? *\/>""")
   regexGodotBuiltIns = ["(`(?P<class>", CACHE_GODOT_BUILTIN_CLASSES.join("|"),
       ")`)"].join.re()
