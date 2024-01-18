@@ -15,9 +15,9 @@ import utils
 
 
 let
-  regexShortcodeInclude = re"< *Include.+/>"
+  regexShortcodeInclude = re"(?P<prefix>.*)< *Include.+/>"
   regexMarkdownCodeBlock = re"(?m)(?s)```(?P<language>\w+?)?\n(?P<body>.+?)```"
-  regexShortcodeArgsInclude = re(r"""< *Include file=["'](?P<file>.+?\.[a-zA-Z0-9]+)["'] *(anchor=["'](?P<anchor>\w+)["'])? *\/>""")
+  regexShortcodeArgsInclude = re(r""".*< *Include file=["'](?P<file>.+?\.[a-zA-Z0-9]+)["'] *(anchor=["'](?P<anchor>\w+)["'])? *\/>""")
   regexGodotBuiltIns = ["(`(?P<class>", CACHE_GODOT_BUILTIN_CLASSES.join("|"),
       ")`)"].join.re()
   regexAnchorLine = re"(?m)(?s)\h*(#|\/\/)\h*(ANCHOR|END):.*?(\v|$)"
@@ -34,6 +34,9 @@ proc preprocessCodeListings(content: string): string =
     ## Processes one include shortcode to replace. Finds and loads the
     ## appropriate GDScript or other code file and extracts and returns the
     ## contents corresponding to the requested anchor.
+    
+    let capturesTable = match.captures.toTable()
+    let prefix = capturesTable.getOrDefault("prefix", "")
     let newMatch = match(match.match, regexShortcodeArgsInclude, 0, int.high)
     if newMatch.isSome():
       let
@@ -43,17 +46,24 @@ proc preprocessCodeListings(content: string): string =
       if "anchor" in args:
         let
           anchor = args["anchor"]
-          regexAnchor = re(fmt(r"(?s)\h*(?:#|\/\/)\h*ANCHOR:\h*\b{anchor}\b\h*\v(.*?)\s*(?:#|\/\/)\h*END:\h*\b{anchor}\b"))
+          regexAnchor = re(fmt(r"(?s)\h*(?:#|\/\/)\h*ANCHOR:\h*\b{anchor}\b\h*\v(?P<contents>.*?)\s*(?:#|\/\/)\h*END:\h*\b{anchor}\b"))
 
         var anchorMatch = result.find(regexAnchor)
         if anchorMatch.isSome():
-          result = anchorMatch.get.match
+          let anchorCaptures = anchorMatch.get.captures.toTable()
+          let output = anchorCaptures["contents"]
+          let lines = output.splitLines()
+          var prefixedLines: seq[string] = @[]
+          for line in lines:
+            prefixedLines.add(prefix & line)
+          result = prefixedLines.join("\n")
+          echo(result)
         else:
-          raise newException(ValueError, "Can't find matching contents for anchor. {SYNOPSIS}")
+          raise newException(ValueError, fmt"Can't find matching contents for anchor {anchor} in file {includeFileName}.")
 
       result = result.replace(regexAnchorLine, "").strip(chars = {'\n'})
     else:
-      error ["Synopsis: `{{ include fileName(.gd|.shader) [anchorName] }}`"
+      error ["Synopsis: `<Include file='fileName(.gd|.shader)' [anchor='anchorName'] />`"
         , fmt"{result}: Incorrect include arguments. Expected 1 or 2 arguments. Skipping..."
         ].join(NL)
       return match.match
