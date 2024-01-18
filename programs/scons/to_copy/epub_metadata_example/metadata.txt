@@ -1,5 +1,0 @@
----
-title: PCG Secrets
-author: GDQuest
-lang: en-US
----

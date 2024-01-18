@@ -1,4 +1,0 @@
-colorama==0.4.4
-SCons==4.1.0.post1
-datargs==0.8.0
-pyperclip==1.8.2
