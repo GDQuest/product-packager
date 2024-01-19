@@ -57,7 +57,6 @@ proc preprocessCodeListings(content: string): string =
           for line in lines:
             prefixedLines.add(prefix & line)
           result = prefixedLines.join("\n")
-          echo(result)
         else:
           raise newException(ValueError, fmt"Can't find matching contents for anchor {anchor} in file {includeFileName}.")
 
