@@ -1,0 +1,79 @@
+﻿input,expected
+It is because I did this.,It is because I did this.
+"- A cat.
+1. A boy.
+2. A wolf.","- A cat.
+1. A boy.
+2. A wolf."
+Some directory learn/ and another one like this path/into/A/ should be converted to DirInText.,Some directory <DirInText>learn/</DirInText> and another one like this <DirInText>path/into/A/</DirInText> should be converted to *DirInText*.
+res://TacticalSpaceCombat/Ship/Weapons/WeaponProjectile.tscn.,<FileInText>res://TacticalSpaceCombat/Ship/Weapons/WeaponProjectile.tscn</FileInText>.
+"Vector2(750, 0).","`Vector2(750, 0)`."
+add_central_force(),`add_central_force()`
+_ready() and _some_variable,`_ready()` and `_some_variable`
+Use the file Atlas.svg.,Use the file `Atlas.svg`.
+Vector2.ZERO,`Vector2.ZERO`
+Vector2.ONE.length(),`Vector2.ONE.length()`
+"<video controls width=""772"">
+  <source src=""videos/11.weapon-projectile.mp4"" type=""video/mp4"">
+</video>","<video controls width=""772"">
+  <source src=""videos/11.weapon-projectile.mp4"" type=""video/mp4"">
+</video>"
+"Create a Node2D, Tween, Sprite, and RemoteTransform node.","Create a `Node2D`, `Tween`, *Sprite*, and *RemoteTransform* node."
+Use the Layout -> Full Rect option.,Use the *Layout -> Full Rect* option.
+Click on Animation -> New Animation.,Click on *Animation -> New Animation*.
+{% link Area2D %},{{ link Area2D }}
+The AI controller system operates like this:,The *AI* controller system operates like this:
+"```gdscript
+## This is why we used the generic `Weapon` name for both projectile and laser specializations.
+```","```gdscript
+## This is why we used the generic `Weapon` name for both projectile and laser
+## specializations.
+```"
+"```
+test
+```","```gdscript
+test
+```"
+"```gdscript
+func test():
+## This is why we used the generic `Weapon` name for both projectile and laser specializations.
+pass
+```","```gdscript
+func test():
+## This is why we used the generic `Weapon` name for both projectile and laser
+## specializations.
+pass
+```"
+This is a `test` of *premade* **formatting**.,This is a `test` of *premade* **formatting**.
+res://TacticalSpaceCombat.tscn,<FileInText>res://TacticalSpaceCombat.tscn</FileInText>
+"```gdscript
+{% include PlayerSideScroll.gd constants %}
+```","```gdscript
+{{ include PlayerSideScroll.gd constants }}
+```"
+"What if you want a projectile to bounce against surfaces? With move_and_slide(), when it hits a wall, the projectile will slide alongside it.","What if you want a projectile to bounce against surfaces? With `move_and_slide()`, when it hits a wall, the projectile will slide alongside it."
+- How to synchronize two nodes' transforms.,- How to synchronize two nodes' transforms.
+The node's Z Index.,The node's *Z Index*.
+You can expand the tileset editor by pressing Shift+F12,You can expand the tileset editor by pressing <Key>Shift+F12</Key>
+Drag tileset_mining.png into the editor!,Drag <FileInText>tileset_mining.png</FileInText> into the editor!
+> This is a blockquote,> This is a blockquote
+"'This ""is some text inside quotes""'","'This ""is some text inside quotes""'"
+64x64,`64x64`
+It is great: It lets us keep track of time.,It is great: It lets us keep track of time.
+"---
+description: Detects when entities enter stay inside or leave an area.
+learning_order: 1
+category: two_dimensional
+sub_category: physics
+---","---
+description: Detects when entities enter stay inside or leave an area.
+learning_order: 1
+category: two_dimensional
+sub_category: physics
+---"
+TileFit is a great option,*TileFit* is a great option
+"'Spinning the ""gun"" to show reloading if out of ammo.'","'Spinning the ""gun"" to show reloading if out of ammo.'"
+Spinning the gun to show it's reloading if we're out of ammo.,Spinning the gun to show it's reloading if we're out of ammo.
+Press Ctrl+Alt+M,Press <Key>Ctrl+Alt+M</Key>
+,
+

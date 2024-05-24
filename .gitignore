@@ -4,8 +4,7 @@ results/
 
 archive.zip
 
-.sconsign.dblite
 .vscode/
 .env
 .cache
-src/godot/
+mdx-utils/bin
