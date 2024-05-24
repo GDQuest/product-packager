@@ -10,10 +10,10 @@ This repository contains utilities for our internal build system to create cours
 
 It does things such as:
 
-- Auto-formats [MDX](https://mdxjs.com) files.
+- Auto-formats [MDX](https://mdxjs.com) prose files for our web platform [GDSchool](https://school.gdquest.com/).
 - Preprocesses MDX files:
-    - You can use templates in MDX to link to other documents `{{ link }}`, include content from code files `{{ include Filename.gd anchor_name }}`, or generate a table of contents with `{{ contents }}`.
-    - It appends Godot icon images before detected class names.
+    - Includes content from code files. Replaces `<Include file="Filename.gd" anchor="anchor_name" />` with the corresponding source code.
+    - Appends Godot icon images before detected class names.
 - Compress and resize png and jpg images using [imagemagick](https://www.imagemagick.org/).
 - Compress and resize videos with [FFMpeg](https://ffmpeg.org/).
 - Strip documents to translate from code, to count words to translate.
