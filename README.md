@@ -18,6 +18,26 @@ It does things such as:
 - Compress and resize videos with [FFMpeg](https://ffmpeg.org/).
 - Strip documents to translate from code, to count words to translate.
 
+## MDX Utils gotchas
+
+The MDX formatter depends on some Godot source files to build regular expressiosn.
+
+These are found at `mdx-utils/src/md/godot/`, and they need to be synced with the upstream `godot` repo.
+
+We have a shell script `mdx-utils/update_godot.sh` that:
+
+1. Sets up a `git remote` called `godot` that points to the Godot repository.
+1. Updates the `mdx-utils/src/md/godot/` folder.
+
+**Note:** that after you run the script you have to manually commit the update.
+
+### Nim gotchas
+
+`mdx-utils/src/md/assets.nim` reads the Godot files at compile time.
+
+- `walkDir()` seems to require paths relative to the path where we compile from. If using `nimble build` this is `mdx-utils/`.
+- `staticRead()` requires paths relative to the `assets.nim` source file.
+
 ## How to use
 
 Product packager is a modular set of tools to help process files and package products. You can find them in their respective directories.
