@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="GLTFAccessor" inherits="Resource" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Represents a GLTF accessor.
+	</brief_description>
+	<description>
+		GLTFAccessor is a data structure representing GLTF a [code]accessor[/code] that would be found in the [code]"accessors"[/code] array. A buffer is a blob of binary data. A buffer view is a slice of a buffer. An accessor is a typed interpretation of the data in a buffer view.
+		Most custom data stored in GLTF does not need accessors, only buffer views (see [GLTFBufferView]). Accessors are for more advanced use cases such as interleaved mesh data encoded for the GPU.
+	</description>
+	<tutorials>
+		<link title="Buffers, BufferViews, and Accessors in Khronos glTF specification">https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_005_BuffersBufferViewsAccessors.md</link>
+		<link title="Runtime file loading and saving">$DOCS_URL/tutorials/io/runtime_file_loading_and_saving.html</link>
+	</tutorials>
+	<members>
+		<member name="buffer_view" type="int" setter="set_buffer_view" getter="get_buffer_view" default="-1">
+			The index of the buffer view this accessor is referencing. If [code]-1[/code], this accessor is not referencing any buffer view.
+		</member>
+		<member name="byte_offset" type="int" setter="set_byte_offset" getter="get_byte_offset" default="0">
+		</member>
+		<member name="component_type" type="int" setter="set_component_type" getter="get_component_type" default="0">
+		</member>
+		<member name="count" type="int" setter="set_count" getter="get_count" default="0">
+		</member>
+		<member name="max" type="PackedFloat64Array" setter="set_max" getter="get_max" default="PackedFloat64Array()">
+		</member>
+		<member name="min" type="PackedFloat64Array" setter="set_min" getter="get_min" default="PackedFloat64Array()">
+		</member>
+		<member name="normalized" type="bool" setter="set_normalized" getter="get_normalized" default="false">
+		</member>
+		<member name="sparse_count" type="int" setter="set_sparse_count" getter="get_sparse_count" default="0">
+		</member>
+		<member name="sparse_indices_buffer_view" type="int" setter="set_sparse_indices_buffer_view" getter="get_sparse_indices_buffer_view" default="0">
+		</member>
+		<member name="sparse_indices_byte_offset" type="int" setter="set_sparse_indices_byte_offset" getter="get_sparse_indices_byte_offset" default="0">
+		</member>
+		<member name="sparse_indices_component_type" type="int" setter="set_sparse_indices_component_type" getter="get_sparse_indices_component_type" default="0">
+		</member>
+		<member name="sparse_values_buffer_view" type="int" setter="set_sparse_values_buffer_view" getter="get_sparse_values_buffer_view" default="0">
+		</member>
+		<member name="sparse_values_byte_offset" type="int" setter="set_sparse_values_byte_offset" getter="get_sparse_values_byte_offset" default="0">
+		</member>
+		<member name="type" type="int" setter="set_type" getter="get_type" default="0">
+		</member>
+	</members>
+</class>
