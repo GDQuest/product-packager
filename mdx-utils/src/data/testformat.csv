@@ -5,8 +5,8 @@ It is because I did this.,It is because I did this.
 2. A wolf.","- A cat.
 1. A boy.
 2. A wolf."
-Some directory learn/ and another one like this path/into/A/ should be converted to DirInText.,Some directory <DirInText>learn/</DirInText> and another one like this <DirInText>path/into/A/</DirInText> should be converted to *DirInText*.
-res://TacticalSpaceCombat/Ship/Weapons/WeaponProjectile.tscn.,<FileInText>res://TacticalSpaceCombat/Ship/Weapons/WeaponProjectile.tscn</FileInText>.
+Some directory learn/ and another one like this path/into/A/ should be converted to DirInText.,Some directory <DirInText path="learn/" /> and another one like this <DirInText path="path/into/A/" /> should be converted to *DirInText*.
+res://TacticalSpaceCombat/Ship/Weapons/WeaponProjectile.tscn.,<FileInText path="res://TacticalSpaceCombat/Ship/Weapons/WeaponProjectile.tscn" />.
 "Vector2(750, 0).","`Vector2(750, 0)`."
 add_central_force(),`add_central_force()`
 _ready() and _some_variable,`_ready()` and `_some_variable`
@@ -45,7 +45,7 @@ func test():
 pass
 ```"
 This is a `test` of *premade* **formatting**.,This is a `test` of *premade* **formatting**.
-res://TacticalSpaceCombat.tscn,<FileInText>res://TacticalSpaceCombat.tscn</FileInText>
+res://TacticalSpaceCombat.tscn,<FileInText path="res://TacticalSpaceCombat.tscn" />
 "```gdscript
 {% include PlayerSideScroll.gd constants %}
 ```","```gdscript
@@ -55,7 +55,7 @@ res://TacticalSpaceCombat.tscn,<FileInText>res://TacticalSpaceCombat.tscn</FileI
 - How to synchronize two nodes' transforms.,- How to synchronize two nodes' transforms.
 The node's Z Index.,The node's *Z Index*.
 You can expand the tileset editor by pressing Shift+F12,You can expand the tileset editor by pressing <Key>Shift+F12</Key>
-Drag tileset_mining.png into the editor!,Drag <FileInText>tileset_mining.png</FileInText> into the editor!
+Drag tileset_mining.png into the editor!,Drag <FileInText path="tileset_mining.png" /> into the editor!
 > This is a blockquote,> This is a blockquote
 "'This ""is some text inside quotes""'","'This ""is some text inside quotes""'"
 64x64,`64x64`
@@ -76,4 +76,3 @@ TileFit is a great option,*TileFit* is a great option
 Spinning the gun to show it's reloading if we're out of ammo.,Spinning the gun to show it's reloading if we're out of ammo.
 Press Ctrl+Alt+M,Press <Key>Ctrl+Alt+M</Key>
 ,
-

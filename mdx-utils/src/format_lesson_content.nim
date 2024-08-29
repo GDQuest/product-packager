@@ -107,8 +107,8 @@ func regexWrapEach(regexAll, regexOne: Regex; pair: (string, string)): string ->
 
 let formatters =
   { "any": regexWrap(@[RegexKeyboardFShortcut, RegexKeyboardShortcut], ("<Key>", "</Key>"))
-  , "any": regexWrap(@[RegexDirPath], ("<DirInText>", "</DirInText>"))
-  , "any": regexWrap(@[RegexFilePath], ("<FileInText>", "</FileInText>"))
+  , "any": regexWrap(@[RegexDirPath], ("<DirInText path=\"", "\" />"))
+  , "any": regexWrap(@[RegexFilePath], ("<FileInText path=\"", "\" />"))
   , "any": regexWrap(@[RegexMenuEntry], ("<SettingsInText sections={[\"", "\"]}/>"))
   , "any": regexWrap(@[RegexPropertyEntry], ("*", "*"))
   # NOTE: Godot built-ins are pulled from the Godot engine source files. Ensure you have them to compile.
@@ -247,4 +247,3 @@ when isMainModule:
 
     else:
       echo formattedContent
-
