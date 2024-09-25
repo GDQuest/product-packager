@@ -66,19 +66,24 @@ def to_snake_case(name: str) -> str:
 
 
 def update_file_content(
-    file_path: Path, config: Config, regex_pattern: re.Pattern
+    file_path: Path, config: Config, regex_patterns: list[re.Pattern]
 ) -> None:
     with open(file_path, "r") as file:
         content = file.read()
 
-    # FIXME: needs to preserve the regex patterns, e.g. preload, and only change the path
-    updated_content = regex_pattern.sub(
-        lambda m: m.group(0).replace(m.group(1), to_snake_case(m.group(1))), content
-    )
+    updated_content = content
+    modified_attributes = []
+
+    for regex_pattern in regex_patterns:
+        updated_content = regex_pattern.sub(
+            lambda m: m.group(0).replace(m.group(1), to_snake_case(m.group(1))),
+            updated_content,
+        )
+        if config.dry_run:
+            modified_attributes.extend(regex_pattern.findall(updated_content))
 
     if config.dry_run:
-        modified = regex_pattern.findall(updated_content)
-        print(f"Modified attributes: {modified}")
+        print(f"Modified attributes: {modified_attributes}")
     else:
         with open(file_path, "w") as file:
             file.write(updated_content)
@@ -90,19 +95,22 @@ def rename_files_and_folders(path: Path, config: Config) -> None:
         return
 
     regex_path_attribute = re.compile(r'path="([^"]*)"')
+    regex_gdscript_file_path = re.compile(r'"res://([^"]*)"')
     regex_gdscript_preload = re.compile(r'preload\("([^"]*)"')
-    regex_file_path_string = re.compile(r'="\*?(res://[^"]*)"')
+    regex_autoload_file_path_string = re.compile(r'="\*?(res://[^"]*)"')
 
     for path_current in path.iterdir():
         if path_current.is_dir():
             rename_files_and_folders(path_current, config)
 
         if path_current.suffix in [".tscn", ".tres"]:
-            update_file_content(path_current, config, regex_path_attribute)
+            update_file_content(path_current, config, [regex_path_attribute])
         elif path_current.suffix == ".gd":
-            update_file_content(path_current, config, regex_gdscript_preload)
+            update_file_content(
+                path_current, config, [regex_gdscript_file_path, regex_gdscript_preload]
+            )
         elif path_current.name == "project.godot":
-            update_file_content(path_current, config, regex_file_path_string)
+            update_file_content(path_current, config, [regex_autoload_file_path_string])
 
         path_new = path_current.with_name(to_snake_case(path_current.name))
         if path_current != path_new:
