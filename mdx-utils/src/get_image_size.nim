@@ -1,10 +1,15 @@
 ## Reads the header of PNG, JPEG, and WEBP files to extract the image width and height.
-import streams, strformat, endians
+import streams, endians
 
 type ImageDimensions* = object
   width*: int
   height*: int
 
+proc readUint16BigEndian(fs: FileStream): uint16 =
+  var buffer: array[2, byte]
+  if fs.readData(addr(buffer), 2) != 2:
+    raise newException(IOError, "Failed to read 2 bytes")
+  bigEndian16(addr result, addr buffer)
 
 proc readUint32BigEndian(fs: FileStream): uint32 =
   ## Reads a 32-bit unsigned integer in big-endian format from the file stream.
@@ -12,7 +17,6 @@ proc readUint32BigEndian(fs: FileStream): uint32 =
   if fs.readData(addr(buffer), 4) != 4:
     raise newException(IOError, "Failed to read 4 bytes")
   bigEndian32(addr result, addr buffer)
-
 
 proc getPngDimensions(fs: FileStream): ImageDimensions =
   # Png files start with a signature that is composed of eight bytes, followed by chunks of data.
@@ -25,13 +29,16 @@ proc getPngDimensions(fs: FileStream): ImageDimensions =
   if fs.readStr(4) != "IHDR":
     raise newException(IOError, "Invalid PNG format")
 
-  result = ImageDimensions(width: fs.readUint32BigEndian().int(), height: fs.readUint32BigEndian().int())
+  result = ImageDimensions(
+    width: fs.readUint32BigEndian().int(), height: fs.readUint32BigEndian().int()
+  )
 
 proc getJpegDimensions(fs: FileStream): ImageDimensions =
   # JPEG files are composed of segments, each starting with a marker.
   # The marker is a 2-byte value that starts with 0xFF and is followed by a byte that defines the segment type.
   # The segment type can be a Start Of Frame (SOF) marker, which contains the image dimensions.
   # The starter frame marker seems to not be necessarily at the start of the file. So we need to loop over segments until we find it.
+  # /!\ The JPEG format uses big-endian encoding for integers.
 
   # SOF stands for Start Of Frame and is 2 bytes followed by file metadata.
   # SOF 0 to 3 are the most common markers for JPEG files.
@@ -40,24 +47,29 @@ proc getJpegDimensions(fs: FileStream): ImageDimensions =
     SOF3 = 0xFFC3
 
   # We skip the first 2 bytes in the file as they are the JPEG start of image marker.
-  discard fs.readUint16()
+  fs.setPosition(2)
 
   while not fs.atEnd():
-    let marker = fs.readUint16()
+    let marker = fs.readUint16BigEndian()
     # If the marker is a SOF marker, we can extract the image dimensions.
     if marker >= SOF0 and marker <= SOF3:
-      # Skip file length and precision metadata, respectively 2 and 1 bytes.
-      discard fs.readUint16()
-      discard fs.readUint8()
-      # The next 4 bytes are the image height and width!
-      result =
-        ImageDimensions(height: fs.readUint16().int(), width: fs.readUint16().int())
-      return
+      break
+    # This marks the end of the file
+    elif marker == 0xFFD9:
+      raise newException(IOError, "Invalid JPEG file")
 
-    let length = fs.readUint16().int() - 2
+    let length = fs.readUint16BigEndian().int()
     if length < 0:
       raise newException(IOError, "Invalid JPEG file")
     fs.setPosition(fs.getPosition() + length - 2)
+
+  # Skip length and precision
+  fs.setPosition(fs.getPosition() + 3)
+  # The next 4 bytes are the image height and width!
+  result = ImageDimensions(
+    height: fs.readUint16BigEndian().int(), width: fs.readUint16BigEndian().int()
+  )
+  return result
 
 proc getWebPDimensions(fs: FileStream): ImageDimensions =
   # WebP files start with a header stating with the text 'RIFF', followed by the file size and the 'WEBP' signature.
@@ -138,12 +150,3 @@ proc getImageDimensions*(filePath: string): ImageDimensions =
     result = getWebPDimensions(fs)
   else:
     raise newException(IOError, "Unknown image format")
-
-when isMainModule:
-  let imageFiles = @["test.png", "test.jpg", "test.webp"]
-  for file in imageFiles:
-    try:
-      let dimensions = getImageDimensions(file)
-      echo fmt"Found dimensions for {file}: {dimensions.width}x{dimensions.height}"
-    except IOError:
-      echo fmt"Error processing {file}: {getCurrentExceptionMsg()}"
