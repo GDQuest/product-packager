@@ -1,21 +1,31 @@
 ## Reads the header of PNG, JPEG, and WEBP files to extract the image width and height.
-import streams, strformat
+import streams, strformat, endians
 
-type ImageDimensions = object
-  width: int
-  height: int
+type ImageDimensions* = object
+  width*: int
+  height*: int
+
+
+proc readUint32BigEndian(fs: FileStream): uint32 =
+  ## Reads a 32-bit unsigned integer in big-endian format from the file stream.
+  var buffer: array[4, byte]
+  if fs.readData(addr(buffer), 4) != 4:
+    raise newException(IOError, "Failed to read 4 bytes")
+  bigEndian32(addr result, addr buffer)
+
 
 proc getPngDimensions(fs: FileStream): ImageDimensions =
   # Png files start with a signature that is composed of eight bytes, followed by chunks of data.
   # Each chunk starts with the chunk size, an int, followed by a 4-byte chunk type.
   # The first chunk is the IHDR (image header) chunk, which contains the image width and height.
+  # /!\ The PNG format uses big-endian encoding for integers.
 
   # Skip PNG signature and chunk size.
-  discard fs.readStr(8)
-  discard fs.readUint32()
+  fs.setPosition(12)
   if fs.readStr(4) != "IHDR":
     raise newException(IOError, "Invalid PNG format")
-  result = ImageDimensions(width: fs.readUint32().int(), height: fs.readUint32().int())
+
+  result = ImageDimensions(width: fs.readUint32BigEndian().int(), height: fs.readUint32BigEndian().int())
 
 proc getJpegDimensions(fs: FileStream): ImageDimensions =
   # JPEG files are composed of segments, each starting with a marker.
@@ -69,10 +79,11 @@ proc getWebPDimensions(fs: FileStream): ImageDimensions =
     # When we arrive here we've read the first 16 bytes of the file.
     # It is followed by 10 bytes of metadata, which we can discard.
     discard fs.readStr(10)
-    
+
     # The width and height are stored in the next 4 bytes, as 14 bits each.
     result = ImageDimensions(
-      width: (fs.readUint16() and 0x3FFF).int(), height: (fs.readUint16() and 0x3FFF).int()
+      width: (fs.readUint16() and 0x3FFF).int(),
+      height: (fs.readUint16() and 0x3FFF).int(),
     )
   # Simple lossless WebP format
   of "VP8L":
@@ -109,7 +120,7 @@ proc getWebPDimensions(fs: FileStream): ImageDimensions =
   else:
     raise newException(IOError, "Unsupported WebP format")
 
-proc getImageDimensions(filePath: string): ImageDimensions =
+proc getImageDimensions*(filePath: string): ImageDimensions =
   var fs = newFileStream(filePath, fmRead)
   if fs == nil:
     raise newException(IOError, "Cannot open the file")
