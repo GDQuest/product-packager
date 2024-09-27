@@ -9,9 +9,14 @@ import std /
   , strutils
   , tables
   , options
+  , paths
+  , os
   ]
 import assets
 import utils
+import ../types
+import ../get_image_size
+
 
 
 let
@@ -22,6 +27,8 @@ let
       ")`)"].join.re()
   regexAnchorLine = re"(?m)(?s)\h*(#|\/\/)\h*(region|endregion).*?(\v|$)"
   regexVersionSuffix = re"(_v[0-9]+)"
+  regexMarkdownImage = re"!\[(?P<alt>.+?)\]\((?P<path>.+?)\)"
+  regexVideoFile = re("<VideoFile(?P<before>.*?)?src=[\"'](?P<src>[^\"']+)[\"'](?P<after>.*?)?/>")
 
 
 proc preprocessCodeListings(content: string): string =
@@ -34,7 +41,7 @@ proc preprocessCodeListings(content: string): string =
     ## Processes one include shortcode to replace. Finds and loads the
     ## appropriate GDScript or other code file and extracts and returns the
     ## contents corresponding to the requested anchor.
-    
+
     let capturesTable = match.captures.toTable()
     let prefix = capturesTable.getOrDefault("prefix", "")
     let newMatch = match(match.match, regexShortcodeArgsInclude, 0, int.high)
@@ -100,5 +107,40 @@ proc addGodotIcons(content: string): string =
   result = content.replace(regexGodotBuiltIns, replaceGodotIcon)
 
 
-proc processContent*(fileContent: string): string =
-  result = fileContent.preprocessCodeListings().addGodotIcons()
+proc replaceMarkdownImages*(content: string, outputDirPath: string, inputDirPath: string): string =
+  proc replaceOneImage(match: RegexMatch): string =
+    let
+      captures = match.captures.toTable()
+      alt = captures["alt"]
+      relpath = captures["path"]
+      outputPath = outputDirPath / relpath
+      dimensions = getImageDimensions(inputDirPath / relpath)
+
+    let
+      ratio = dimensions.width / dimensions.height
+      className =
+        if ratio < 1.0: "portrait-image"
+        elif ratio == 1.0: "square-image"
+        else: "landscape-image"
+    result = fmt"""<PublicImage src="{outputPath}" alt="{alt}" className="{className}" width="{dimensions.width}" height="{dimensions.height}"/>"""
+
+  result = content.replace(regexMarkdownImage, replaceOneImage)
+
+
+proc replaceVideos*(content: string, outputDirPath: string): string =
+  proc replaceOneVideo(match: RegexMatch): string =
+    let
+      captures = match.captures.toTable()
+      src = captures["src"]
+      before = captures.getOrDefault("before", " ")
+      after = captures.getOrDefault("after", " ")
+      outputPath = outputDirPath / src
+    result = fmt"""<VideoFile{before}src="{outputPath}"{after}/>"""
+
+  result = content.replace(regexVideoFile, replaceOneVideo)
+
+
+proc processContent*(fileContent: string, inputFilePath: string = "", appSettings: AppSettingsBuildGDSchool): string =
+  let inputDirPath = Path(inputFilePath).parentDir()
+  let publicDir = inputDirPath.string().replace(appSettings.contentDir, "/")
+  result = fileContent.preprocessCodeListings().replaceMarkdownImages(publicDir, inputDirPath.string()).replaceVideos(publicDir).addGodotIcons()

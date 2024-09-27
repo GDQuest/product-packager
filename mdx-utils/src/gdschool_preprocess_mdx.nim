@@ -168,12 +168,15 @@ proc getAppSettings(): AppSettingsBuildGDSchool =
 
 
 proc process(appSettings: AppSettingsBuildGDSchool) =
-  # Copy asset/all subfolders
+  # REVIEW: is it copying everything, and then still opening and writing each MDX file?
+
+  # Copy all files in the content directory to the dist directory recursively.
   createDir(appSettings.distDir)
   for dirIn in walkDirs(appSettings.workingDir / appSettings.contentDir / "**"):
     let dirOut = dirIn.replace(appSettings.contentDir & DirSep, appSettings.distDir & DirSep)
     copyDir(dirIn, dirOut)
-  
+
+  # Process all MDX and MD files and save them to the dist directory.
   cache = prepareCache(appSettings.workingDir, appSettings.contentDir, appSettings.ignoreDirs)
   for fileIn in cache.files.filterIt(
     (it.toLower.endsWith(MDX_EXT) or it.toLower.endsWith(MD_EXT)) and
@@ -195,7 +198,7 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
     if not appSettings.isQuiet:
       info fmt"Creating output `{fileOut.parentDir}` directory..."
 
-    writeFile(fileOut, processContent(fileInContents))
+    writeFile(fileOut, processContent(fileInContents, fileIn, appSettings))
 
 
 when isMainModule:
@@ -208,4 +211,3 @@ when isMainModule:
   echo appSettings
   process(appSettings)
   stdout.resetAttributes()
-

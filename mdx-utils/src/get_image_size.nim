@@ -135,7 +135,7 @@ proc getWebPDimensions(fs: FileStream): ImageDimensions =
 proc getImageDimensions*(filePath: string): ImageDimensions =
   var fs = newFileStream(filePath, fmRead)
   if fs == nil:
-    raise newException(IOError, "Cannot open the file")
+    raise newException(IOError, "Cannot open the image file " & filePath)
   defer:
     fs.close()
 
