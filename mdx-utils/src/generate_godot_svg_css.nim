@@ -7,16 +7,16 @@
 ## - godot_icons.css
 ## - icons/godot/*.svg
 
-
 import md/assets
 import std/tables
 import std/strformat
 import std/os
 
 when isMainModule:
-    # Generating css
-    # These attributes will make the icons scalable and make them work with a single class name (i-gd-*)
-    var css: string = """[class^='i-gd-'], [class*=' i-gd-']{
+  # Generating css
+  # These attributes will make the icons scalable and make them work with a single class name (i-gd-*)
+  var css: string =
+    """[class^='i-gd-'], [class*=' i-gd-']{
   background-position: center;
   background-repeat: no-repeat;
   background-size: 100% 100%;
@@ -25,16 +25,19 @@ when isMainModule:
   width: 1em;
 }
 """
-    for godotClassName in assets.CACHE_GODOT_ICONS.keys():
-        css.add(fmt".i-gd-{godotClassName} {{ background-image: url(/icons/godot/{godotClassName}.svg); }}" & "\n")
-    writeFile("godot_icons.css", css)
-    echo("Wrote godot_icons.css")
+  for godotClassName in assets.CACHE_GODOT_ICONS.keys():
+    css.add(
+      fmt".i-gd-{godotClassName} {{ background-image: url(/icons/godot/{godotClassName}.svg); }}" &
+        "\n"
+    )
+  writeFile("godot_icons.css", css)
+  echo("Wrote godot_icons.css")
 
-    echo(fmt"Writing SVG files to ./icons/godot/...")
-    var svgFolder = "icons/godot"
-    if not os.dirExists(svgFolder):
-        os.createDir(svgFolder)
-    for godotClassName in assets.CACHE_GODOT_ICONS.keys():
-        let svgData = assets.CACHE_GODOT_ICONS[godotClassName]
-        writeFile(fmt"{svgFolder}/{godotClassName}.svg", svgData)
-    echo("Done!")
+  echo(fmt"Writing SVG files to ./icons/godot/...")
+  var svgFolder = "icons/godot"
+  if not os.dirExists(svgFolder):
+    os.createDir(svgFolder)
+  for godotClassName in assets.CACHE_GODOT_ICONS.keys():
+    let svgData = assets.CACHE_GODOT_ICONS[godotClassName]
+    writeFile(fmt"{svgFolder}/{godotClassName}.svg", svgData)
+  echo("Done!")

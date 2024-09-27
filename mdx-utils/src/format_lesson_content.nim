@@ -4,25 +4,12 @@
 ## - Wraps symbols and numeric values in code.
 ## - Detects names of Godot built-in classes and wraps them in code.
 ## - Wraps other capitalized names, pascal case values into italics (we assume they're node names).
-import std/
-  [ parseopt
-  , re
-  , os
-  , sequtils
-  , strformat
-  , strutils
-  , sugar
-  , wordwrap
-  ]
-import md/
-  [ assets
-  , parser
-  , utils
-  ]
+import std/[parseopt, re, os, sequtils, strformat, strutils, sugar, wordwrap]
+import md/[assets, parser, utils]
 import types
 
-
-const HELP_MESSAGE = """
+const HELP_MESSAGE =
+  """
 {getAppFilename().extractFilename} [options] file [file...]
 
 Auto-formats markdown documents, saving manual formatting work:
@@ -39,42 +26,55 @@ Options:
   -h, --help            prints this help message.
   -o, --output-dir:DIR  write the formatted output to the specified directory."""
 
-
 const
   PatternModifierKeys = r"Cmd|Ctrl|Alt|Shift|Super|CMD|CTRL|ALT|SHIFT|SUPER"
   PatternKeyboardSingleCharacterKey = r"[a-zA-Z0-9!@#$%^&*()_\-{}|\[\]\\;':,\./<>?]"
   PatternFKeys = r"F\d{1,2}"
-  PatternOtherKeys = PatternFKeys & r"|Tab|Up|Down|Left|Right|Space|Backspace|Delete|TAB|UP|DOWN|LEFT|RIGHT|SPACE|BACKSPACE|DELETE|LMB|MMB|RMB"
+  PatternOtherKeys =
+    PatternFKeys &
+    r"|Tab|Up|Down|Left|Right|Space|Backspace|Delete|TAB|UP|DOWN|LEFT|RIGHT|SPACE|BACKSPACE|DELETE|LMB|MMB|RMB"
   PatternFunctionOrConstructorCall = r"\w+(\.\w+)*\(.*?\)"
-  PatternVariablesAndProperties = r"((?!_\w+(\s[a-zA-Z0-9]+)+_)(?!_\w+_)_\w+)|_?[a-zA-Z0-9]+([\._]\w+)+"
+  PatternVariablesAndProperties =
+    r"((?!_\w+(\s[a-zA-Z0-9]+)+_)(?!_\w+_)_\w+)|_?[a-zA-Z0-9]+([\._]\w+)+"
 
 let
   RegexDirPath = re"\b((res|user)://)([^\s]+/)+\B|\b([\w\d\.]+/)+\B"
-  RegexFilePath = re"\b((res|user)://)?([^\s]+)?(\w+\.(png|jpe?g|mp4|mkv|t?res|t?scn|gd|py|shader))\b"
+  RegexFilePath =
+    re"\b((res|user)://)?([^\s]+)?(\w+\.(png|jpe?g|mp4|mkv|t?res|t?scn|gd|py|shader))\b"
   RegexMaybeCodeCommentLine = re"\s*[#/]*"
   RegexOnePascalCaseWord = re"[A-Z0-9]\w+[A-Z]\w+|[A-Z][a-zA-Z0-9]+(\.\.\.)?"
   RegexOnePascalCaseWordStrict = re"[A-Z0-9]\w+[A-Z]\w+"
   RegexArrow = re" *-> *"
-  RegexMenuEntry = re"(Scene|Project|Debug|Editor|Help) ->(( | -> )[A-Z]+[a-zA-Z0-9]*(\.\.\.)?)+"
-  RegexPropertyEntry = re"([A-Z0-9]+[a-zA-Z0-9]* ?)+ ->(( | -> )[A-Z]+[a-zA-Z0-9]*(\.\.\.)?)+"
-  RegexCapitalWordSequence = re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )?[A-Z][a-zA-Z0-9]+(\.\.\.)?)+"
+  RegexMenuEntry =
+    re"(Scene|Project|Debug|Editor|Help) ->(( | -> )[A-Z]+[a-zA-Z0-9]*(\.\.\.)?)+"
+  RegexPropertyEntry =
+    re"([A-Z0-9]+[a-zA-Z0-9]* ?)+ ->(( | -> )[A-Z]+[a-zA-Z0-9]*(\.\.\.)?)+"
+  RegexCapitalWordSequence =
+    re"[A-Z0-9]+[a-zA-Z0-9]*( (-> )?[A-Z][a-zA-Z0-9]+(\.\.\.)?)+"
   RegexKeyboardFShortcut = re(PatternFKeys)
-  RegexKeyboardShortcut = re("((" & PatternModifierKeys & r") ?\+ ?)+(" & PatternFKeys & "|" & PatternOtherKeys & "|" & PatternKeyboardSingleCharacterKey & ")")
+  RegexKeyboardShortcut = re(
+    "((" & PatternModifierKeys & r") ?\+ ?)+(" & PatternFKeys & "|" & PatternOtherKeys &
+      "|" & PatternKeyboardSingleCharacterKey & ")"
+  )
   # RegexOneKeyboardKey = re("(" & [PatternModifierKeys, PatternOtherKeys, PatternKeyboardSingleCharacterKey].join("|") & ")")
   RegexNumber = re"\d+(D|px)|\d+(x\d+)*"
   RegexHexValue = re"(0x|#)[0-9a-fA-F]+"
-  RegexCodeIdentifier = re([PatternFunctionOrConstructorCall, PatternVariablesAndProperties].join("|"))
+  RegexCodeIdentifier =
+    re([PatternFunctionOrConstructorCall, PatternVariablesAndProperties].join("|"))
   # NOTE: Requires folders from Godot to work. See the file assets.nim.
-  RegexGodotBuiltIns = re([r"\b(", assets.CACHE_GODOT_BUILTIN_CLASSES.join("|"), r")\b"].join)
-  RegexSkip = re"""import.*from.*;|(<.*?>|<.*?\/>|{{.*?}}|{%.*?%}|\b_.+?_\b|\*\*[^*]+?\*\*|\*[^*]+?\*|`.+?`|".+?"|'(?![vsr\h]).+?'|\!?\[.+?\)|\[.+?\])\s*|\(|\)|\s+|$"""
+  RegexGodotBuiltIns =
+    re([r"\b(", assets.CACHE_GODOT_BUILTIN_CLASSES.join("|"), r")\b"].join)
+  RegexSkip =
+    re"""import.*from.*;|(<.*?>|<.*?\/>|{{.*?}}|{%.*?%}|\b_.+?_\b|\*\*[^*]+?\*\*|\*[^*]+?\*|`.+?`|".+?"|'(?![vsr\h]).+?'|\!?\[.+?\)|\[.+?\])\s*|\(|\)|\s+|$"""
   RegexStartOfSentence = re"\s*\p{Lu}"
   RegexEndOfSentence = re"[.!?:]\s+"
   RegexFourSpaces = re" {4}"
   RegexCodeCommentSymbol = re"#{3,}|/+"
   RegexNodeCall = re"\B(\$|%)([a-zA-Z0-9\._]/?)+\b"
 
-
-func regexWrap(regexes: seq[Regex], pair: (string, string)): string -> (string, string) =
+func regexWrap(
+    regexes: seq[Regex], pair: (string, string)
+): string -> (string, string) =
   ## Retruns a function that takes the string `text` and finds the first
   ## regex match from `regexes` only at the beginning of `text`.
   ##
@@ -82,15 +82,18 @@ func regexWrap(regexes: seq[Regex], pair: (string, string)): string -> (string, 
   ## - `(text wrapped by pair, rest of text)` if there's a regex match.
   ## - `("", text)` if there's no regex match.
   let RegexBlacklist = re([r"\b(", CACHE_BLACKLIST.join("|"), r")\b"].join)
-  return func(text: string): (string, string) =
-    for regex in regexes:
-      let bound = text.matchLen(regex)
-      if bound == -1 or text.match(RegexBlacklist): continue
-      return (pair[0] & text[0 ..< bound] & pair[1], text[bound .. ^1])
-    return ("", text)
+  return
+    func (text: string): (string, string) =
+      for regex in regexes:
+        let bound = text.matchLen(regex)
+        if bound == -1 or text.match(RegexBlacklist):
+          continue
+        return (pair[0] & text[0 ..< bound] & pair[1], text[bound .. ^1])
+      return ("", text)
 
-
-func regexWrapEach(regexAll, regexOne: Regex; pair: (string, string)): string -> (string, string) =
+func regexWrapEach(
+    regexAll, regexOne: Regex, pair: (string, string)
+): string -> (string, string) =
   ## Returns a function that takes the string `text` and tries to match
   ## `regexAll` only at the beginning of `text`.
   ##
@@ -98,27 +101,29 @@ func regexWrapEach(regexAll, regexOne: Regex; pair: (string, string)): string ->
   ## - `(text with all occurances of RegexOne wrapped by pair, rest of text)`
   ##   if there's a regex match.
   ## - `("", text)` if there's no regex match.
-  return func(text: string): (string, string) =
-    let bound = text.matchLen(regexAll)
-    if bound != -1:
-      let replaced = replacef(text[0 ..< bound], regexOne, pair[0] & "$1" & pair[1])
-      return (replaced, text[bound .. ^1])
-    return ("", text)
+  return
+    func (text: string): (string, string) =
+      let bound = text.matchLen(regexAll)
+      if bound != -1:
+        let replaced = replacef(text[0 ..< bound], regexOne, pair[0] & "$1" & pair[1])
+        return (replaced, text[bound .. ^1])
+      return ("", text)
 
-let formatters =
-  { "any": regexWrap(@[RegexKeyboardFShortcut, RegexKeyboardShortcut], ("<Key>", "</Key>"))
-  , "any": regexWrap(@[RegexDirPath], ("<DirInText path=\"", "\" />"))
-  , "any": regexWrap(@[RegexFilePath], ("<FileInText path=\"", "\" />"))
-  , "any": regexWrap(@[RegexMenuEntry], ("<SettingsInText sections={[\"", "\"]}/>"))
-  , "any": regexWrap(@[RegexPropertyEntry], ("*", "*"))
-  # NOTE: Godot built-ins are pulled from the Godot engine source files. Ensure you have them to compile.
-  # See assets.nim for reference.
-  , "any": regexWrap(@[RegexCodeIdentifier, RegexGodotBuiltIns], ("`", "`"))
-  , "any": regexWrap(@[RegexNodeCall, RegexNumber, RegexHexValue], ("`", "`"))
-  , "any": regexWrap(@[RegexOnePascalCaseWordStrict], ("*", "*"))
-  , "skipStartOfSentence": regexWrap(@[RegexCapitalWordSequence, RegexOnePascalCaseWord], ("*", "*"))
-  }
-
+let formatters = {
+  "any":
+    regexWrap(@[RegexKeyboardFShortcut, RegexKeyboardShortcut], ("<Key>", "</Key>")),
+  "any": regexWrap(@[RegexDirPath], ("<DirInText path=\"", "\" />")),
+  "any": regexWrap(@[RegexFilePath], ("<FileInText path=\"", "\" />")),
+  "any": regexWrap(@[RegexMenuEntry], ("<SettingsInText sections={[\"", "\"]}/>")),
+  "any": regexWrap(@[RegexPropertyEntry], ("*", "*")),
+    # NOTE: Godot built-ins are pulled from the Godot engine source files. Ensure you have them to compile.
+    # See assets.nim for reference.
+  "any": regexWrap(@[RegexCodeIdentifier, RegexGodotBuiltIns], ("`", "`")),
+  "any": regexWrap(@[RegexNodeCall, RegexNumber, RegexHexValue], ("`", "`")),
+  "any": regexWrap(@[RegexOnePascalCaseWordStrict], ("*", "*")),
+  "skipStartOfSentence":
+    regexWrap(@[RegexCapitalWordSequence, RegexOnePascalCaseWord], ("*", "*")),
+}
 
 proc formatLine(line: string): string =
   ## Returns the formatted `line` using the GDQuest standard.
@@ -136,8 +141,10 @@ proc formatLine(line: string): string =
 
     while true:
       for (applyAt, formatter) in formatters:
-        if line.len <= 0: break outer
-        if (applyAt, isStartOfSentence) == ("skipStartOfSentence", true): continue
+        if line.len <= 0:
+          break outer
+        if (applyAt, isStartOfSentence) == ("skipStartOfSentence", true):
+          continue
         let (formatted, rest) = formatter(line)
 
         if formatted.startsWith("<SettingsInText"):
@@ -152,9 +159,8 @@ proc formatLine(line: string): string =
       result.add advanced
       line = rest
 
-
-proc formatList(items: seq[ListItem]): seq[string] = items.mapIt([it.form, it.item.formatLine].join(SPACE))
-
+proc formatList(items: seq[ListItem]): seq[string] =
+  items.mapIt([it.form, it.item.formatLine].join(SPACE))
 
 proc formatCodeLine(codeLine: CodeLine): string =
   ## Returns the formatted `codeLine` block using the GDQuest standard:
@@ -164,25 +170,32 @@ proc formatCodeLine(codeLine: CodeLine): string =
   case codeLine.kind
   of clkShortcode:
     codeLine.render
-
   of clkRegular:
     const (TAB, HASH, SLASH, MAX_LINE_LEN) = ("\t", '#', '/', 80)
     let
       bound = max(0, codeLine.line.matchLen(RegexMaybeCodeCommentLine))
       first = codeLine.line[0 ..< bound]
       indent = first.multiReplace(
-        [ (RegexFourSpaces, TAB)
-        , (RegexCodeCommentSymbol, (if first.endsWith(HASH): HASH else: SLASH).repeat(2))
-        ])
+        [
+          (RegexFourSpaces, TAB),
+          (
+            RegexCodeCommentSymbol,
+            (if first.endsWith(HASH): HASH else: SLASH).repeat(2),
+          ),
+        ]
+      )
       sep = if indent.endsWith(HASH) or indent.endsWith(SLASH): SPACE else: ""
       margin = indent.count(TAB) + indent.strip.len + sep.len
-      wrapLen = if sep == "": codeLine.line.len else: MAX_LINE_LEN - margin
+      wrapLen =
+        if sep == "":
+          codeLine.line.len
+        else:
+          MAX_LINE_LEN - margin
 
-    codeLine.line[bound .. ^1]
-      .strip.wrapWords(wrapLen, splitLongWords=false)
-      .splitLines.mapIt([indent, it].join(sep))
-      .join(NL)
-
+    codeLine.line[bound .. ^1].strip
+    .wrapWords(wrapLen, splitLongWords = false).splitLines
+    .mapIt([indent, it].join(sep))
+    .join(NL)
 
 proc formatBlock(mdBlock: Block): string =
   ## Takes an `mdBlock` from a parsed markdown file
@@ -195,43 +208,45 @@ proc formatBlock(mdBlock: Block): string =
     partialResult.add OPEN_CLOSE & mdBlock.language
     partialResult.add mdBlock.code.map(formatCodeLine)
     partialResult.add OPEN_CLOSE
-
   of bkList:
     partialResult.add mdBlock.items.formatList
-
   of bkParagraph:
     partialResult.add mdBlock.body.map(formatLine)
-
   else:
     partialResult.add(mdBlock.render)
 
   partialResult.join(NL)
-
 
 proc formatContent*(content: string): string =
   ## Takes the markdown `content` and returns a formatted document using
   ## the GDQuest standard.
   parse(content).map(formatBlock).join(NL).strip & NL
 
-
 proc getAppSettings(): AppSettingsFormat =
-  for kind, key, value in getopt(shortNoVal = {'h', 'i'}, longNoVal = @["help", "in-place"]):
+  for kind, key, value in getopt(
+    shortNoVal = {'h', 'i'}, longNoVal = @["help", "in-place"]
+  ):
     case kind
-    of cmdEnd: break
-
+    of cmdEnd:
+      break
     of cmdArgument:
-      if fileExists(key): result.inputFiles.add key
-      else: fmt"Invalid filename: {key}".quit
-
+      if fileExists(key):
+        result.inputFiles.add key
+      else:
+        fmt"Invalid filename: {key}".quit
     of cmdLongOption, cmdShortOption:
       case key
-      of "help", "h": HELP_MESSAGE.quit(QuitSuccess)
-      of "in-place", "i": result.inPlace = true
-      of "output-dir", "o": result.outputDir = value
-      else: [fmt"Invalid option: {key}", "", HELP_MESSAGE].join(NL).quit
+      of "help", "h":
+        HELP_MESSAGE.quit(QuitSuccess)
+      of "in-place", "i":
+        result.inPlace = true
+      of "output-dir", "o":
+        result.outputDir = value
+      else:
+        [fmt"Invalid option: {key}", "", HELP_MESSAGE].join(NL).quit
 
-  if result.inputFiles.len == 0: ["No input files specified.", "", HELP_MESSAGE].join(NL).quit
-
+  if result.inputFiles.len == 0:
+    ["No input files specified.", "", HELP_MESSAGE].join(NL).quit
 
 when isMainModule:
   let appSettings = getAppSettings()
@@ -240,10 +255,8 @@ when isMainModule:
     let formattedContent = readFile(filename).formatContent
     if appSettings.inPlace:
       writeFile(filename, formattedContent)
-
     elif appSettings.outputDir != "":
       createDir(appSettings.outputDir)
       writeFile(appSettings.outputDir / filename.extractFilename, formattedContent)
-
     else:
       echo formattedContent

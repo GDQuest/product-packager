@@ -5,17 +5,20 @@ import ../get_image_size
 # NOTE: currently the paths are relative to where the tests are run from. You need to be in this directory to run the tests.
 suite "gdschool_preprocessor":
   test "replaceMarkdownImages":
-    let input = """![The character looking in different directions](images/020_075_runner_directions.png)"""
+    let input =
+      """![The character looking in different directions](images/020_075_runner_directions.png)"""
     let outputDirPath = "/"
     let inputDirPath = "test/"
-    let expected = """<PublicImage src="/images/020_075_runner_directions.png" alt="The character looking in different directions" className="landscape-image" width="806" height="421"/>"""
+    let expected =
+      """<PublicImage src="/images/020_075_runner_directions.png" alt="The character looking in different directions" className="landscape-image" width="806" height="421"/>"""
 
     check replaceMarkdownImages(input, outputDirPath, inputDirPath) == expected
 
   test "replaceVideos":
     let input = """<VideoFile src="videos/010_overview_020_final_project.mp4" />"""
     let outputDirPath = "/courses/learn_2d_gamedev_godot_4/"
-    let expected = """<VideoFile src="/courses/learn_2d_gamedev_godot_4/videos/010_overview_020_final_project.mp4" />"""
+    let expected =
+      """<VideoFile src="/courses/learn_2d_gamedev_godot_4/videos/010_overview_020_final_project.mp4" />"""
 
     check replaceVideos(input, outputDirPath) == expected
 
