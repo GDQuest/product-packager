@@ -17,7 +17,7 @@ const
   GD_EXT* = ".gd"
   MD_EXT* = ".md"
   MDX_EXT* = ".mdx"
-  SHADER_EXT* = ".shader"
+  SHADER_EXT* = ".gdshader"
   HTML_EXT* = ".html"
 
 
@@ -47,7 +47,7 @@ proc prepareCache*(workingDir, contentDir: string; ignoreDirs: openArray[string]
   ##                     base names and values being a sequence of paths.
   ##                     One key can have multiple paths associated with it in
   ##                     which case it isn't clear which to use with
-  ##                     `{{ link ... }}` and `{{ include ... }}` shortcodes.
+  ##                     `< Link />` and `<Include ... />` shortcodes.
   ##   - `return.findFile`: `string -> string` is the function that searches for
   ##                        paths in both `return.files` and `return.table`.
   ##                        It raises a `ValueError` if:
@@ -65,12 +65,9 @@ proc prepareCache*(workingDir, contentDir: string; ignoreDirs: openArray[string]
 
       for searchDir in searchDirs:
         for path in walkDirRec(workingDir / searchDir, relative = true).toSeq.concat:
+          if "/." in path: continue
           if (path.toLower.endsWith(GD_EXT) or path.toLower.endsWith(SHADER_EXT)):
             blockResult.add searchDir / path
-
-      for path in walkDirRec(workingDir / contentDir, relative = true):
-        if path.toLower.endsWith(MDX_EXT) or path.toLower.endsWith(MD_EXT):
-          blockResult.add contentDir / path
 
       blockResult
 

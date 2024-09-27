@@ -168,7 +168,8 @@ proc getAppSettings(): AppSettingsBuildGDSchool =
 
 
 proc process(appSettings: AppSettingsBuildGDSchool) =
-  # REVIEW: is it copying everything, and then still opening and writing each MDX file?
+  # This cache lists code files (.gd, .gdshader) in the content directory and maps associated files.
+  cache = prepareCache(appSettings.workingDir, appSettings.contentDir, appSettings.ignoreDirs)
 
   # Copy all files in the content directory to the dist directory recursively.
   createDir(appSettings.distDir)
@@ -176,8 +177,8 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
     let dirOut = dirIn.replace(appSettings.contentDir & DirSep, appSettings.distDir & DirSep)
     copyDir(dirIn, dirOut)
 
+
   # Process all MDX and MD files and save them to the dist directory.
-  cache = prepareCache(appSettings.workingDir, appSettings.contentDir, appSettings.ignoreDirs)
   for fileIn in cache.files.filterIt(
     (it.toLower.endsWith(MDX_EXT) or it.toLower.endsWith(MD_EXT)) and
     (appSettings.contentDir & DirSep) in it
