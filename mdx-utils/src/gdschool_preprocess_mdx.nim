@@ -242,14 +242,14 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
   if preprocessorErrorMessages.len() != 0:
     stderr.styledWriteLine(
       fgRed,
-      fmt"Found {preprocessorErrorMessages.len()} preprocessor error messages:" & "\n" &
-        preprocessorErrorMessages.join(NL),
+      fmt"Found {preprocessorErrorMessages.len()} preprocessor error messages:" & "\n\n" &
+        preprocessorErrorMessages.join(NL) & "\n",
     )
   if missingMediaFiles.len() != 0:
     stderr.styledWriteLine(
       fgRed,
-      fmt"Found {missingMediaFiles.len()} missing media files:" & "\n" &
-        missingMediaFiles.join(NL),
+      fmt"Found {missingMediaFiles.len()} missing media files:" & "\n\n" &
+        missingMediaFiles.join(NL) & "\n",
     )
 
     # Create directories and write files to output directory
