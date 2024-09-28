@@ -250,6 +250,12 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
   if appSettings.isShowingMedia:
     for inputMediaFile, outputMediaFile in mediaFiles:
       echo fmt"{inputMediaFile} -> {outputMediaFile}"
+  if preprocessorErrorMessages.len() != 0:
+    stderr.styledWriteLine(
+      fgRed,
+      fmt"Found {preprocessorErrorMessages.len()} preprocessor error messages:" & "\n" &
+        preprocessorErrorMessages.join(NL),
+    )
   if missingMediaFiles.len() != 0:
     stderr.styledWriteLine(
       fgRed,

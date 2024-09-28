@@ -2,11 +2,15 @@
 ## It find and replaces include shortcodes in code blocks and adds Godot icons
 ## for built-in class names in inline code marks.
 ## Also, produces a css file with the list of all Godot icons used in the content.
-import std/[logging, nre, strformat, strutils, tables, options, paths, os]
+import std/[nre, strformat, strutils, tables, options, paths, os, terminal, logging]
 import assets
 import utils
 import ../types
 import ../get_image_size
+
+## Collects all error messages generated during the preprocessing of
+## all files to group them at the end of the program's execution.
+var preprocessorErrorMessages*: seq[string] = @[]
 
 let
   regexShortcodeInclude = re"(?P<prefix>.*)< *Include.+/>"
@@ -59,17 +63,17 @@ proc preprocessCodeListings(content: string): string =
             prefixedLines.add(prefix & line)
           result = prefixedLines.join("\n")
         else:
-          raise newException(
-            ValueError,
-            fmt"Can't find matching contents for anchor {anchor} in file {includeFileName}.",
-          )
+          let errorMessage =
+            fmt"Can't find matching contents for anchor {anchor} in file {includeFileName}."
+          stderr.styledWriteLine(fgRed, errorMessage)
+          preprocessorErrorMessages.add(errorMessage)
 
       result = result.replace(regexAnchorLine, "").strip(chars = {'\n'})
     else:
-      error [
-        "Synopsis: `<Include file='fileName(.gd|.shader)' [anchor='anchorName'] />`",
-        fmt"{result}: Incorrect include arguments. Expected 1 or 2 arguments. Skipping...",
-      ].join(NL)
+      let errorMessage =
+        fmt"Malformed include shortcode in file: `<Include file='fileName(.gd|.shader)' [anchor='anchorName'] />`: Incorrect include arguments. Expected 1 or 2 arguments. Skipping..."
+      stderr.styledWriteLine(fgRed, errorMessage)
+      preprocessorErrorMessages.add(errorMessage)
       return match.match
 
   proc replaceMarkdownCodeBlock(match: RegexMatch): string =
@@ -92,7 +96,7 @@ proc addGodotIcons(content: string): string =
     if className in CACHE_GODOT_ICONS:
       result = "<IconGodot name=\"" & className & "\"/> " & match.match
     else:
-      info fmt"Couldn't find icon for `{className}`. Skipping..."
+      info(fmt"Couldn't find icon for `{className}`. Skipping...")
       result = match.match
 
   result = content.replace(regexGodotBuiltIns, replaceGodotIcon)
