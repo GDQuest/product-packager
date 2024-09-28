@@ -78,20 +78,6 @@ Shortcodes:
 
     For `.shader` files replace # with //."""
 
-proc resolveWorkingDir(
-    appSettings: AppSettingsBuildGDSchool
-): AppSettingsBuildGDSchool =
-  ## Tries to find the root directory of the course project by checking
-  ## either `CFG_FILE` or `appSettings.contentDir` exist.
-  ##
-  ## If a valid course project was found it returns the updated
-  ## `AppSettingsBuildGDSchool.workingDir`.
-  result = appSettings
-  for dir in appSettings.inputDir.parentDirs:
-    if (dir / CFG_FILE).fileExists or (dir / result.contentDir).dirExists:
-      result.workingDir = dir
-      break
-
 proc resolveAppSettings(
     appSettings: AppSettingsBuildGDSchool
 ): AppSettingsBuildGDSchool =
@@ -103,7 +89,14 @@ proc resolveAppSettings(
   ## *Note* that it also stops the execution if there was an error with
   ## the given values.
   result = appSettings
-  result = resolveWorkingDir(result)
+  # Tries to find the root directory of the course project by checking
+  # either `CFG_FILE` or `appSettings.contentDir` exist.
+  # If a valid course project was found it returns the updated
+  # `AppSettingsBuildGDSchool.workingDir`.
+  for dir in result.inputDir.parentDirs:
+    if (dir / CFG_FILE).fileExists or (dir / result.contentDir).dirExists:
+      result.workingDir = dir
+      break
 
   if (result.workingDir / CFG_FILE).fileExists:
     let config = loadConfig(result.workingDir / CFG_FILE)
@@ -111,12 +104,17 @@ proc resolveAppSettings(
       result.contentDir = config.getSectionValue("", "contentDir", COURSE_DIR)
     if result.distDir == "":
       result.distDir = config.getSectionValue("", "distDir", DIST_DIR)
-    if result.ignoreDirs.len == 0:
+    if result.ignoreDirs.len() == 0:
       result.ignoreDirs =
         config.getSectionValue("", "ignoreDirs").split(",").mapIt(it.strip())
-    if result.godotProjectDirs.len == 0:
-      result.godotProjectDirs =
-        config.getSectionValue("", "godotProjectDirs").split(",").mapIt(it.strip())
+    if result.godotProjectDirs.len() == 0:
+      let godotProjectDirs = config
+        .getSectionValue("", "godotProjectDirs")
+        .split(",")
+        .mapIt(it.strip())
+        .filterIt(not it.isEmptyOrWhitespace())
+      if godotProjectDirs.len() > 0:
+        result.godotProjectDirs = godotProjectDirs
 
   if result.contentDir == "":
     result.contentDir = COURSE_DIR
