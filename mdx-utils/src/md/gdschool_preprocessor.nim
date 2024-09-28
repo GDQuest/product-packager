@@ -38,7 +38,7 @@ proc preprocessCodeListings(content: string): string =
     if newMatch.isSome():
       let
         args = newMatch.get.captures.toTable()
-        includeFileName = cache.findFile(args["file"])
+        includeFileName = cache.findCodeFile(args["file"])
       result = readFile(includeFileName)
       if "anchor" in args:
         let

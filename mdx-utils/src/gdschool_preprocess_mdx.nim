@@ -57,7 +57,7 @@ Options:
                             added to the ignored list.
   --dry-run             print the list of files that would be processed without
                         actually processing them. This argument has no short form.
-  -sm, --show-media      print the list of media files included in the course.
+  -s, --show-media      print the list of media files included in the course.
   -v, --verbose         print extra information when building the course.
   -q, --quiet           suppress output
 
@@ -193,10 +193,10 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
   let
     regexImage = re"!\[.*\]\((?P<src>.+?)\)"
     regexVideoFile = re("<VideoFile.*src=[\"'](?P<src>[^\"']+?)[\"']")
-  # File paths collected from input md and mdx files, usually relative to the file itself.
-  var inputMediaFilesRelative: seq[string] = @[]
+  # File paths collected from input md and mdx files, with the parentDir of the content file prepended.
+  var inputMediaFiles: seq[string] = @[]
   # Process all MDX and MD files and save them to the dist directory.
-  for fileIn in cache.files.filterIt(
+  for fileIn in cache.contentFiles.filterIt(
     (it.toLower.endsWith(MDX_EXT) or it.toLower.endsWith(MD_EXT)) and
       (appSettings.contentDir & DirSep) in it
   ):
@@ -221,20 +221,32 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
 
     let outputContent = processContent(fileInContents, fileIn, appSettings)
 
-    let parentDir = fileIn.parentDir().string()
+    let inputFileDir = fileIn.parentDir()
     # Find and collect all matches of the src group for regexImage and regexVideoFile
-    inputMediaFilesRelative.add(fileInContents.findAll(regexImage).map(it))
-    inputMediaFilesRelative.add(fileInContents.findAll(regexVideoFile))
+    inputMediaFiles.add(fileInContents.findAll(regexImage).mapIt(inputFileDir / it))
+    inputMediaFiles.add(fileInContents.findAll(regexVideoFile).mapIt(inputFileDir / it))
     if not appSettings.isDryRun:
       writeFile(fileOut, outputContent)
 
   # Map of input media files to output media files
   var mediaFiles: Table[string, string] = initTable[string, string]()
-  for inputMediaFile in inputMediaFilesRelative:
-    let inputMediaFile = appSettings.workingDir / inputMediaFile
-    let outputMediaFile =
-      inputMediaFile.replace(appSettings.contentDir, appSettings.distDir)
-    mediaFiles[inputMediaFile] = outputMediaFile
+  var missingMediaFiles: seq[string] = @[]
+  for inputMediaFile in inputMediaFiles:
+    if not fileExists(inputMediaFile):
+      missingMediaFiles.add(inputMediaFile)
+    else:
+      let outputMediaFile =
+        inputMediaFile.replace(appSettings.contentDir, appSettings.distDir)
+      mediaFiles[inputMediaFile] = outputMediaFile
+
+  if appSettings.isShowingMedia:
+    for inputMediaFile, outputMediaFile in mediaFiles:
+      echo fmt"{inputMediaFile} -> {outputMediaFile}"
+  if missingMediaFiles.len() != 0:
+    stderr.styledWriteLine(
+      fgRed,
+      fmt"Missing media files:\n{missingMediaFiles.join(NL)}\nProgram ended with errors.",
+    )
 
 when isMainModule:
   let appSettings = getAppSettings()

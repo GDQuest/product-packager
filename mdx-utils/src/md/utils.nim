@@ -14,7 +14,10 @@ const
 type
   Cache =
     tuple[
-      files: seq[string], table: Table[string, seq[string]], findFile: string -> string
+      codeFiles: seq[string],
+      contentFiles: seq[string],
+      table: Table[string, seq[string]],
+      findCodeFile: string -> string,
     ]
   Report* = object
     built*: int
@@ -44,38 +47,39 @@ proc prepareCache*(
   ##                        It raises a `ValueError` if:
   ##                          - the file name isn't stored in the cache.
   ##                          - the file name is associated with multiple paths.
-  let
-    cacheFiles = block:
-      let searchDirs = walkDir(workingDir, relative = true).toSeq
-        .filterIt(
-          it.kind == pcDir and not it.path.startsWith(".") and it.path notin ignoreDirs
-        )
-        .mapIt(it.path)
-
-      var blockResult: seq[string]
-
-      for searchDir in searchDirs:
-        for path in walkDirRec(workingDir / searchDir, relative = true).toSeq.concat:
-          if "/." in path:
-            continue
-          if (path.toLower.endsWith(GD_EXT) or path.toLower.endsWith(SHADER_EXT)):
-            blockResult.add searchDir / path
-
-      blockResult
-
-    cacheTable = collect(
-      for k, v in cacheFiles.groupBy((s) => extractFilename(s)):
-        {k: v}
+  var
+    codeFiles: seq[string]
+    contentFiles: seq[string]
+  let searchDirs = walkDir(workingDir, relative = true)
+    .toSeq()
+    .filterIt(
+      it.kind == pcDir and not it.path.startsWith(".") and it.path notin ignoreDirs
     )
+    .mapIt(it.path)
 
-  result.files = cacheFiles
+  for searchDir in searchDirs:
+    for path in walkDirRec(workingDir / searchDir, relative = true).toSeq().concat():
+      if "/." in path:
+        continue
+      if (path.toLower.endsWith(GD_EXT) or path.toLower.endsWith(SHADER_EXT)):
+        codeFiles.add(searchDir / path)
+      elif path.toLower.endsWith(MD_EXT) or path.toLower.endsWith(MDX_EXT):
+        contentFiles.add(searchDir / path)
+
+  let cacheTable = collect(
+    for k, v in codeFiles.groupBy((s) => extractFilename(s)):
+      {k: v}
+  )
+
+  result.codeFiles = codeFiles
+  result.contentFiles = contentFiles
   result.table = cacheTable
-  result.findFile =
+  result.findCodeFile =
     func (name: string): string =
-      if not (name in cacheTable or name in cacheFiles):
+      if not (name in cacheTable or name in codeFiles):
         let
           filteredCandidates =
-            cacheFiles.filterIt(it.toLower.endsWith(name.splitFile.ext))
+            codeFiles.filterIt(it.toLower.endsWith(name.splitFile.ext))
           candidates = filteredCandidates
           .mapIt((score: name.fuzzyMatchSmart(it), path: it))
           .sorted((x, y) => cmp(x.score, y.score), Descending)[
