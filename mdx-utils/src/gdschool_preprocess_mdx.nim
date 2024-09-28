@@ -179,27 +179,23 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
   cache =
     prepareCache(appSettings.workingDir, appSettings.contentDir, appSettings.ignoreDirs)
 
-  # Copy all files in the content directory to the dist directory recursively.
-  #createDir(appSettings.distDir)
-  #for dirIn in walkDirs(appSettings.workingDir / appSettings.contentDir / "**"):
-  #  let dirOut = dirIn.replace(appSettings.contentDir & DirSep, appSettings.distDir & DirSep)
-  #  copyDir(dirIn, dirOut)
+  type ProcessedFile = object
+    inputPath: string
+    content: string
+    outputPath: string
 
-  # TO DO:
-  # - We process all MDX and MD files in the content directory.
-  # - Parsing the markdown files should return a list of input media files that need to be copied.
-  # - We build a list of output file paths for the media files.
+  var
+    processedFiles: seq[ProcessedFile] = @[]
+    # This table maps media files found in content to their destination paths.
+    mediaFiles: Table[string, string] = initTable[string, string]()
+    missingMediaFiles: seq[string] = @[]
 
   let
     regexImage = re"!\[.*\]\((?P<src>.+?)\)"
     regexVideoFile = re("<VideoFile.*src=[\"'](?P<src>[^\"']+?)[\"']")
-  # File paths collected from input md and mdx files, with the parentDir of the content file prepended.
-  var inputMediaFiles: seq[string] = @[]
+
   # Process all MDX and MD files and save them to the dist directory.
-  for fileIn in cache.contentFiles.filterIt(
-    (it.toLower.endsWith(MDX_EXT) or it.toLower.endsWith(MD_EXT)) and
-      (appSettings.contentDir & DirSep) in it
-  ):
+  for fileIn in cache.contentFiles:
     let fileOut =
       fileIn.replace(appSettings.contentDir & DirSep, appSettings.distDir & DirSep)
 
@@ -214,40 +210,35 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
     let fileInContents = readFile(fileIn)
     if not appSettings.isQuiet:
       info fmt"Creating output `{fileOut.parentDir}` directory..."
-    if not appSettings.isDryRun:
-      createDir(fileOut.parentDir)
-
-    let outputContent = processContent(fileInContents, fileIn, appSettings)
 
     let inputFileDir = fileIn.parentDir()
-    # Find and collect all matches of the src group for regexImage and regexVideoFile
-    inputMediaFiles.add(
-      fileInContents.findIter(regexImage).toSeq().mapIt(
-        inputFileDir / it.captures["src"]
-      )
-    )
-    inputMediaFiles.add(
-      fileInContents.findIter(regexVideoFile).toSeq().mapIt(
-        inputFileDir / it.captures["src"]
-      )
-    )
-    if not appSettings.isDryRun:
-      writeFile(fileOut, outputContent)
+    let outputDirMedia = appSettings.distDir / "public" / "courses" / inputFileDir
+    let outputContent =
+      processContent(fileInContents, inputFileDir, outputDirMedia, appSettings)
 
-  # Map of input media files to output media files
-  var mediaFiles: Table[string, string] = initTable[string, string]()
-  var missingMediaFiles: seq[string] = @[]
-  for inputMediaFile in inputMediaFiles:
-    if not fileExists(inputMediaFile):
-      missingMediaFiles.add(inputMediaFile)
-    else:
-      let outputMediaFile =
-        inputMediaFile.replace(appSettings.contentDir, appSettings.distDir)
-      mediaFiles[inputMediaFile] = outputMediaFile
+    processedFiles.add(
+      ProcessedFile(inputPath: fileIn, content: outputContent, outputPath: fileOut)
+    )
 
+    # Collect media files found in the content.
+    var inputMediaFiles: seq[string] =
+      fileInContents.findIter(regexImage).toSeq().mapIt(it.captures["src"])
+    inputMediaFiles.add(
+      fileInContents.findIter(regexVideoFile).toSeq().mapIt(it.captures["src"])
+    )
+    for mediaFile in inputMediaFiles:
+      let inputPath = inputFileDir / mediaFile
+      if fileExists(inputPath):
+        let outputPath = outputDirMedia / mediaFile
+        mediaFiles[inputPath] = outputPath
+      else:
+        missingMediaFiles.add(inputPath)
+
+  # Show all media files processed and output collected errors
   if appSettings.isShowingMedia:
     for inputMediaFile, outputMediaFile in mediaFiles:
       echo fmt"{inputMediaFile} -> {outputMediaFile}"
+
   if preprocessorErrorMessages.len() != 0:
     stderr.styledWriteLine(
       fgRed,
@@ -260,6 +251,16 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
       fmt"Found {missingMediaFiles.len()} missing media files:" & "\n" &
         missingMediaFiles.join(NL),
     )
+
+    # Create directories and write files to output directory
+    if not appSettings.isDryRun and not appSettings.isShowingMedia:
+      for processedFile in processedFiles:
+        createDir(processedFile.outputPath.parentDir())
+        writeFile(processedFile.outputPath, processedFile.content)
+
+      for inputMediaFile, outputMediaFile in mediaFiles:
+        createDir(outputMediaFile.parentDir())
+        copyFile(inputMediaFile, outputMediaFile)
 
 when isMainModule:
   let appSettings = getAppSettings()

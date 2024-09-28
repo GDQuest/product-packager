@@ -140,19 +140,12 @@ proc replaceVideos*(content: string, outputDirPath: string): string =
 
 proc processContent*(
     fileContent: string,
-    inputFilePath: string = "",
+    inputDirPath: string = "",
+    outputDirPath: string = "",
     appSettings: AppSettingsBuildGDSchool,
 ): string =
-  let inputDirPath = inputFilePath.parentDir()
-  let publicDir = inputDirPath.string()
-  #TODO: issue, paths are absolute.
-  stderr.styledWriteLine(
-    fgYellow,
-    "Input file: " & inputFilePath & "\n" & "Input dir path: " & inputDirPath.string() &
-      "\n" & "Public dir path: " & publicDir,
-  )
   result = fileContent
     .preprocessCodeListings()
-    .replaceMarkdownImages(publicDir, inputDirPath.string())
-    .replaceVideos(publicDir)
+    .replaceMarkdownImages(outputDirPath, inputDirPath)
+    .replaceVideos(outputDirPath)
     .addGodotIcons()
