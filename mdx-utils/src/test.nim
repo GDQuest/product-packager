@@ -1,9 +1,4 @@
-import std/
-  [ os
-  , parsecsv
-  , strutils
-  , unittest
-  ]
+import std/[os, parsecsv, strutils, unittest]
 import format_lesson_content
 
 suite "Formatter":
@@ -21,4 +16,6 @@ suite "Formatter":
 
       check(isExpectedOutput)
       if not isExpectedOutput:
-        stderr.writeLine ["", "Input: ", input, "Expected: ", expected, "But instead got: ", formatted].join("\n")
+        stderr.writeLine [
+          "", "Input: ", input, "Expected: ", expected, "But instead got: ", formatted
+        ].join("\n")

@@ -1,11 +1,4 @@
-import std/
-  [ strformat
-  , strutils
-  ]
-import md/
-  [ utils
-  ]
-
+import std/[strformat, strutils]
 
 type
   AppSettingsFormat* = object
@@ -36,42 +29,39 @@ type
     isCleaning*: bool
     isForced*: bool
     isQuiet*: bool
+    isDryRun*: bool
+    isShowingMedia*: bool
     # Prefix to preprend to markdown image urls when making them absolute for GDSchool.
     imagePathPrefix*: string
 
-
 func `$`*(appSettings: AppSettingsFormat): string =
-  [ "AppSettings:"
-  , "\tinputFiles: {appSettings.inputFiles}".fmt
-  , "\tinPlace: {appSettings.inPlace}".fmt
-  , "\toutputDir: {appSettings.outputDir}".fmt
-  ].join(NL)
-
+  [
+    "AppSettings:", "\tinputFiles: {appSettings.inputFiles}".fmt,
+    "\tinPlace: {appSettings.inPlace}".fmt, "\toutputDir: {appSettings.outputDir}".fmt,
+  ].join("\n")
 
 func `$`*(appSettings: AppSettingsBuildCourse): string =
-  [ "AppSettings:"
-  , "\tinputDir: {appSettings.inputDir}".fmt
-  , "\tworkingDir: {appSettings.workingDir}".fmt
-  , "\tcontentDir: {appSettings.contentDir}".fmt
-  , "\tdistDir: {appSettings.distDir}".fmt
-  , "\tgodotProjectDirs: {appSettings.godotProjectDirs}".fmt
-  , "\tignoreDirs: {appSettings.ignoreDirs.join(\", \")}".fmt
-  , "\tpandocExe: {appSettings.pandocExe}".fmt
-  , "\tpandocAssetsDir: {appSettings.pandocAssetsDir}".fmt
-  , "\tisCleaning: {appSettings.isCleaning}".fmt
-  , "\tisForced: {appSettings.isForced}".fmt
-  , "\texec: {appSettings.exec}".fmt
-  ].join(NL)
-
+  [
+    "AppSettings:", "\tinputDir: {appSettings.inputDir}".fmt,
+    "\tworkingDir: {appSettings.workingDir}".fmt,
+    "\tcontentDir: {appSettings.contentDir}".fmt,
+    "\tdistDir: {appSettings.distDir}".fmt,
+    "\tgodotProjectDirs: {appSettings.godotProjectDirs}".fmt,
+    "\tignoreDirs: {appSettings.ignoreDirs.join(\", \")}".fmt,
+    "\tpandocExe: {appSettings.pandocExe}".fmt,
+    "\tpandocAssetsDir: {appSettings.pandocAssetsDir}".fmt,
+    "\tisCleaning: {appSettings.isCleaning}".fmt,
+    "\tisForced: {appSettings.isForced}".fmt, "\texec: {appSettings.exec}".fmt,
+  ].join("\n")
 
 func `$`*(appSettings: AppSettingsBuildGDSchool): string =
-  [ "AppSettings:"
-  , "\tinputDir: {appSettings.inputDir}".fmt
-  , "\tworkingDir: {appSettings.workingDir}".fmt
-  , "\tcontentDir: {appSettings.contentDir}".fmt
-  , "\tdistDir: {appSettings.distDir}".fmt
-  , "\tgodotProjectDirs: {appSettings.godotProjectDirs}".fmt
-  , "\tignoreDirs: {appSettings.ignoreDirs.join(\", \")}".fmt
-  , "\tisCleaning: {appSettings.isCleaning}".fmt
-  , "\tisForced: {appSettings.isForced}".fmt
-  ].join(NL)
+  [
+    "AppSettings:", "\tinputDir: {appSettings.inputDir}".fmt,
+    "\tworkingDir: {appSettings.workingDir}".fmt,
+    "\tcontentDir: {appSettings.contentDir}".fmt,
+    "\tdistDir: {appSettings.distDir}".fmt,
+    "\tgodotProjectDirs: {appSettings.godotProjectDirs}".fmt,
+    "\tignoreDirs: {appSettings.ignoreDirs.join(\", \")}".fmt,
+    "\tisCleaning: {appSettings.isCleaning}".fmt,
+    "\tisForced: {appSettings.isForced}".fmt,
+  ].join("\n")

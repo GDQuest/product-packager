@@ -1,11 +1,4 @@
-import std/
-  [ algorithm
-  , os
-  , strutils
-  , sugar
-  , tables
-  ]
-
+import std/[algorithm, os, strutils, sugar, tables]
 
 const
   EXT_XML = ".xml"
@@ -44,10 +37,6 @@ const
 
     result
 
-  CACHE_BLACKLIST* = [ "2D"
-                     , "3D"
-                     , "Godot"
-                     , "GDScript"
-                     , "GDQuest"
-                     , "UI"
-                     ].sorted((x, y) => cmp(x.len, y.len), Descending)
+  CACHE_BLACKLIST* = ["2D", "3D", "Godot", "GDScript", "GDQuest", "UI"].sorted(
+    (x, y) => cmp(x.len, y.len), Descending
+  )

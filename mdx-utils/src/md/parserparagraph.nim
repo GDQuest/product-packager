@@ -1,10 +1,9 @@
 import honeycomb
 import parser
 
-
 type
   ParagraphLineSectionKind* = enum
-    plskRegular,
+    plskRegular
     plskShortcode
 
   ParagraphLineSection* = object
@@ -17,8 +16,10 @@ func render*(pls: ParagraphLineSection): string =
   of plskShortcode: pls.shortcode.render
   of plskRegular: pls.section
 
-func ParagraphLineSectionRegular(section: string): ParagraphLineSection = ParagraphLineSection(kind: plskRegular, section: section)
-func ParagraphLineSectionShortcode(shortcode: Block): ParagraphLineSection = ParagraphLineSection(kind: plskShortcode, shortcode: shortcode)
+func ParagraphLineSectionRegular(section: string): ParagraphLineSection =
+  ParagraphLineSection(kind: plskRegular, section: section)
+func ParagraphLineSectionShortcode(shortcode: Block): ParagraphLineSection =
+  ParagraphLineSection(kind: plskShortcode, shortcode: shortcode)
 
 proc toParagraphLine*(x: string): seq[ParagraphLineSection] =
   let parsed = (
@@ -27,6 +28,7 @@ proc toParagraphLine*(x: string): seq[ParagraphLineSection] =
   ).many.parse(x)
 
   case parsed.kind
-    of success: parsed.value
-    else: @[]
-
+  of success:
+    parsed.value
+  else:
+    @[]
