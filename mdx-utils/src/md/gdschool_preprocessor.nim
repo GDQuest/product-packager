@@ -45,7 +45,7 @@ proc preprocessCodeListings(content: string): string =
           anchor = args["anchor"]
           regexAnchor = re(
             fmt(
-              r"(?s)\h*(?:#|\/\/)\h*region\h*\b{anchor}\b\h*\v(?P<contents>.*?)\s*(?:#|\/\/)\h*endregion\h*\b{anchor}\b"
+              r"(?s)\h*(?:#|\/\/)\h*ANCHOR:\h*\b{anchor}\b\h*\v(?P<contents>.*?)\s*(?:#|\/\/)\h*END:\h*\b{anchor}\b"
             )
           )
 

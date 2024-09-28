@@ -223,8 +223,16 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
 
     let inputFileDir = fileIn.parentDir()
     # Find and collect all matches of the src group for regexImage and regexVideoFile
-    inputMediaFiles.add(fileInContents.findAll(regexImage).mapIt(inputFileDir / it))
-    inputMediaFiles.add(fileInContents.findAll(regexVideoFile).mapIt(inputFileDir / it))
+    inputMediaFiles.add(
+      fileInContents.findIter(regexImage).toSeq().mapIt(
+        inputFileDir / it.captures["src"]
+      )
+    )
+    inputMediaFiles.add(
+      fileInContents.findIter(regexVideoFile).toSeq().mapIt(
+        inputFileDir / it.captures["src"]
+      )
+    )
     if not appSettings.isDryRun:
       writeFile(fileOut, outputContent)
 
@@ -245,7 +253,8 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
   if missingMediaFiles.len() != 0:
     stderr.styledWriteLine(
       fgRed,
-      fmt"Missing media files:\n{missingMediaFiles.join(NL)}\nProgram ended with errors.",
+      fmt"Found {missingMediaFiles.len()} missing media files:" & "\n" &
+        missingMediaFiles.join(NL),
     )
 
 when isMainModule:

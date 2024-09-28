@@ -1,5 +1,5 @@
 ## Reads the header of PNG, JPEG, and WEBP files to extract the image width and height.
-import streams, endians
+import streams, endians, os, terminal
 
 type ImageDimensions* = object
   width*: int
@@ -135,18 +135,27 @@ proc getWebPDimensions(fs: FileStream): ImageDimensions =
 proc getImageDimensions*(filePath: string): ImageDimensions =
   var fs = newFileStream(filePath, fmRead)
   if fs == nil:
-    raise newException(IOError, "Cannot open the image file " & filePath)
-  defer:
-    fs.close()
-
-  let fileHeader = fs.readStr(4)
-  fs.setPosition(0)
-  case fileHeader
-  of "\x89PNG":
-    result = getPngDimensions(fs)
-  of "\xFF\xD8\xFF\xE0":
-    result = getJpegDimensions(fs)
-  of "RIFF":
-    result = getWebPDimensions(fs)
+    stderr.styledWriteLine(fgRed, "Cannot open the image file " & filePath)
   else:
-    raise newException(IOError, "Unknown image format")
+    defer:
+      fs.close()
+
+    let fileHeader = fs.readStr(4)
+    fs.setPosition(0)
+    case fileHeader
+    of "\x89PNG":
+      result = getPngDimensions(fs)
+    of "\xFF\xD8\xFF\xE0":
+      result = getJpegDimensions(fs)
+    of "RIFF":
+      result = getWebPDimensions(fs)
+    else:
+      let fileExtension = filePath.splitFile().ext
+
+      stderr.styledWriteLine(
+        fgRed,
+        "Trying to read dimensions for an unsupported image format: " & fileExtension &
+          ".\nFile path: " & filePath,
+      )
+      # TODO: either remove exceptions or bubble up to a higher level to collect errors and report them all at once.
+      #raise newException(IOError, "Unsupported image format: " & fileExtension)
