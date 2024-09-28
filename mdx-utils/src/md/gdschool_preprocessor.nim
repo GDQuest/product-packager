@@ -107,7 +107,7 @@ proc replaceMarkdownImages*(
   proc replaceOneImage(match: RegexMatch): string =
     let
       captures = match.captures.toTable()
-      alt = captures["alt"]
+      alt = captures["alt"].replace("\"", "'")
       relpath = captures["path"]
       outputPath = outputDirPath / relpath
       dimensions = getImageDimensions(inputDirPath / relpath)
