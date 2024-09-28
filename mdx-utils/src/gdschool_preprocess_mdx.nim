@@ -255,15 +255,15 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
         missingMediaFiles.join("\n") & "\n",
     )
 
-    # Create directories and write files to output directory
-    if not appSettings.isDryRun and not appSettings.isShowingMedia:
-      for processedFile in processedFiles:
-        createDir(processedFile.outputPath.parentDir())
-        writeFile(processedFile.outputPath, processedFile.content)
+  # Create directories and write files to output directory
+  if not appSettings.isDryRun and not appSettings.isShowingMedia:
+    for processedFile in processedFiles:
+      createDir(processedFile.outputPath.parentDir())
+      writeFile(processedFile.outputPath, processedFile.content)
 
-      for inputMediaFile, outputMediaFile in mediaFiles:
-        createDir(outputMediaFile.parentDir())
-        copyFile(inputMediaFile, outputMediaFile)
+    for inputMediaFile, outputMediaFile in mediaFiles:
+      createDir(outputMediaFile.parentDir())
+      copyFile(inputMediaFile, outputMediaFile)
 
 when isMainModule:
   let appSettings = getAppSettings()
