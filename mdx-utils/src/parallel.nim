@@ -60,10 +60,10 @@ proc waitForJobs*(runner: PandocRunner, report: var Report) =
       if output.strip != "":
         info [
           fmt"`{job.fileIn.relativePath(runner.settings.workingDir)}`", "{output}".fmt
-        ].join(NL)
+        ].join("\n")
     else:
       report.errors.inc
       error [
         fmt"`{job.fileIn.relativePath(runner.settings.workingDir)}`",
         "{output.strip}".fmt, "Skipping...",
-      ].join(NL)
+      ].join("\n")

@@ -129,7 +129,7 @@ proc resolveAppSettings(
       .mapIt("\t{result.workingDir / it}".fmt)
 
     if ignoreDirsErrors.len != 0:
-      warn ("Invalid ignore directories:" & ignoreDirsErrors).join(NL)
+      warn ("Invalid ignore directories:" & ignoreDirsErrors).join("\n")
 
     result.ignoreDirs.add result.distDir
 
@@ -176,8 +176,7 @@ proc getAppSettings(): AppSettingsBuildGDSchool =
 
 proc process(appSettings: AppSettingsBuildGDSchool) =
   # This cache lists code files (.gd, .gdshader) in the content directory and maps associated files.
-  cache =
-    prepareCache(appSettings.workingDir, appSettings.contentDir, appSettings.ignoreDirs)
+  cache = prepareCache(appSettings)
 
   type ProcessedFile = object
     inputPath: string
@@ -243,13 +242,13 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
     stderr.styledWriteLine(
       fgRed,
       fmt"Found {preprocessorErrorMessages.len()} preprocessor error messages:" & "\n\n" &
-        preprocessorErrorMessages.join(NL) & "\n",
+        preprocessorErrorMessages.join("\n") & "\n",
     )
   if missingMediaFiles.len() != 0:
     stderr.styledWriteLine(
       fgRed,
       fmt"Found {missingMediaFiles.len()} missing media files:" & "\n\n" &
-        missingMediaFiles.join(NL) & "\n",
+        missingMediaFiles.join("\n") & "\n",
     )
 
     # Create directories and write files to output directory

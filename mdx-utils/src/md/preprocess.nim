@@ -67,18 +67,18 @@ proc preprocessBlock(mdBlock: Block, mdBlocks: seq[Block], fileName: string): st
   of bkParagraph:
     mdBlock.body
     .mapIt(it.toParagraphLine.preprocessParagraphLine(mdBlocks, fileName))
-    .join(NL)
+    .join("\n")
   of bkList:
-    mdBlock.items.mapIt(it.render.addGodotIcon).join(NL)
+    mdBlock.items.mapIt(it.render.addGodotIcon).join("\n")
   of bkCode:
     [
       fmt"```{mdBlock.language}",
-      mdBlock.code.mapIt(it.preprocessCodeLine(mdBlocks, fileName)).join(NL),
+      mdBlock.code.mapIt(it.preprocessCodeLine(mdBlocks, fileName)).join("\n"),
       "```",
-    ].join(NL)
+    ].join("\n")
   else:
     mdBlock.render
 
 proc preprocess*(fileName, contents: string): string =
   let mdBlocks = contents.parse
-  mdBlocks.mapIt(preprocessBlock(it, mdBlocks, fileName)).join(NL)
+  mdBlocks.mapIt(preprocessBlock(it, mdBlocks, fileName)).join("\n")

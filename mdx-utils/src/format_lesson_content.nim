@@ -195,7 +195,7 @@ proc formatCodeLine(codeLine: CodeLine): string =
     codeLine.line[bound .. ^1].strip
     .wrapWords(wrapLen, splitLongWords = false).splitLines
     .mapIt([indent, it].join(sep))
-    .join(NL)
+    .join("\n")
 
 proc formatBlock(mdBlock: Block): string =
   ## Takes an `mdBlock` from a parsed markdown file
@@ -215,12 +215,12 @@ proc formatBlock(mdBlock: Block): string =
   else:
     partialResult.add(mdBlock.render)
 
-  partialResult.join(NL)
+  partialResult.join("\n")
 
 proc formatContent*(content: string): string =
   ## Takes the markdown `content` and returns a formatted document using
   ## the GDQuest standard.
-  parse(content).map(formatBlock).join(NL).strip & NL
+  parse(content).map(formatBlock).join("\n").strip & "\n"
 
 proc getAppSettings(): AppSettingsFormat =
   for kind, key, value in getopt(
@@ -243,10 +243,10 @@ proc getAppSettings(): AppSettingsFormat =
       of "output-dir", "o":
         result.outputDir = value
       else:
-        [fmt"Invalid option: {key}", "", HELP_MESSAGE].join(NL).quit
+        [fmt"Invalid option: {key}", "", HELP_MESSAGE].join("\n").quit
 
   if result.inputFiles.len == 0:
-    ["No input files specified.", "", HELP_MESSAGE].join(NL).quit
+    ["No input files specified.", "", HELP_MESSAGE].join("\n").quit
 
 when isMainModule:
   let appSettings = getAppSettings()

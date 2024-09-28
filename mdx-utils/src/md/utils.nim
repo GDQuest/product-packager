@@ -1,10 +1,10 @@
 import std/[algorithm, os, sequtils, strformat, strutils, sugar, tables]
 import fuzzy
 import itertools
+import ../types
 
 const
   SPACE* = " "
-  NL* = "\n"
   GD_EXT* = ".gd"
   MD_EXT* = ".md"
   MDX_EXT* = ".mdx"
@@ -31,9 +31,7 @@ var cache*: Cache
 proc `$`*(r: Report): string =
   fmt"Summary: {r.built} built, {r.errors} errors, {r.skipped} skipped."
 
-proc prepareCache*(
-    workingDir, contentDir: string, ignoreDirs: openArray[string]
-): Cache =
+proc prepareCache*(appSettings: AppSettingsBuildGDSchool): Cache =
   ## Retruns a `Cache` object with:
   ##   - `return.files`: `seq[string]` stores all Markdown, GDScript and Shader
   ##                     paths.
@@ -50,22 +48,37 @@ proc prepareCache*(
   var
     codeFiles: seq[string]
     contentFiles: seq[string]
-  let searchDirs = walkDir(workingDir, relative = true)
+  let subDirs = walkDir(appSettings.workingDir, relative = true)
     .toSeq()
     .filterIt(
-      it.kind == pcDir and not it.path.startsWith(".") and it.path notin ignoreDirs
+      it.kind == pcDir and not it.path.startsWith(".") and
+        it.path notin appSettings.ignoreDirs
     )
     .mapIt(it.path)
+  let godotDirs =
+    if appSettings.godotProjectDirs.len() == 0:
+      subDirs
+    else:
+      subDirs.filterIt(it in appSettings.godotProjectDirs)
 
-  for searchDir in searchDirs:
-    for path in walkDirRec(searchDir, relative = true).toSeq().concat():
+  const CODE_FILE_EXTENSIONS = @[GD_EXT, SHADER_EXT]
+  for godotProjectDir in godotDirs:
+    for path in walkDirRec(godotProjectDir, relative = true):
       if "/." in path:
         continue
-      let fullPath = relativePath(searchDir / path, workingDir)
-      if (fullPath.toLower.endsWith(GD_EXT) or fullPath.toLower.endsWith(SHADER_EXT)):
+      let ext = path.splitFile().ext
+      if ext in CODE_FILE_EXTENSIONS:
+        let fullPath = relativePath(godotProjectDir / path, appSettings.workingDir)
         codeFiles.add(fullPath)
-      elif fullPath.toLower.endsWith(MD_EXT) or fullPath.toLower.endsWith(MDX_EXT):
-        contentFiles.add(fullPath)
+
+  const CONTENT_FILE_EXTENSIONS = @[MD_EXT, MDX_EXT]
+  for path in walkDirRec(appSettings.contentDir, relative = true):
+    if "/." in path:
+      continue
+    let ext = path.splitFile().ext
+    if ext in CONTENT_FILE_EXTENSIONS:
+      let fullPath = relativePath(appSettings.contentDir / path, appSettings.workingDir)
+      contentFiles.add(fullPath)
 
   let cacheTable = collect(
     for k, v in codeFiles.groupBy((s) => extractFilename(s)):
@@ -89,7 +102,7 @@ proc prepareCache*(
 
         raise newException(
           ValueError,
-          (fmt"`{name}` doesn't exist. Possible candidates:" & candidates).join(NL),
+          (fmt"`{name}` doesn't exist. Possible candidates:" & candidates).join("\n"),
         )
       elif name in cacheTable and cacheTable[name].len != 1:
         raise newException(
@@ -97,7 +110,7 @@ proc prepareCache*(
           (
             fmt"`{name}` is associated with multiple files:" & cacheTable[name] &
             fmt"Relative to the current working directory. Use a file path in your shortcode instead."
-          ).join(NL),
+          ).join("\n"),
         )
       elif name in cacheTable:
         return cacheTable[name][0]

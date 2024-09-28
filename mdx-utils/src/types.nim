@@ -1,5 +1,4 @@
 import std/[strformat, strutils]
-import md/[utils]
 
 type
   AppSettingsFormat* = object
@@ -39,7 +38,7 @@ func `$`*(appSettings: AppSettingsFormat): string =
   [
     "AppSettings:", "\tinputFiles: {appSettings.inputFiles}".fmt,
     "\tinPlace: {appSettings.inPlace}".fmt, "\toutputDir: {appSettings.outputDir}".fmt,
-  ].join(NL)
+  ].join("\n")
 
 func `$`*(appSettings: AppSettingsBuildCourse): string =
   [
@@ -53,7 +52,7 @@ func `$`*(appSettings: AppSettingsBuildCourse): string =
     "\tpandocAssetsDir: {appSettings.pandocAssetsDir}".fmt,
     "\tisCleaning: {appSettings.isCleaning}".fmt,
     "\tisForced: {appSettings.isForced}".fmt, "\texec: {appSettings.exec}".fmt,
-  ].join(NL)
+  ].join("\n")
 
 func `$`*(appSettings: AppSettingsBuildGDSchool): string =
   [
@@ -65,4 +64,4 @@ func `$`*(appSettings: AppSettingsBuildGDSchool): string =
     "\tignoreDirs: {appSettings.ignoreDirs.join(\", \")}".fmt,
     "\tisCleaning: {appSettings.isCleaning}".fmt,
     "\tisForced: {appSettings.isForced}".fmt,
-  ].join(NL)
+  ].join("\n")

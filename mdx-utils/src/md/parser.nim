@@ -104,17 +104,17 @@ func render*(b: Block): string =
   of bkHeading:
     '#'.repeat(b.level) & SPACE & b.heading
   of bkCode:
-    (@["```" & b.language] & b.code.map(render) & @["```"]).join(NL)
+    (@["```" & b.language] & b.code.map(render) & @["```"]).join("\n")
   of bkImage:
     "![" & b.alt & "](" & b.path & ")"
   of bkShortcode:
     ["{{", (@[b.name] & b.args).join(SPACE), "}}"].join(SPACE)
   of bkList:
-    b.items.map(render).join(NL)
+    b.items.map(render).join("\n")
   of bkYAMLFrontMatter:
-    (@["---"] & b.body & @["---"]).join(NL)
+    (@["---"] & b.body & @["---"]).join("\n")
   else:
-    b.body.join(NL)
+    b.body.join("\n")
 
 let
   newLine = regex(r"\R")
