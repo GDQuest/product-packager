@@ -22,8 +22,9 @@ let
     ["(`(?P<class>", CACHE_GODOT_BUILTIN_CLASSES.join("|"), ")`)"].join.re()
   regexAnchorLine = re"(?m)(?s)\h*(#|\/\/)\h*(ANCHOR|END).*?(\v|$)"
   regexMarkdownImage = re"!\[(?P<alt>.*?)\]\((?P<path>.+?)\)"
-  regexVideoFile =
-    re("<VideoFile(?P<before>.*?)?src=[\"'](?P<src>[^\"']+)[\"'](?P<after>.*?)?/>")
+  regexVideoFile = re(
+    "(?s)<VideoFile\\s*(?P<before>.*?)?src=[\"'](?P<src>[^\"']+)[\"'](?P<after>.*?)?/>"
+  )
 
 proc preprocessCodeListings(content: string): string =
   ## Finds code blocks in the markdown document and searches for include
@@ -131,10 +132,16 @@ proc replaceVideos*(content: string, outputDirPath: string): string =
     let
       captures = match.captures.toTable()
       src = captures["src"]
-      before = captures.getOrDefault("before", " ")
-      after = captures.getOrDefault("after", " ")
+      before = captures.getOrDefault("before", " ").strip()
+      after = captures.getOrDefault("after", " ").strip()
       outputPath = outputDirPath / src
-    result = fmt"""<VideoFile{before}src="{outputPath}"{after}/>"""
+    result = "<VideoFile"
+    if before != "":
+      result &= " " & before
+    result &= " src=\"" & outputPath & "\""
+    if after != "":
+      result &= " " & after
+    result &= "/>"
 
   result = content.replace(regexVideoFile, replaceOneVideo)
 
