@@ -60,8 +60,8 @@ func `$`*(appSettings: AppSettingsBuildGDSchool): string =
     "\tworkingDir: {appSettings.workingDir}".fmt,
     "\tcontentDir: {appSettings.contentDir}".fmt,
     "\tdistDir: {appSettings.distDir}".fmt,
-    "\tgodotProjectDirs: {appSettings.godotProjectDirs}".fmt,
     "\tignoreDirs: {appSettings.ignoreDirs.join(\", \")}".fmt,
+    "\tgodotProjectDirs: {appSettings.godotProjectDirs.join(\", \")}".fmt,
     "\tisCleaning: {appSettings.isCleaning}".fmt,
     "\tisForced: {appSettings.isForced}".fmt,
   ].join("\n")

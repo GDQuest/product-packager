@@ -114,6 +114,9 @@ proc resolveAppSettings(
     if result.ignoreDirs.len == 0:
       result.ignoreDirs =
         config.getSectionValue("", "ignoreDirs").split(",").mapIt(it.strip())
+    if result.godotProjectDirs.len == 0:
+      result.godotProjectDirs =
+        config.getSectionValue("", "godotProjectDirs").split(",").mapIt(it.strip())
 
   if result.contentDir == "":
     result.contentDir = COURSE_DIR
