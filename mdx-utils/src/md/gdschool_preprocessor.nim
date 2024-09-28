@@ -17,7 +17,7 @@ let
   regexGodotBuiltIns =
     ["(`(?P<class>", CACHE_GODOT_BUILTIN_CLASSES.join("|"), ")`)"].join.re()
   regexAnchorLine = re"(?m)(?s)\h*(#|\/\/)\h*(region|endregion).*?(\v|$)"
-  regexMarkdownImage = re"!\[(?P<alt>.+?)\]\((?P<path>.+?)\)"
+  regexMarkdownImage = re"!\[(?P<alt>.*?)\]\((?P<path>.+?)\)"
   regexVideoFile =
     re("<VideoFile(?P<before>.*?)?src=[\"'](?P<src>[^\"']+)[\"'](?P<after>.*?)?/>")
 

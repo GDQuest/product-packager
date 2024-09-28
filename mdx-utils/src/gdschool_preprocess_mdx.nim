@@ -2,7 +2,10 @@
 ## Replaces include shortcodes with the contents of the included source code files.
 ## It also inserts components representing Godot icons in front of Godot class names.
 import
-  std/[logging, os, parseopt, parsecfg, sequtils, strformat, strutils, terminal, re]
+  std/[
+    logging, os, parseopt, parsecfg, sequtils, strformat, strutils, terminal, nre,
+    tables,
+  ]
 import md/[gdschool_preprocessor, utils]
 import customlogger, types
 
@@ -52,6 +55,9 @@ Options:
                             root directory.
                           - The outut directory is automatically
                             added to the ignored list.
+  --dry-run             print the list of files that would be processed without
+                        actually processing them. This argument has no short form.
+  -sm, --show-media      print the list of media files included in the course.
   -v, --verbose         print extra information when building the course.
   -q, --quiet           suppress output
 
@@ -107,7 +113,7 @@ proc resolveAppSettings(
       result.distDir = config.getSectionValue("", "distDir", DIST_DIR)
     if result.ignoreDirs.len == 0:
       result.ignoreDirs =
-        config.getSectionValue("", "ignoreDirs").split(",").mapIt(it.strip)
+        config.getSectionValue("", "ignoreDirs").split(",").mapIt(it.strip())
 
   if result.contentDir == "":
     result.contentDir = COURSE_DIR
@@ -128,13 +134,12 @@ proc resolveAppSettings(
     result.ignoreDirs.add result.distDir
 
 proc getAppSettings(): AppSettingsBuildGDSchool =
-  ## Returns an `AppSettingsBuildGDSchool` object with appropriate values. It stops the
-  ## execution if invalid values were found.
-  result.inputDir = ".".absolutePath
+  result.inputDir = getCurrentDir().absolutePath
   result.workingDir = result.inputDir
 
   for kind, key, value in getopt(
-    shortNoVal = {'h', 'v', 'q'}, longNoVal = @["clean", "help", "verbose", "quiet"]
+    shortNoVal = {'h', 'v', 'q', 'd', 's'},
+    longNoVal = @["clean", "help", "verbose", "quiet", "dry-run", "show-media"],
   ):
     case kind
     of cmdEnd:
@@ -143,12 +148,12 @@ proc getAppSettings(): AppSettingsBuildGDSchool =
       if dirExists(key):
         result.inputDir = key.absolutePath
       else:
-        fmt"Invalid input directory: `{key}`".quit
+        quit fmt"Invalid input directory: `{key}`"
     of cmdLongOption, cmdShortOption:
       case key
       of "help", "h":
-        HELP_MESSAGE.fmt.quit(QuitSuccess)
-      of "clean", "":
+        quit HELP_MESSAGE.fmt
+      of "clean":
         result.isCleaning = true
       of "course-dir", "c":
         result.contentDir = value
@@ -160,13 +165,14 @@ proc getAppSettings(): AppSettingsBuildGDSchool =
         logger.levelThreshold = lvlAll
       of "quiet", "q":
         result.isQuiet = true
+      of "dry-run":
+        result.isDryRun = true
+      of "show-media", "s":
+        result.isShowingMedia = true
       else:
-        [
-          fmt"Unrecognized command line option: `{key}`.", "", "Help:",
-          HELP_MESSAGE.fmt, "Exiting.",
-        ].join(NL).quit
+        quit fmt"Unrecognized command line option: `{key}`\n\nHelp:\n{HELP_MESSAGE.fmt}"
 
-  result = result.resolveAppSettings
+  result = result.resolveAppSettings()
 
 proc process(appSettings: AppSettingsBuildGDSchool) =
   # This cache lists code files (.gd, .gdshader) in the content directory and maps associated files.
@@ -184,6 +190,11 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
   # - Parsing the markdown files should return a list of input media files that need to be copied.
   # - We build a list of output file paths for the media files.
 
+  let
+    regexImage = re"!\[.*\]\((?P<src>.+?)\)"
+    regexVideoFile = re("<VideoFile.*src=[\"'](?P<src>[^\"']+?)[\"']")
+  # File paths collected from input md and mdx files, usually relative to the file itself.
+  var inputMediaFilesRelative: seq[string] = @[]
   # Process all MDX and MD files and save them to the dist directory.
   for fileIn in cache.files.filterIt(
     (it.toLower.endsWith(MDX_EXT) or it.toLower.endsWith(MD_EXT)) and
@@ -203,18 +214,34 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
         echo processingMsg
 
     let fileInContents = readFile(fileIn)
-    createDir(fileOut.parentDir)
     if not appSettings.isQuiet:
       info fmt"Creating output `{fileOut.parentDir}` directory..."
+    if not appSettings.isDryRun:
+      createDir(fileOut.parentDir)
 
     let outputContent = processContent(fileInContents, fileIn, appSettings)
-    writeFile(fileOut, outputContent)
+
+    let parentDir = fileIn.parentDir().string()
+    # Find and collect all matches of the src group for regexImage and regexVideoFile
+    inputMediaFilesRelative.add(fileInContents.findAll(regexImage).map(it))
+    inputMediaFilesRelative.add(fileInContents.findAll(regexVideoFile))
+    if not appSettings.isDryRun:
+      writeFile(fileOut, outputContent)
+
+  # Map of input media files to output media files
+  var mediaFiles: Table[string, string] = initTable[string, string]()
+  for inputMediaFile in inputMediaFilesRelative:
+    let inputMediaFile = appSettings.workingDir / inputMediaFile
+    let outputMediaFile =
+      inputMediaFile.replace(appSettings.contentDir, appSettings.distDir)
+    mediaFiles[inputMediaFile] = outputMediaFile
 
 when isMainModule:
   let appSettings = getAppSettings()
 
   if appSettings.isCleaning:
-    removeDir(appSettings.workingDir / appSettings.distDir)
+    if not appSettings.isDryRun:
+      removeDir(appSettings.workingDir / appSettings.distDir)
     fmt"Removing `{appSettings.workingDir / appSettings.distDir}`. Exiting.".quit(
       QuitSuccess
     )

@@ -30,6 +30,8 @@ type
     isCleaning*: bool
     isForced*: bool
     isQuiet*: bool
+    isDryRun*: bool
+    isShowingMedia*: bool
     # Prefix to preprend to markdown image urls when making them absolute for GDSchool.
     imagePathPrefix*: string
 
