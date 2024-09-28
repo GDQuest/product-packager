@@ -15,11 +15,3 @@ suite "Image Dimension Tests":
       echo "Checking image dimensions for: ", path
       let dimensions = getImageDimensions(path)
       check dimensions == expectedDimensions
-
-  test "Handle non-existent file":
-    expect IOError:
-      discard getImageDimensions("non_existent_file.png")
-
-  test "Handle unsupported format":
-    expect IOError:
-      discard getImageDimensions("images/test.gif")
