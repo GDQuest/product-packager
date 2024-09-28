@@ -58,13 +58,14 @@ proc prepareCache*(
     .mapIt(it.path)
 
   for searchDir in searchDirs:
-    for path in walkDirRec(workingDir / searchDir, relative = true).toSeq().concat():
+    for path in walkDirRec(searchDir, relative = true).toSeq().concat():
       if "/." in path:
         continue
-      if (path.toLower.endsWith(GD_EXT) or path.toLower.endsWith(SHADER_EXT)):
-        codeFiles.add(searchDir / path)
-      elif path.toLower.endsWith(MD_EXT) or path.toLower.endsWith(MDX_EXT):
-        contentFiles.add(searchDir / path)
+      let fullPath = relativePath(searchDir / path, workingDir)
+      if (fullPath.toLower.endsWith(GD_EXT) or fullPath.toLower.endsWith(SHADER_EXT)):
+        codeFiles.add(fullPath)
+      elif fullPath.toLower.endsWith(MD_EXT) or fullPath.toLower.endsWith(MDX_EXT):
+        contentFiles.add(fullPath)
 
   let cacheTable = collect(
     for k, v in codeFiles.groupBy((s) => extractFilename(s)):
@@ -95,10 +96,10 @@ proc prepareCache*(
           ValueError,
           (
             fmt"`{name}` is associated with multiple files:" & cacheTable[name] &
-            fmt"Relative to {workingDir}. Use a file path in your shortcode instead."
+            fmt"Relative to the current working directory. Use a file path in your shortcode instead."
           ).join(NL),
         )
       elif name in cacheTable:
-        return workingDir / cacheTable[name][0]
+        return cacheTable[name][0]
       else:
-        return workingDir / name
+        return name

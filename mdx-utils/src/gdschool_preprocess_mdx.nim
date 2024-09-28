@@ -200,10 +200,8 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
     (it.toLower.endsWith(MDX_EXT) or it.toLower.endsWith(MD_EXT)) and
       (appSettings.contentDir & DirSep) in it
   ):
-    let
-      fileIn = appSettings.workingDir / fileIn
-      fileOut =
-        fileIn.replace(appSettings.contentDir & DirSep, appSettings.distDir & DirSep)
+    let fileOut =
+      fileIn.replace(appSettings.contentDir & DirSep, appSettings.distDir & DirSep)
 
     if not appSettings.isQuiet:
       let processingMsg =

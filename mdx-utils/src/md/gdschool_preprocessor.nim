@@ -2,7 +2,7 @@
 ## It find and replaces include shortcodes in code blocks and adds Godot icons
 ## for built-in class names in inline code marks.
 ## Also, produces a css file with the list of all Godot icons used in the content.
-import std/[nre, strformat, strutils, tables, options, paths, os, terminal, logging]
+import std/[nre, strformat, strutils, tables, options, os, terminal, logging]
 import assets
 import utils
 import ../types
@@ -143,8 +143,14 @@ proc processContent*(
     inputFilePath: string = "",
     appSettings: AppSettingsBuildGDSchool,
 ): string =
-  let inputDirPath = Path(inputFilePath).parentDir()
-  let publicDir = inputDirPath.string().replace(appSettings.contentDir, "/")
+  let inputDirPath = inputFilePath.parentDir()
+  let publicDir = inputDirPath.string()
+  #TODO: issue, paths are absolute.
+  stderr.styledWriteLine(
+    fgYellow,
+    "Input file: " & inputFilePath & "\n" & "Input dir path: " & inputDirPath.string() &
+      "\n" & "Public dir path: " & publicDir,
+  )
   result = fileContent
     .preprocessCodeListings()
     .replaceMarkdownImages(publicDir, inputDirPath.string())
