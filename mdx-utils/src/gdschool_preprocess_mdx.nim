@@ -190,10 +190,6 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
     mediaFiles: Table[string, string] = initTable[string, string]()
     missingMediaFiles: seq[string] = @[]
 
-  let
-    regexImage = re"!\[.*\]\((?P<src>.+?)\)"
-    regexVideoFile = re("<VideoFile.*src=[\"'](?P<src>[^\"']+?)[\"']")
-
   # Process all MDX and MD files and save them to the dist directory.
   for fileIn in cache.contentFiles:
     let fileOut =
@@ -223,7 +219,7 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
     # Collect media files found in the content.
     let distDirMedia = appSettings.distDir / "public" / "courses" / inputFileDir
     var inputMediaFiles: seq[string] =
-      fileInContents.findIter(regexImage).toSeq().mapIt(it.captures["src"])
+      fileInContents.findIter(regexMarkdownImage).toSeq().mapIt(it.captures["path"])
     inputMediaFiles.add(
       fileInContents.findIter(regexVideoFile).toSeq().mapIt(it.captures["src"])
     )
