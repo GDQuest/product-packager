@@ -208,7 +208,7 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
       info fmt"Creating output `{fileOut.parentDir}` directory..."
 
     let inputFileDir = fileIn.parentDir()
-    let htmlAbsoluteMediaDir = "/" & "courses" / inputFileDir
+    let htmlAbsoluteMediaDir = "/media/courses" / inputFileDir
     let outputContent =
       processContent(fileInContents, inputFileDir, htmlAbsoluteMediaDir, appSettings)
 
@@ -217,7 +217,8 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
     )
 
     # Collect media files found in the content.
-    let distDirMedia = appSettings.distDir / "public" / "courses" / inputFileDir
+    let distDirMedia =
+      appSettings.distDir / "public" / "media" / "courses" / inputFileDir
     var inputMediaFiles: seq[string] =
       fileInContents.findIter(regexMarkdownImage).toSeq().mapIt(it.captures["path"])
     inputMediaFiles.add(
