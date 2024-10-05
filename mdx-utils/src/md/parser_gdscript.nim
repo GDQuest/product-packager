@@ -1,5 +1,5 @@
 ## Minimal GDScript parser for code include shortcodes. Tokenizes functions, variables, and signals and collects all their content.
-import std/[strutils, times]
+import std/[strutils, times, tables]
 
 type
   TokenType = enum
@@ -19,6 +19,55 @@ type
     name: string
     lines: seq[string] = @[]
     range: Range
+
+const
+  DEFINITION_KEYWORDS = ["func", "var", "const", "signal", "class", "enum"]
+  MULTI_LINE_ENDINGS = {':', '=', '(', '\\'}
+  BRACKET_OPENINGS = {'(', '{', '['}
+  BRACKET_CLOSINGS = {')', '}', ']'}
+  KEYWORD_TO_TOKEN_TYPE = {
+    "func": TokenType.Function,
+    "var": TokenType.Variable,
+    "const": TokenType.Constant,
+    "signal": TokenType.Signal,
+    "class": TokenType.Class,
+    "enum": TokenType.Enum,
+  }.toTable()
+
+# TODO: make a func that directly finds and returns the line or line/col range of the definition?
+proc isMultiLineDefinition(line: string): bool =
+  let stripped = line.strip()
+  if stripped.isEmptyOrWhitespace():
+    return false
+
+  let lastChar = stripped[^1]
+  if lastChar in MULTI_LINE_ENDINGS:
+    return true
+
+  # Walk the line and look for a bracket pair. If there's an opening bracket but no closing bracket,
+  # then it's a multi-line definition.
+  var bracketCount = 0
+  for c in stripped:
+    if c in BRACKET_OPENINGS:
+      bracketCount += 1
+    elif c in BRACKET_CLOSINGS:
+      bracketCount -= 1
+
+  return bracketCount > 0
+
+  proc isDefinition(line: string): tuple[isDefinition: bool, tokenType: TokenType] =
+    ## Returns true if the line is a definition line.
+    let stripped = line.strip(trailing = false)
+    var firstWordEnd = 0
+    for c in stripped:
+      if c == ' ':
+        break
+      firstWordEnd += 1
+    let firstWord = stripped[0 .. firstWordEnd - 1]
+    let foundIndex = DEFINITION_KEYWORDS.find(firstWord)
+    result.isDefinition = foundIndex != -1
+    if result.isDefinition:
+      result.tokenType = KEYWORD_TO_TOKEN_TYPE[firstWord]
 
 proc parseGDScript*(code: string): seq[Token] =
   var
@@ -53,6 +102,15 @@ proc parseGDScript*(code: string): seq[Token] =
 
   # This code iterates through the lines and when finding a token,
   # it collects the content of the token until the next token is found.
+
+  # TODO: rewrite algorithm. It should:
+  # - Check if a line is a definition.
+  #     - If so, check if it's a multi-line definition.
+  #     - If not, make a token with the line, otherwise, collect lines until the next definition or end of file.
+  # - Separately, parse the collected content of the token:
+  #     - For classes and functions, Separate the definition from the body.
+  #     - For classes, parse child functions, variables, constants, signals, and enums. Assume a single level of nesting.
+  #     - For variables, constants, signals, and enums just collect the lines.
   for i, line in lines:
     let trimmedLine = line.strip()
     let currentIndent = getIndentLevel(line)
@@ -64,6 +122,10 @@ proc parseGDScript*(code: string): seq[Token] =
         tokens.add(currentToken)
         isCollecting = false
 
+      # FIXME: after var, etc. there can be more than one space. Need to handle that.
+      # TODO: remove some boilerplate code, const, enum, vars are very similar
+      # FIXME: a var/const/enum/etc. does not necessarily have an =, it can also have :
+      # TODO: there can be an annotation above a var
       if trimmedLine.startsWith("func "):
         isCollecting = true
         indentLevel = currentIndent
@@ -75,7 +137,7 @@ proc parseGDScript*(code: string): seq[Token] =
         )
       elif trimmedLine.startsWith("var "):
         let parts = trimmedLine.split("=")
-        let varName = parts[0].strip().split(" ")[1]
+        let varName = parts[0].strip().split(" ", 2)[1]
         tokens.add(
           Token(
             tokenType: TokenType.Variable,
@@ -86,7 +148,7 @@ proc parseGDScript*(code: string): seq[Token] =
         )
       elif trimmedLine.startsWith("const "):
         let parts = trimmedLine.split("=")
-        let constName = parts[0].strip().split(" ")[1]
+        let constName = parts[0].strip().split(" ", 2)[1]
         tokens.add(
           Token(
             tokenType: TokenType.Constant,
@@ -96,7 +158,7 @@ proc parseGDScript*(code: string): seq[Token] =
           )
         )
       elif trimmedLine.startsWith("signal "):
-        let signalName = trimmedLine.split("(")[0][7 ..^ 1]
+        let signalName = trimmedLine.split("(", 1)[0][7 ..^ 1]
         tokens.add(
           Token(
             tokenType: TokenType.Signal,
@@ -110,7 +172,7 @@ proc parseGDScript*(code: string): seq[Token] =
         indentLevel = currentIndent
         currentToken = Token(
           tokenType: TokenType.Class,
-          name: trimmedLine.split(" ")[1],
+          name: trimmedLine.split(" ", 2)[1],
           lines: @[line],
           range: Range(lineStart: i, lineEnd: -1),
         )
@@ -119,7 +181,7 @@ proc parseGDScript*(code: string): seq[Token] =
         indentLevel = currentIndent
         currentToken = Token(
           tokenType: TokenType.Enum,
-          name: trimmedLine.split(" ")[1],
+          name: trimmedLine.split(" ", 2)[1],
           lines: @[line],
           range: Range(lineStart: i, lineEnd: -1),
         )
@@ -134,7 +196,12 @@ proc parseGDScript*(code: string): seq[Token] =
       currentToken.range.lineEnd = i
       tokens.add(currentToken)
 
-  return tokens
+  # We collect lines naively, then we remove empty lines from the end of each token.
+  var mutableTokens = tokens
+  for token in mutableTokens.mitems():
+    while token.lines.len > 0 and token.lines[^1].isEmptyOrWhitespace():
+      token.lines.setLen(token.lines.len - 1)
+  return mutableTokens
 
 let testCode =
   """
@@ -186,7 +253,7 @@ when isMainModule:
 
   # TODO: use test cases
   # TODO: Fix multiline parsing for enums, variables...
-  # TODO: Remove empty lines after a token
+  # TODO: Write down algorithm and simplify common cases
   let tokens = parseGDScript(testCode)
   for token in tokens:
     echo "Type: ", token.tokenType
