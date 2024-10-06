@@ -24,6 +24,44 @@ type
     range: Range
     children: seq[Token] = @[]
 
+  TokenFunction =
+    concept t
+        t is Token
+        t.tokenType == TokenType.Function
+
+  TokenClass =
+    concept t
+        t is Token
+        t.tokenType == TokenType.Class
+
+# TODO: extract multiline definitions
+proc getDefinition*(token: Token): string =
+  if token is TokenFunction or token is TokenClass:
+    return token.lines[0]
+  else:
+    raise newException(
+      ValueError,
+      # NB: the $ operator stringifies the token type.
+      "Trying to call getDefinition for an unsupported token type. tokenType is: " &
+        $token.tokenType,
+    )
+
+proc getBody*(token: Token): string =
+  if token is TokenFunction:
+    # TODO: handle cases where function definition is multiline.
+    return token.lines[1 ..^ 1].join("\n")
+  elif token is TokenClass:
+    var bodyLines: seq[string] = @[]
+    for child in token.children:
+      bodyLines.add(child.lines)
+    return bodyLines.join("\n")
+  else:
+    raise newException(
+      ValueError,
+      "Trying to call getBody for an unsupported token type. tokenType is: " &
+        $token.tokenType,
+    )
+
 const
   DEFINITION_KEYWORDS = ["func", "var", "const", "signal", "class", "enum"]
   MULTI_LINE_ENDINGS = {':', '=', '(', '\\'}
@@ -320,3 +358,20 @@ class StateMachine extends Node:
             classToken.children[1].tokenType == TokenType.Variable
             classToken.children[2].tokenType == TokenType.Variable
             classToken.children[3].tokenType == TokenType.Function
+
+    test "Get class definition and body":
+      let code =
+        """
+class Test extends Node:
+  var x: int
+
+  func test():
+    pass
+"""
+      let tokens = parseGDScript(code)
+      check:
+        tokens.len == 1
+        tokens[0].tokenType == TokenType.Class
+        tokens[0] is TokenClass
+        tokens[0].getDefinition() == "class Test extends Node:"
+        tokens[0].getBody() == "  var x: int\n\n  func test():\n    pass"
