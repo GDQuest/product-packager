@@ -133,6 +133,9 @@ proc parseGDScript*(code: string): seq[Token] =
     let (newDefinition, tokenType) = findDefinition(line)
 
     if newDefinition:
+      # We reached a new definition while collecting. We need to add the current token to a list.
+      # If we're in a class and the new definition is indented, we add the new token as a child of the class.
+      # Else we add it to the top level.
       if isCollecting:
         currentToken.range.lineEnd = lineIndex - 1
         if currentIndent > lastIndentLevel and tokens.len > 0 and
@@ -236,10 +239,19 @@ when isMainModule:
 
   # TODO: use test cases
   let tokens = parseGDScript(testCode)
+
+  proc printToken(token: Token, isIndented: bool = false) =
+    let indentStr = if isIndented: "\t" else: ""
+    echo indentStr, "Type: ", token.tokenType
+    echo indentStr, "Name: ", token.name
+    echo indentStr, "Range: ", token.range.lineStart, " - ", token.range.lineEnd
+    echo indentStr, "Content:"
+    for line in token.lines:
+      echo indentStr, line
+    if token.tokenType == TokenType.Class:
+      for child in token.children:
+        printToken(child, isIndented = true)
+    echo indentStr, "---"
+
   for token in tokens:
-    echo "Type: ", token.tokenType
-    echo "Name: ", token.name
-    echo "Range: ", token.range.lineStart, " - ", token.range.lineEnd
-    echo "Content:"
-    echo token.lines.join("\n")
-    echo "---"
+    printToken(token)
