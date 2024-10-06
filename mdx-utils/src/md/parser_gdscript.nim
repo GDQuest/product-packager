@@ -1,5 +1,8 @@
-## Minimal GDScript parser for code include shortcodes. Tokenizes functions, variables, and signals and collects all their content.
-import std/[strutils, times, tables]
+## Minimal GDScript parser specialized for code include shortcodes. Tokenizes symbol definitions and their body and collects all their content.
+# FIXME: if a file starts with a class definition, following tokens are not collected as children of the class.
+# TODO: functions: add functions to get the definition and body of the token.
+# TODO: class: add functions to get the definition and body of the token. Definition is the class token content, body is the formatted children tokens.
+import std/[strutils, tables, unittest]
 
 type
   TokenType = enum
@@ -189,69 +192,131 @@ proc parseGDScript*(code: string): seq[Token] =
 
   return tokens
 
-let testCode =
-  """
-class_name AI extends RefCounted
+proc printToken(token: Token, isIndented: bool = false) =
+  ## Prints a token and its children.
+  let indentStr = if isIndented: "\t" else: ""
+  echo indentStr, "Type: ", token.tokenType
+  echo indentStr, "Name: ", token.name
+  echo indentStr, "Range: ", token.range.lineStart, " - ", token.range.lineEnd
+  echo indentStr, "Content:"
+  for line in token.lines:
+    echo indentStr, line
+  if token.tokenType == TokenType.Class:
+    for child in token.children:
+      printToken(child, isIndented = true)
+  echo indentStr, "---"
 
+# Unit tests
+when isMainModule:
+  suite "GDScript parser tests":
+    test "Parse signals":
+      let code =
+        """
 signal health_depleted
 signal health_changed(old_health: int, new_health: int)
+"""
+      let tokens = parseGDScript(code)
+      check:
+        tokens.len == 2
+        tokens[0].tokenType == TokenType.Signal
+        tokens[0].name == "health_depleted"
+        tokens[1].tokenType == TokenType.Signal
+        tokens[1].name == "health_changed"
 
+    test "Parse enums":
+      let code =
+        """
 enum Direction {UP, DOWN, LEFT, RIGHT}
 enum Events {
-	NONE,
-	FINISHED,
+  NONE,
+  FINISHED,
 }
+"""
+      let tokens = parseGDScript(code)
+      check:
+        tokens.len == 2
+        tokens[0].tokenType == TokenType.Enum
+        tokens[0].name == "Direction"
+        tokens[1].tokenType == TokenType.Enum
+        tokens[1].name == "Events"
+        tokens[1].lines.len == 4
 
+    test "Parse variables":
+      let code =
+        """
 @export var skin: MobSkin3D = null
-@export var hurt_box: HurtBox3D = null
-
+@export_range(0.0, 10.0) var power := 0.1
+var dynamic_uninitialized
 var health := max_health
+"""
+      let tokens = parseGDScript(code)
+      check:
+        tokens.len == 4
+        tokens[0].tokenType == TokenType.Variable
+        tokens[0].name == "skin"
+        tokens[1].tokenType == TokenType.Variable
+        tokens[1].name == "power"
+        tokens[2].tokenType == TokenType.Variable
+        tokens[2].name == "dynamic_uninitialized"
+        tokens[3].tokenType == TokenType.Variable
+        tokens[3].name == "health"
 
-const MAX_HEALTH = 100
+    test "Parse constants":
+      let code = "const MAX_HEALTH = 100"
+      let tokens = parseGDScript(code)
+      check:
+        tokens.len == 1
+        tokens[0].tokenType == TokenType.Constant
+        tokens[0].name == "MAX_HEALTH"
+
+    test "Parse functions":
+      let code =
+        """
+func _ready():
+  add_child(skin)
 
 func deactivate() -> void:
-	if hurt_box != null:
-		(func deactivate_hurtbox():
-			hurt_box.monitoring = false
-			hurt_box.monitorable = false).call_deferred()
-
-
-class StateMachine extends Node:
-	var transitions := {}: set = set_transitions
-	var current_state: State
-	var is_debugging := false: set = set_is_debugging
-
-	func _init() -> void:
-		set_physics_process(false)
-		var blackboard := Blackboard.new()
-		Blackboard.player_died.connect(trigger_event.bind(Events.PLAYER_DIED))
-
-func _ready():
-	add_child(skin)
+  if hurt_box != null:
+    (func deactivate_hurtbox():
+      hurt_box.monitoring = false
+      hurt_box.monitorable = false).call_deferred()
 """
+      let tokens = parseGDScript(code)
+      check:
+        tokens.len == 2
+        tokens[0].tokenType == TokenType.Function
+        tokens[0].name == "_ready"
+        tokens[1].tokenType == TokenType.Function
+        tokens[1].name == "deactivate"
+        tokens[1].lines.len == 5
 
-when isMainModule:
-  let start = cpuTime()
-  for i in 0 .. 10_000:
-    discard parseGDScript(testCode)
-  let duration = cpuTime() - start
-  echo "Time taken to parse 10 000 times: ", duration, " seconds"
+    test "Parse nested class":
+      let code =
+        """
+class StateMachine extends Node:
+  var transitions := {}: set = set_transitions
+  var current_state: State
+  var is_debugging := false: set = set_is_debugging
 
-  # TODO: use test cases
-  let tokens = parseGDScript(testCode)
+  func _init() -> void:
+    set_physics_process(false)
+    var blackboard := Blackboard.new()
+    Blackboard.player_died.connect(trigger_event.bind(Events.PLAYER_DIED))
+"""
+      let tokens = parseGDScript(code)
+      check:
+        tokens.len == 1
 
-  proc printToken(token: Token, isIndented: bool = false) =
-    let indentStr = if isIndented: "\t" else: ""
-    echo indentStr, "Type: ", token.tokenType
-    echo indentStr, "Name: ", token.name
-    echo indentStr, "Range: ", token.range.lineStart, " - ", token.range.lineEnd
-    echo indentStr, "Content:"
-    for line in token.lines:
-      echo indentStr, line
-    if token.tokenType == TokenType.Class:
-      for child in token.children:
-        printToken(child, isIndented = true)
-    echo indentStr, "---"
+      if tokens.len > 0:
+        let classToken = tokens[0]
+        check:
+          classToken.tokenType == TokenType.Class
+          classToken.name == "StateMachine"
+          classToken.children.len == 4
 
-  for token in tokens:
-    printToken(token)
+        if classToken.children.len >= 4:
+          check:
+            classToken.children[0].tokenType == TokenType.Variable
+            classToken.children[1].tokenType == TokenType.Variable
+            classToken.children[2].tokenType == TokenType.Variable
+            classToken.children[3].tokenType == TokenType.Function
