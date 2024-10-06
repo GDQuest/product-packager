@@ -158,6 +158,8 @@ proc extractName(lineDefinition: string, tokenType: TokenType): string =
       break
   result = lineDefinition[nameStart .. nameEnd].strip()
 
+#TODO: ignore local variables, constants, functions, ...
+# locals are any definition when collecting a function that have an indent greater than the function definition.
 proc parseGDScript*(code: string): seq[Token] =
   let lines = code.splitLines()
   var
@@ -166,33 +168,29 @@ proc parseGDScript*(code: string): seq[Token] =
     isCollecting = false
     lineIndex = 0
     currentIndent = 0
-    lastIndentLevel = 0
+    lastDefinitionIndent = 0
+    isInsideFunction = false # New flag to track if we're inside a function
+    lastFunctionDefinitionIndent = 0
 
   while lineIndex < lines.len:
     let line = lines[lineIndex]
-    # We skip empty lines to keep the algorithm and indentation tracking simple.
-    # There can be an empty line with 0 indentation in the middle of an inner class,
-    # and we don't want to consider that as a new definition outside the class.
     if line.isEmptyOrWhitespace():
       lineIndex += 1
       continue
 
     currentIndent = getIndentLevel(line)
-    echo currentIndent
-    let (newDefinition, tokenType) = findDefinition(line)
+    let (isNewDefinition, tokenType) = findDefinition(line)
 
-    if newDefinition:
-      # We reached a new definition while collecting. We need to add the current token to a list.
-      # If we're in a class and the new definition is indented, we add the new token as a child of the class.
-      # Else we add it to the top level.
+    if isNewDefinition:
       if isCollecting:
         currentToken.range.lineEnd = lineIndex - 1
-
-        if currentIndent > lastIndentLevel and tokens.len > 0 and
-            tokens[^1].tokenType == TokenType.Class:
-          tokens[^1].children.add(currentToken)
-        else:
-          tokens.add(currentToken)
+        # Only tokenize non-local definitions
+        if not isInsideFunction or currentIndent <= lastFunctionDefinitionIndent:
+          if currentIndent > lastDefinitionIndent and tokens.len > 0 and
+              tokens[^1].tokenType == TokenType.Class:
+            tokens[^1].children.add(currentToken)
+          else:
+            tokens.add(currentToken)
         isCollecting = false
 
       currentToken = Token(
@@ -202,28 +200,36 @@ proc parseGDScript*(code: string): seq[Token] =
         range: Range(lineStart: lineIndex, lineEnd: -1),
       )
 
+      # FIXME: now this won't collect functions that we do want to collect.
+      if not isInsideFunction and tokenType == TokenType.Function:
+        isInsideFunction = true
+        lastFunctionDefinitionIndent = currentIndent
+      elif currentIndent <= lastFunctionDefinitionIndent:
+        isInsideFunction = false
+
       if isMultiLineDefinition(line):
         isCollecting = true
-        lastIndentLevel = currentIndent
+        lastDefinitionIndent = currentIndent
       else:
         currentToken.range.lineEnd = lineIndex
-        if currentIndent > lastIndentLevel and tokens.len > 0 and
-            tokens[^1].tokenType == TokenType.Class:
-          echo "Adding child to class: ", currentToken.name
-          tokens[^1].children.add(currentToken)
-        else:
-          tokens.add(currentToken)
-          lastIndentLevel = currentIndent
+        if not isInsideFunction or currentIndent <= lastFunctionDefinitionIndent:
+          if currentIndent > lastDefinitionIndent and tokens.len > 0 and
+              tokens[^1].tokenType == TokenType.Class:
+            tokens[^1].children.add(currentToken)
+          else:
+            tokens.add(currentToken)
+            lastDefinitionIndent = currentIndent
     elif isCollecting:
       currentToken.lines.add(line)
 
     lineIndex += 1
 
   # Collect the last token
+  # TODO: check this after adding checks for local variables
   if isCollecting:
     currentToken.range.lineEnd = lineIndex - 1
 
-    if currentIndent > lastIndentLevel and tokens.len > 0 and
+    if currentIndent > lastDefinitionIndent and tokens.len > 0 and
         tokens[^1].tokenType == TokenType.Class:
       tokens[^1].children.add(currentToken)
     else:
@@ -333,13 +339,16 @@ func deactivate() -> void:
       let tokens = parseGDScript(code)
       check:
         tokens.len == 2
-        tokens[0].tokenType == TokenType.Function
-        tokens[0].name == "_ready"
-        tokens[1].tokenType == TokenType.Function
-        tokens[1].name == "deactivate"
-        tokens[1].lines.len == 5
 
-    test "Parse nested class":
+      if tokens.len == 2:
+        check:
+          tokens[0].tokenType == TokenType.Function
+          tokens[0].name == "_ready"
+          tokens[1].tokenType == TokenType.Function
+          tokens[1].name == "deactivate"
+          tokens[1].lines.len == 5
+
+    test "Parse inner class":
       let code =
         """
 class StateMachine extends Node:
@@ -389,15 +398,4 @@ class Test extends Node:
 
 # Unit tests
 when isMainModule:
-  #runUnitTests()
-  let code =
-    """
-class Test extends Node:
-	var x: int
-
-	func test():
-		pass
-"""
-  let tokens = parseGDScript(code)
-  for token in tokens:
-    printToken(token)
+  runUnitTests()
