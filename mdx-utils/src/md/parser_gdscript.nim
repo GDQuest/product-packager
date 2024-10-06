@@ -58,7 +58,16 @@ proc isMultiLineDefinition(line: string): bool =
 proc findDefinition(line: string): tuple[isDefinition: bool, tokenType: TokenType] =
   ## Tries to find a definition in the line. Returns a tuple with a boolean indicating if a definition was found
   ## and the token type of the definition.
-  let stripped = line.strip(trailing = false)
+  var stripped = line.strip(trailing = false)
+
+  # Skip annotation if present
+  if stripped.startsWith('@'):
+    let annotationEnd = stripped.find(')')
+    if annotationEnd != -1:
+      stripped = stripped[annotationEnd + 1 ..^ 1].strip(leading = true)
+    else:
+      stripped = stripped.split(maxsplit = 1)[^1].strip(leading = true)
+
   var firstWordEnd = 0
   for c in stripped:
     if c == ' ':
@@ -95,11 +104,16 @@ proc parseGDScript*(code: string): seq[Token] =
     isCollecting = false
     lineIndex = 0
 
-  proc extractName(lineDefinition: string): string =
+  proc extractName(lineDefinition: string, tokenType: TokenType): string =
     ## Extracts the name of the definition from the line.
-    let parts = lineDefinition.split(maxsplit = 1)
     let length = lineDefinition.len()
-    var nameStart = parts[0].len()
+    var nameStart = 0
+    if tokenType == TokenType.Variable:
+      nameStart = lineDefinition.find("var ") + 4
+    else:
+      let parts = lineDefinition.split(maxsplit = 1)
+      nameStart = parts[0].len()
+
     while nameStart < length and lineDefinition[nameStart] == ' ':
       nameStart += 1
     var nameEnd = length - 1
@@ -121,7 +135,7 @@ proc parseGDScript*(code: string): seq[Token] =
 
       currentToken = Token(
         tokenType: tokenType,
-        name: extractName(line),
+        name: extractName(line, tokenType),
         lines: @[line],
         range: Range(lineStart: lineIndex, lineEnd: -1),
       )
