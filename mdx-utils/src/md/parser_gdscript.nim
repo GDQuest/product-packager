@@ -19,6 +19,7 @@ type
     name: string
     lines: seq[string] = @[]
     range: Range
+    children: seq[Token] = @[]
 
 const
   DEFINITION_KEYWORDS = ["func", "var", "const", "signal", "class", "enum"]
@@ -34,8 +35,9 @@ const
     "enum": TokenType.Enum,
   }.toTable()
 
-# TODO: make a func that directly finds and returns the line or line/col range of the definition?
 proc isMultiLineDefinition(line: string): bool =
+  ## Returns true if the definition contained in `line` spans multiple lines.
+  ## This is for example a variable with a dictionary or array definition formatted over multiple lines.
   let stripped = line.strip()
   if stripped.isEmptyOrWhitespace():
     return false
@@ -96,41 +98,48 @@ proc getIndentLevel(line: string): int =
     result = result.div(4)
   return result
 
+proc extractName(lineDefinition: string, tokenType: TokenType): string =
+  ## Extracts the name of the definition from the line.
+  let length = lineDefinition.len()
+  var nameStart = 0
+  if tokenType == TokenType.Variable:
+    nameStart = lineDefinition.find("var ") + 4
+  else:
+    let parts = lineDefinition.split(maxsplit = 1)
+    nameStart = parts[0].len()
+
+  while nameStart < length and lineDefinition[nameStart] == ' ':
+    nameStart += 1
+  var nameEnd = length - 1
+  for i in nameStart .. lineDefinition.high():
+    if lineDefinition[i] in {' ', ':', '=', '(', '{'}:
+      nameEnd = i - 1
+      break
+  result = lineDefinition[nameStart .. nameEnd].strip()
+
 proc parseGDScript*(code: string): seq[Token] =
+  let lines = code.splitLines()
   var
     tokens: seq[Token] = @[]
-    lines = code.splitLines()
     currentToken: Token
     isCollecting = false
     lineIndex = 0
-
-  proc extractName(lineDefinition: string, tokenType: TokenType): string =
-    ## Extracts the name of the definition from the line.
-    let length = lineDefinition.len()
-    var nameStart = 0
-    if tokenType == TokenType.Variable:
-      nameStart = lineDefinition.find("var ") + 4
-    else:
-      let parts = lineDefinition.split(maxsplit = 1)
-      nameStart = parts[0].len()
-
-    while nameStart < length and lineDefinition[nameStart] == ' ':
-      nameStart += 1
-    var nameEnd = length - 1
-    for i in nameStart .. lineDefinition.high():
-      if lineDefinition[i] in {' ', ':', '=', '(', '{'}:
-        nameEnd = i - 1
-        break
-    result = lineDefinition[nameStart .. nameEnd].strip()
+    currentIndent = 0
+    lastIndentLevel = 0
 
   while lineIndex < lines.len:
     let line = lines[lineIndex]
+    currentIndent = getIndentLevel(line)
     let (newDefinition, tokenType) = findDefinition(line)
 
     if newDefinition:
       if isCollecting:
         currentToken.range.lineEnd = lineIndex - 1
-        tokens.add(currentToken)
+        if currentIndent > lastIndentLevel and tokens.len > 0 and
+            tokens[^1].tokenType == TokenType.Class:
+          tokens[^1].children.add(currentToken)
+        else:
+          tokens.add(currentToken)
         isCollecting = false
 
       currentToken = Token(
@@ -142,9 +151,15 @@ proc parseGDScript*(code: string): seq[Token] =
 
       if isMultiLineDefinition(line):
         isCollecting = true
+        lastIndentLevel = currentIndent
       else:
         currentToken.range.lineEnd = lineIndex
-        tokens.add(currentToken)
+        if currentIndent > lastIndentLevel and tokens.len > 0 and
+            tokens[^1].tokenType == TokenType.Class:
+          tokens[^1].children.add(currentToken)
+        else:
+          tokens.add(currentToken)
+          lastIndentLevel = currentIndent
     elif isCollecting:
       currentToken.lines.add(line)
 
@@ -153,13 +168,21 @@ proc parseGDScript*(code: string): seq[Token] =
   # Collect the last token
   if isCollecting:
     currentToken.range.lineEnd = lineIndex - 1
-    tokens.add(currentToken)
-    isCollecting = false
+    if currentIndent > lastIndentLevel and tokens.len > 0 and
+        tokens[^1].tokenType == TokenType.Class:
+      tokens[^1].children.add(currentToken)
+    else:
+      tokens.add(currentToken)
 
   # Remove empty lines from the end of each token
-  for token in tokens.mitems():
+  proc removeTrailingEmptyLines(token: var Token) =
     while token.lines.len > 0 and token.lines[^1].isEmptyOrWhitespace:
       token.lines.setLen(token.lines.len - 1)
+    for child in token.children.mitems:
+      removeTrailingEmptyLines(child)
+
+  for token in tokens.mitems:
+    removeTrailingEmptyLines(token)
 
   return tokens
 
