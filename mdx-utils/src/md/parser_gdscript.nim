@@ -170,7 +170,15 @@ proc parseGDScript*(code: string): seq[Token] =
 
   while lineIndex < lines.len:
     let line = lines[lineIndex]
+    # We skip empty lines to keep the algorithm and indentation tracking simple.
+    # There can be an empty line with 0 indentation in the middle of an inner class,
+    # and we don't want to consider that as a new definition outside the class.
+    if line.isEmptyOrWhitespace():
+      lineIndex += 1
+      continue
+
     currentIndent = getIndentLevel(line)
+    echo currentIndent
     let (newDefinition, tokenType) = findDefinition(line)
 
     if newDefinition:
@@ -179,6 +187,7 @@ proc parseGDScript*(code: string): seq[Token] =
       # Else we add it to the top level.
       if isCollecting:
         currentToken.range.lineEnd = lineIndex - 1
+
         if currentIndent > lastIndentLevel and tokens.len > 0 and
             tokens[^1].tokenType == TokenType.Class:
           tokens[^1].children.add(currentToken)
@@ -200,6 +209,7 @@ proc parseGDScript*(code: string): seq[Token] =
         currentToken.range.lineEnd = lineIndex
         if currentIndent > lastIndentLevel and tokens.len > 0 and
             tokens[^1].tokenType == TokenType.Class:
+          echo "Adding child to class: ", currentToken.name
           tokens[^1].children.add(currentToken)
         else:
           tokens.add(currentToken)
@@ -212,6 +222,7 @@ proc parseGDScript*(code: string): seq[Token] =
   # Collect the last token
   if isCollecting:
     currentToken.range.lineEnd = lineIndex - 1
+
     if currentIndent > lastIndentLevel and tokens.len > 0 and
         tokens[^1].tokenType == TokenType.Class:
       tokens[^1].children.add(currentToken)
@@ -244,8 +255,8 @@ proc printToken(token: Token, isIndented: bool = false) =
       printToken(child, isIndented = true)
   echo indentStr, "---"
 
-# Unit tests
-when isMainModule:
+proc runUnitTests() =
+  ## Note: when adding tests, be careful to make the code use tabs or four spaces for indentation.
   suite "GDScript parser tests":
     test "Parse signals":
       let code =
@@ -266,8 +277,8 @@ signal health_changed(old_health: int, new_health: int)
         """
 enum Direction {UP, DOWN, LEFT, RIGHT}
 enum Events {
-  NONE,
-  FINISHED,
+	NONE,
+	FINISHED,
 }
 """
       let tokens = parseGDScript(code)
@@ -311,13 +322,13 @@ var health := max_health
       let code =
         """
 func _ready():
-  add_child(skin)
+	add_child(skin)
 
 func deactivate() -> void:
-  if hurt_box != null:
-    (func deactivate_hurtbox():
-      hurt_box.monitoring = false
-      hurt_box.monitorable = false).call_deferred()
+	if hurt_box != null:
+		(func deactivate_hurtbox():
+			hurt_box.monitoring = false
+			hurt_box.monitorable = false).call_deferred()
 """
       let tokens = parseGDScript(code)
       check:
@@ -332,14 +343,14 @@ func deactivate() -> void:
       let code =
         """
 class StateMachine extends Node:
-  var transitions := {}: set = set_transitions
-  var current_state: State
-  var is_debugging := false: set = set_is_debugging
+	var transitions := {}: set = set_transitions
+	var current_state: State
+	var is_debugging := false: set = set_is_debugging
 
-  func _init() -> void:
-    set_physics_process(false)
-    var blackboard := Blackboard.new()
-    Blackboard.player_died.connect(trigger_event.bind(Events.PLAYER_DIED))
+	func _init() -> void:
+		set_physics_process(false)
+		var blackboard := Blackboard.new()
+		Blackboard.player_died.connect(trigger_event.bind(Events.PLAYER_DIED))
 """
       let tokens = parseGDScript(code)
       check:
@@ -363,10 +374,10 @@ class StateMachine extends Node:
       let code =
         """
 class Test extends Node:
-  var x: int
+	var x: int
 
-  func test():
-    pass
+	func test():
+		pass
 """
       let tokens = parseGDScript(code)
       check:
@@ -375,3 +386,18 @@ class Test extends Node:
         tokens[0] is TokenClass
         tokens[0].getDefinition() == "class Test extends Node:"
         tokens[0].getBody() == "  var x: int\n\n  func test():\n    pass"
+
+# Unit tests
+when isMainModule:
+  #runUnitTests()
+  let code =
+    """
+class Test extends Node:
+	var x: int
+
+	func test():
+		pass
+"""
+  let tokens = parseGDScript(code)
+  for token in tokens:
+    printToken(token)
