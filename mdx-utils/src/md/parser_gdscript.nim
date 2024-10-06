@@ -55,19 +55,37 @@ proc isMultiLineDefinition(line: string): bool =
 
   return bracketCount > 0
 
-  proc isDefinition(line: string): tuple[isDefinition: bool, tokenType: TokenType] =
-    ## Returns true if the line is a definition line.
-    let stripped = line.strip(trailing = false)
-    var firstWordEnd = 0
-    for c in stripped:
-      if c == ' ':
-        break
-      firstWordEnd += 1
-    let firstWord = stripped[0 .. firstWordEnd - 1]
-    let foundIndex = DEFINITION_KEYWORDS.find(firstWord)
-    result.isDefinition = foundIndex != -1
-    if result.isDefinition:
-      result.tokenType = KEYWORD_TO_TOKEN_TYPE[firstWord]
+proc findDefinition(line: string): tuple[isDefinition: bool, tokenType: TokenType] =
+  ## Tries to find a definition in the line. Returns a tuple with a boolean indicating if a definition was found
+  ## and the token type of the definition.
+  let stripped = line.strip(trailing = false)
+  var firstWordEnd = 0
+  for c in stripped:
+    if c == ' ':
+      break
+    firstWordEnd += 1
+  let firstWord = stripped[0 .. firstWordEnd - 1]
+  let foundIndex = DEFINITION_KEYWORDS.find(firstWord)
+  result.isDefinition = foundIndex != -1
+  if result.isDefinition:
+    result.tokenType = KEYWORD_TO_TOKEN_TYPE[firstWord]
+
+proc getIndentLevel(line: string): int =
+  # GDScript either uses tabs or 4 spaces for indentation. So we can count
+  # either 1 tab per indent or 4 spaces per indent.
+  result = 0
+  var isTab = false
+  for c in line:
+    if c == '\t':
+      isTab = true
+      result += 1
+    elif c == ' ':
+      result += 1
+    else:
+      break
+  if not isTab:
+    result = result.div(4)
+  return result
 
 proc parseGDScript*(code: string): seq[Token] =
   var
@@ -75,133 +93,61 @@ proc parseGDScript*(code: string): seq[Token] =
     lines = code.splitLines()
     currentToken: Token
     isCollecting = false
-    indentLevel = 0
+    lineIndex = 0
 
-  proc isKeyword(line: string): bool =
-    let stripped = line.strip()
-    stripped.startsWith("func ") or stripped.startsWith("var ") or
-      stripped.startsWith("const ") or stripped.startsWith("signal ") or
-      stripped.startsWith("class ") or stripped.startsWith("enum ")
-
-  proc getIndentLevel(line: string): int =
-    # GDScript either uses tabs or 4 spaces for indentation. So we can count
-    # either 1 tab per indent or 4 spaces per indent.
-    result = 0
-    var isTab = false
-    for c in line:
-      if c == '\t':
-        isTab = true
-        result += 1
-      elif c == ' ':
-        result += 1
-      else:
+  proc extractName(lineDefinition: string): string =
+    ## Extracts the name of the definition from the line.
+    let parts = lineDefinition.split(maxsplit = 1)
+    let length = lineDefinition.len()
+    var nameStart = parts[0].len()
+    while nameStart < length and lineDefinition[nameStart] == ' ':
+      nameStart += 1
+    var nameEnd = length - 1
+    for i in nameStart .. lineDefinition.high():
+      if lineDefinition[i] in {' ', ':', '=', '(', '{'}:
+        nameEnd = i - 1
         break
-    if not isTab:
-      result = result.div(4)
-    return result
+    result = lineDefinition[nameStart .. nameEnd].strip()
 
-  # This code iterates through the lines and when finding a token,
-  # it collects the content of the token until the next token is found.
+  while lineIndex < lines.len:
+    let line = lines[lineIndex]
+    let (newDefinition, tokenType) = findDefinition(line)
 
-  # TODO: rewrite algorithm. It should:
-  # - Check if a line is a definition.
-  #     - If so, check if it's a multi-line definition.
-  #     - If not, make a token with the line, otherwise, collect lines until the next definition or end of file.
-  # - Separately, parse the collected content of the token:
-  #     - For classes and functions, Separate the definition from the body.
-  #     - For classes, parse child functions, variables, constants, signals, and enums. Assume a single level of nesting.
-  #     - For variables, constants, signals, and enums just collect the lines.
-  for i, line in lines:
-    let trimmedLine = line.strip()
-    let currentIndent = getIndentLevel(line)
-
-    if isKeyword(line) and (currentIndent <= indentLevel or not isCollecting):
+    if newDefinition:
       if isCollecting:
-        if currentToken.range.lineEnd == -1:
-          currentToken.range.lineEnd = i - 1
+        currentToken.range.lineEnd = lineIndex - 1
         tokens.add(currentToken)
         isCollecting = false
 
-      # FIXME: after var, etc. there can be more than one space. Need to handle that.
-      # TODO: remove some boilerplate code, const, enum, vars are very similar
-      # FIXME: a var/const/enum/etc. does not necessarily have an =, it can also have :
-      # TODO: there can be an annotation above a var
-      if trimmedLine.startsWith("func "):
+      currentToken = Token(
+        tokenType: tokenType,
+        name: extractName(line),
+        lines: @[line],
+        range: Range(lineStart: lineIndex, lineEnd: -1),
+      )
+
+      if isMultiLineDefinition(line):
         isCollecting = true
-        indentLevel = currentIndent
-        currentToken = Token(
-          tokenType: TokenType.Function,
-          name: trimmedLine.split("(")[0][5 ..^ 1],
-          lines: @[line],
-          range: Range(lineStart: i, lineEnd: -1),
-        )
-      elif trimmedLine.startsWith("var "):
-        let parts = trimmedLine.split("=")
-        let varName = parts[0].strip().split(" ", 2)[1]
-        tokens.add(
-          Token(
-            tokenType: TokenType.Variable,
-            name: varName,
-            lines: @[line],
-            range: Range(lineStart: i, lineEnd: i),
-          )
-        )
-      elif trimmedLine.startsWith("const "):
-        let parts = trimmedLine.split("=")
-        let constName = parts[0].strip().split(" ", 2)[1]
-        tokens.add(
-          Token(
-            tokenType: TokenType.Constant,
-            name: constName,
-            lines: @[line],
-            range: Range(lineStart: i, lineEnd: i),
-          )
-        )
-      elif trimmedLine.startsWith("signal "):
-        let signalName = trimmedLine.split("(", 1)[0][7 ..^ 1]
-        tokens.add(
-          Token(
-            tokenType: TokenType.Signal,
-            name: signalName,
-            lines: @[line],
-            range: Range(lineStart: i, lineEnd: i),
-          )
-        )
-      elif trimmedLine.startsWith("class "):
-        isCollecting = true
-        indentLevel = currentIndent
-        currentToken = Token(
-          tokenType: TokenType.Class,
-          name: trimmedLine.split(" ", 2)[1],
-          lines: @[line],
-          range: Range(lineStart: i, lineEnd: -1),
-        )
-      elif trimmedLine.startsWith("enum "):
-        isCollecting = true
-        indentLevel = currentIndent
-        currentToken = Token(
-          tokenType: TokenType.Enum,
-          name: trimmedLine.split(" ", 2)[1],
-          lines: @[line],
-          range: Range(lineStart: i, lineEnd: -1),
-        )
-    elif isCollecting:
-      if currentIndent > indentLevel or trimmedLine == "":
-        currentToken.lines.add(line)
       else:
+        currentToken.range.lineEnd = lineIndex
         tokens.add(currentToken)
-        isCollecting = false
+    elif isCollecting:
+      currentToken.lines.add(line)
 
-    if i == lines.high and isCollecting:
-      currentToken.range.lineEnd = i
-      tokens.add(currentToken)
+    lineIndex += 1
 
-  # We collect lines naively, then we remove empty lines from the end of each token.
-  var mutableTokens = tokens
-  for token in mutableTokens.mitems():
-    while token.lines.len > 0 and token.lines[^1].isEmptyOrWhitespace():
+  # Collect the last token
+  if isCollecting:
+    currentToken.range.lineEnd = lineIndex - 1
+    tokens.add(currentToken)
+    isCollecting = false
+
+  # Remove empty lines from the end of each token
+  for token in tokens.mitems():
+    while token.lines.len > 0 and token.lines[^1].isEmptyOrWhitespace:
       token.lines.setLen(token.lines.len - 1)
-  return mutableTokens
+
+  return tokens
 
 let testCode =
   """
@@ -252,8 +198,6 @@ when isMainModule:
   echo "Time taken to parse 10 000 times: ", duration, " seconds"
 
   # TODO: use test cases
-  # TODO: Fix multiline parsing for enums, variables...
-  # TODO: Write down algorithm and simplify common cases
   let tokens = parseGDScript(testCode)
   for token in tokens:
     echo "Type: ", token.tokenType
