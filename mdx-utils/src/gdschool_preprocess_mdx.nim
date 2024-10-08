@@ -4,7 +4,7 @@
 import
   std/[
     logging, os, parseopt, parsecfg, sequtils, strformat, strutils, terminal, nre,
-    tables,
+    tables, times,
   ]
 import md/[gdschool_preprocessor, utils]
 import customlogger, types
@@ -176,9 +176,21 @@ proc getAppSettings(): AppSettingsBuildGDSchool =
   result = result.resolveAppSettings()
 
 proc process(appSettings: AppSettingsBuildGDSchool) =
+  proc hasFileChanged(pathSrc, pathDist: string): bool =
+    ## Returns `true` if the source file has been accessed or modified since the destination file was last modified.
+    ## For non-existent destination files, it returns `true`.
+    if not fileExists(pathDist):
+      return true
+
+    let srcInfo = pathSrc.getFileInfo()
+    let distInfo = pathDist.getFileInfo()
+    # For mdx files, they get modified during the build process, so we can't compare the size.
+    return
+      pathSrc.getLastAccessTime() > pathDist.getLastModificationTime() or
+      pathSrc.getLastModificationTime() > pathDist.getLastModificationTime()
+
   # This cache lists code files (.gd, .gdshader) in the content directory and maps associated files.
   cache = prepareCache(appSettings)
-
   type ProcessedFile = object
     inputPath: string
     content: string
@@ -195,26 +207,27 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
     let fileOut =
       fileIn.replace(appSettings.contentDir & DirSep, appSettings.distDir & DirSep)
 
-    if not appSettings.isQuiet:
-      let processingMsg =
-        fmt"Processing `{fileIn.relativePath(appSettings.workingDir)}` -> `{fileOut.relativePath(appSettings.workingDir)}`..."
-      if logger.levelThreshold == lvlAll:
-        info processingMsg
-      else:
-        echo processingMsg
-
+    # Preprocessing and writing files only happens if the file has changed,
+    # but we need to read the file contents to find the media files it uses and which are missing.
     let fileInContents = readFile(fileIn)
-    if not appSettings.isQuiet:
-      info fmt"Creating output `{fileOut.parentDir}` directory..."
-
     let inputFileDir = fileIn.parentDir()
-    let htmlAbsoluteMediaDir = "/media/courses" / inputFileDir
-    let outputContent =
-      processContent(fileInContents, inputFileDir, htmlAbsoluteMediaDir, appSettings)
 
-    processedFiles.add(
-      ProcessedFile(inputPath: fileIn, content: outputContent, outputPath: fileOut)
-    )
+    if hasFileChanged(fileIn, fileOut):
+      if not appSettings.isQuiet:
+        let processingMsg =
+          fmt"Processing `{fileIn.relativePath(appSettings.workingDir)}` -> `{fileOut.relativePath(appSettings.workingDir)}`..."
+        if logger.levelThreshold == lvlAll:
+          info processingMsg
+        else:
+          echo processingMsg
+
+      let htmlAbsoluteMediaDir = "/media/courses" / inputFileDir
+      let outputContent =
+        processContent(fileInContents, inputFileDir, htmlAbsoluteMediaDir, appSettings)
+
+      processedFiles.add(
+        ProcessedFile(inputPath: fileIn, content: outputContent, outputPath: fileOut)
+      )
 
     # Collect media files found in the content.
     let distDirMedia =
@@ -228,7 +241,8 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
       let inputPath = inputFileDir / mediaFile
       if fileExists(inputPath):
         let outputPath = distDirMedia / mediaFile
-        mediaFiles[inputPath] = outputPath
+        if hasFileChanged(inputPath, outputPath):
+          mediaFiles[inputPath] = outputPath
       else:
         missingMediaFiles.add(inputPath)
 
