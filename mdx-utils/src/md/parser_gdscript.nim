@@ -1,7 +1,4 @@
 ## Minimal GDScript parser specialized for code include shortcodes. Tokenizes symbol definitions and their body and collects all their content.
-# FIXME: if a file starts with a class definition, following tokens are not collected as children of the class.
-# TODO: functions: add functions to get the definition and body of the token.
-# TODO: class: add functions to get the definition and body of the token. Definition is the class token content, body is the formatted children tokens.
 import std/[strutils, tables, unittest]
 
 type
@@ -24,19 +21,9 @@ type
     range: Range
     children: seq[Token] = @[]
 
-  TokenFunction =
-    concept t
-        t is Token
-        t.tokenType == TokenType.Function
-
-  TokenClass =
-    concept t
-        t is Token
-        t.tokenType == TokenType.Class
-
 # TODO: extract multiline definitions
 proc getDefinition*(token: Token): string =
-  if token is TokenFunction or token is TokenClass:
+  if token.tokenType in {TokenType.Function, TokenType.Class}:
     return token.lines[0]
   else:
     raise newException(
@@ -47,12 +34,13 @@ proc getDefinition*(token: Token): string =
     )
 
 proc getBody*(token: Token): string =
-  if token is TokenFunction:
+  if token.tokenType == TokenType.Function:
     # TODO: handle cases where function definition is multiline.
     return token.lines[1 ..^ 1].join("\n")
-  elif token is TokenClass:
+  elif token.tokenType == TokenType.Class:
     var bodyLines: seq[string] = @[]
     for child in token.children:
+      echo child.lines
       bodyLines.add(child.lines)
     return bodyLines.join("\n")
   else:
@@ -182,6 +170,11 @@ proc parseGDScript*(code: string): seq[Token] =
     let (isNewDefinition, tokenType) = findDefinition(line)
 
     if isNewDefinition:
+      # We don't want to collect local definitions
+      if isInsideFunction and currentIndent > lastFunctionDefinitionIndent:
+        lineIndex += 1
+        continue
+
       if isCollecting:
         currentToken.range.lineEnd = lineIndex - 1
         # Only tokenize non-local definitions
@@ -389,12 +382,16 @@ class Test extends Node:
 		pass
 """
       let tokens = parseGDScript(code)
+      let body = tokens[0].getBody()
+      let expected = "\tvar x: int\n\n\tfunc test():\n\t\tpass"
+      # TODO: issue is that empty lines between definitions are not tokenized
+      echo "Got body: [\n", body, "]"
+      echo "Expected: [\n", expected, "]"
       check:
         tokens.len == 1
         tokens[0].tokenType == TokenType.Class
-        tokens[0] is TokenClass
         tokens[0].getDefinition() == "class Test extends Node:"
-        tokens[0].getBody() == "  var x: int\n\n  func test():\n    pass"
+        body == expected
 
 # Unit tests
 when isMainModule:
