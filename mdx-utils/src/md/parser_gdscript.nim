@@ -114,12 +114,10 @@ proc getIndentLevel(line: string): int =
   # GDScript either uses tabs or 4 spaces for indentation. So we can count
   # either 1 tab per indent or 4 spaces per indent.
   result = 0
-  var isTab = false
+  var isTab = line.len > 0 and line[0] == '\t'
+  let indentChar = if isTab: '\t' else: ' '
   for c in line:
-    if c == '\t':
-      isTab = true
-      result += 1
-    elif c == ' ':
+    if c == indentChar:
       result += 1
     else:
       break
