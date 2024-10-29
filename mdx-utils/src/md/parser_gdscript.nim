@@ -313,6 +313,8 @@ proc parseGDScript*(code: string): seq[Token] =
   for token in tokens.mitems:
     removeTrailingEmptyLines(token)
 
+  for token in tokens:
+    printToken(token)
   return tokens
 
 proc runUnitTests() =
