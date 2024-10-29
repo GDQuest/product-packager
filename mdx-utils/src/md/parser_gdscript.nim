@@ -36,7 +36,7 @@ proc getDefinition*(token: Token): string =
 proc getBody*(token: Token): string =
   if token.tokenType == TokenType.Function or token.tokenType == TokenType.Class:
     # TODO: handle cases where function definition is multiline.
-    return token.lines[1 ..^ 1].join("\n")
+    return token.lines[1 ..^ -1].join("\n")
   else:
     raise newException(
       ValueError,
@@ -188,22 +188,24 @@ proc parseGDScript*(code: string): seq[Token] =
 
   proc parseClassBody(classToken: var Token, startLine: int): int =
     # Parse the class body and collect both lines and child tokens.
+    # This function exists due to how I initially implemented the parser and could be removed
+    # by going for a scanner architecture, going character by character.
+    # Classes don't fit the original algorithm, they need to collect both child tokens and all lines in their
+    # body, including empty lines between child tokens (which aren't parsed otherwise)
     var classLineIndex = startLine
 
     while classLineIndex < lines.len:
       let line = lines[classLineIndex]
       let lineIndent = getIndentLevel(line)
 
-      # Check if we're still in class scope
+      # Check if we're still in class scope, if not, we finished reading the class body.
       let isEndOfClass = not line.isEmptyOrWhitespace() and lineIndent == 0
       if isEndOfClass:
         return classLineIndex - 1
 
-      classToken.lines.add(line)
-
-      # Parse definitions within the class
+      # Parse child definitions within the class
       let (isNewDefinition, tokenType) = findDefinition(line)
-      let isClassChild = isNewDefinition and lineIndent > 0
+      let isClassChild = isNewDefinition and lineIndent == 1
       if isClassChild:
         var childToken = Token(
           tokenType: tokenType,
@@ -212,16 +214,22 @@ proc parseGDScript*(code: string): seq[Token] =
           range: Range(lineStart: classLineIndex, lineEnd: -1)
         )
 
-        if isMultiLineDefinition(line):
+        if tokenType == TokenType.Function or isMultiLineDefinition(line):
           classLineIndex += 1
           let childIndent = lineIndent
           while classLineIndex < lines.len:
             let childLine = lines[classLineIndex]
             let childLineIndent = getIndentLevel(childLine)
-            if not childLine.isEmptyOrWhitespace() and childLineIndent <= childIndent:
+            # Stop if we find another definition at the same indent level, or a lesser indent
+            let (foundNextDef, _) = findDefinition(childLine)
+            if not childLine.isEmptyOrWhitespace() and (
+              childLineIndent <= childIndent or
+              (childLineIndent == childIndent + 1 and foundNextDef)
+            ):
               break
             childToken.lines.add(childLine)
             classLineIndex += 1
+
           classLineIndex -= 1
           childToken.range.lineEnd = classLineIndex
         else:
@@ -266,6 +274,9 @@ proc parseGDScript*(code: string): seq[Token] =
         currentToken.range.lineStart = lineIndex
         lineIndex = parseClassBody(currentToken, lineIndex + 1)
         currentToken.range.lineEnd = lineIndex
+        for index in (currentToken.range.lineStart + 1)..currentToken.range.lineEnd:
+          let classLine = lines[index]
+          currentToken.lines.add(classLine)
         collectToken()
       elif not isInsideFunction and tokenType == TokenType.Function:
         isInsideFunction = true
