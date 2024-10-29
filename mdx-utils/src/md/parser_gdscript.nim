@@ -40,7 +40,6 @@ proc getBody*(token: Token): string =
   elif token.tokenType == TokenType.Class:
     var bodyLines: seq[string] = @[]
     for child in token.children:
-      echo child.lines
       bodyLines.add(child.lines)
     return bodyLines.join("\n")
   else:
@@ -63,6 +62,20 @@ const
     "class": TokenType.Class,
     "enum": TokenType.Enum,
   }.toTable()
+
+proc printToken(token: Token, isIndented: bool = false) =
+  ## Prints a token and its children.
+  let indentStr = if isIndented: "\t" else: ""
+  echo indentStr, "Type: ", token.tokenType
+  echo indentStr, "Name: ", token.name
+  echo indentStr, "Range: ", token.range.lineStart, " - ", token.range.lineEnd
+  echo indentStr, "Content:"
+  for line in token.lines:
+    echo indentStr, line
+  if token.tokenType == TokenType.Class:
+    for child in token.children:
+      printToken(child, isIndented = true)
+  echo indentStr, "---"
 
 proc isMultiLineDefinition(line: string): bool =
   ## Returns true if the definition contained in `line` spans multiple lines.
@@ -144,8 +157,9 @@ proc extractName(lineDefinition: string, tokenType: TokenType): string =
       break
   result = lineDefinition[nameStart .. nameEnd].strip()
 
-#TODO: ignore local variables, constants, functions, ...
-# locals are any definition when collecting a function that have an indent greater than the function definition.
+# TODO: consider moving to a scanner and capturing definitions through a state machine. E.g. a func definition is
+# func + ( + ) + : + \n
+# Consider recursive parsing too: e.g. capturing a class whole and then parsing its body in a separate step.
 proc parseGDScript*(code: string): seq[Token] =
   let lines = code.splitLines()
   var
@@ -155,8 +169,16 @@ proc parseGDScript*(code: string): seq[Token] =
     lineIndex = 0
     currentIndent = 0
     lastDefinitionIndent = 0
-    isInsideFunction = false # New flag to track if we're inside a function
+    isInsideFunction = false
     lastFunctionDefinitionIndent = 0
+    isInsideClass = false
+
+  proc collectToken() =
+    if currentIndent > lastDefinitionIndent and tokens.len > 0 and
+        tokens[^1].tokenType == TokenType.Class:
+      tokens[^1].children.add(currentToken)
+    else:
+      tokens.add(currentToken)
 
   while lineIndex < lines.len:
     let line = lines[lineIndex]
@@ -168,6 +190,11 @@ proc parseGDScript*(code: string): seq[Token] =
     let (isNewDefinition, tokenType) = findDefinition(line)
 
     if isNewDefinition:
+      if tokenType == TokenType.Class:
+        isInsideClass = true
+      elif isInsideClass and currentIndent == 0:
+        isInsideClass = false
+
       # We don't want to collect local definitions
       if isInsideFunction and currentIndent > lastFunctionDefinitionIndent:
         lineIndex += 1
@@ -177,11 +204,7 @@ proc parseGDScript*(code: string): seq[Token] =
         currentToken.range.lineEnd = lineIndex - 1
         # Only tokenize non-local definitions
         if not isInsideFunction or currentIndent <= lastFunctionDefinitionIndent:
-          if currentIndent > lastDefinitionIndent and tokens.len > 0 and
-              tokens[^1].tokenType == TokenType.Class:
-            tokens[^1].children.add(currentToken)
-          else:
-            tokens.add(currentToken)
+          collectToken()
         isCollecting = false
 
       currentToken = Token(
@@ -191,7 +214,6 @@ proc parseGDScript*(code: string): seq[Token] =
         range: Range(lineStart: lineIndex, lineEnd: -1),
       )
 
-      # FIXME: now this won't collect functions that we do want to collect.
       if not isInsideFunction and tokenType == TokenType.Function:
         isInsideFunction = true
         lastFunctionDefinitionIndent = currentIndent
@@ -204,11 +226,8 @@ proc parseGDScript*(code: string): seq[Token] =
       else:
         currentToken.range.lineEnd = lineIndex
         if not isInsideFunction or currentIndent <= lastFunctionDefinitionIndent:
-          if currentIndent > lastDefinitionIndent and tokens.len > 0 and
-              tokens[^1].tokenType == TokenType.Class:
-            tokens[^1].children.add(currentToken)
-          else:
-            tokens.add(currentToken)
+          collectToken()
+          if tokens[^1].tokenType != TokenType.Class:
             lastDefinitionIndent = currentIndent
     elif isCollecting:
       currentToken.lines.add(line)
@@ -216,15 +235,9 @@ proc parseGDScript*(code: string): seq[Token] =
     lineIndex += 1
 
   # Collect the last token
-  # TODO: check this after adding checks for local variables
   if isCollecting:
     currentToken.range.lineEnd = lineIndex - 1
-
-    if currentIndent > lastDefinitionIndent and tokens.len > 0 and
-        tokens[^1].tokenType == TokenType.Class:
-      tokens[^1].children.add(currentToken)
-    else:
-      tokens.add(currentToken)
+    collectToken()
 
   # Remove empty lines from the end of each token
   proc removeTrailingEmptyLines(token: var Token) =
@@ -237,20 +250,6 @@ proc parseGDScript*(code: string): seq[Token] =
     removeTrailingEmptyLines(token)
 
   return tokens
-
-proc printToken(token: Token, isIndented: bool = false) =
-  ## Prints a token and its children.
-  let indentStr = if isIndented: "\t" else: ""
-  echo indentStr, "Type: ", token.tokenType
-  echo indentStr, "Name: ", token.name
-  echo indentStr, "Range: ", token.range.lineStart, " - ", token.range.lineEnd
-  echo indentStr, "Content:"
-  for line in token.lines:
-    echo indentStr, line
-  if token.tokenType == TokenType.Class:
-    for child in token.children:
-      printToken(child, isIndented = true)
-  echo indentStr, "---"
 
 proc runUnitTests() =
   ## Note: when adding tests, be careful to make the code use tabs or four spaces for indentation.
@@ -382,7 +381,7 @@ class Test extends Node:
       let tokens = parseGDScript(code)
       let body = tokens[0].getBody()
       let expected = "\tvar x: int\n\n\tfunc test():\n\t\tpass"
-      # TODO: issue is that empty lines between definitions are not tokenized
+      # TODO: issue is that empty lines between definitions are not tokenized so the line return is missing
       echo "Got body: [\n", body, "]"
       echo "Expected: [\n", expected, "]"
       check:
