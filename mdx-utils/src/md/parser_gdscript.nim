@@ -34,14 +34,9 @@ proc getDefinition*(token: Token): string =
     )
 
 proc getBody*(token: Token): string =
-  if token.tokenType == TokenType.Function:
+  if token.tokenType == TokenType.Function or token.tokenType == TokenType.Class:
     # TODO: handle cases where function definition is multiline.
     return token.lines[1 ..^ 1].join("\n")
-  elif token.tokenType == TokenType.Class:
-    var bodyLines: seq[string] = @[]
-    for child in token.children:
-      bodyLines.add(child.lines)
-    return bodyLines.join("\n")
   else:
     raise newException(
       ValueError,
@@ -160,6 +155,11 @@ proc extractName(lineDefinition: string, tokenType: TokenType): string =
 # TODO: consider moving to a scanner and capturing definitions through a state machine. E.g. a func definition is
 # func + ( + ) + : + \n
 # Consider recursive parsing too: e.g. capturing a class whole and then parsing its body in a separate step.
+# Instead of trying to capture all at once, this could work in two passes:
+# 1. Tokenize and capture indices and line numbers with a scanner.
+# 2. Parse the tokens and build a tree.
+#
+# Currently, the parser tries to both tokenize and separate definitions at once.
 proc parseGDScript*(code: string): seq[Token] =
   let lines = code.splitLines()
   var
@@ -172,37 +172,78 @@ proc parseGDScript*(code: string): seq[Token] =
     isInsideFunction = false
     lastFunctionDefinitionIndent = 0
     isInsideClass = false
+    classStartIndent = 0
 
   proc collectToken() =
-    if currentIndent > lastDefinitionIndent and tokens.len > 0 and
-        tokens[^1].tokenType == TokenType.Class:
-      tokens[^1].children.add(currentToken)
+    if currentToken.tokenType != TokenType.Class:
+      if currentIndent > lastDefinitionIndent and tokens.len > 0 and
+          tokens[^1].tokenType == TokenType.Class:
+        tokens[^1].children.add(currentToken)
+      else:
+        tokens.add(currentToken)
     else:
       tokens.add(currentToken)
 
+  proc parseClassBody(classToken: var Token, startLine: int): int =
+    # Parse the class body and collect both lines and child tokens
+    var classLineIndex = startLine
+    var currentIndent = getIndentLevel(lines[startLine - 1])
+
+    while classLineIndex < lines.len:
+      let line = lines[classLineIndex]
+      let lineIndent = getIndentLevel(line)
+
+      # Check if we're still in class scope
+      if not line.isEmptyOrWhitespace() and lineIndent <= currentIndent:
+        return classLineIndex - 1
+
+      classToken.lines.add(line)
+
+      # Parse definitions within the class
+      let (isNewDefinition, tokenType) = findDefinition(line)
+      if isNewDefinition and lineIndent > currentIndent:
+        var childToken = Token(
+          tokenType: tokenType,
+          name: extractName(line, tokenType),
+          lines: @[line],
+          range: Range(lineStart: classLineIndex, lineEnd: -1)
+        )
+
+        if isMultiLineDefinition(line):
+          classLineIndex += 1
+          let childIndent = lineIndent
+          while classLineIndex < lines.len:
+            let childLine = lines[classLineIndex]
+            let childLineIndent = getIndentLevel(childLine)
+            if not childLine.isEmptyOrWhitespace() and childLineIndent <= childIndent:
+              break
+            childToken.lines.add(childLine)
+            classLineIndex += 1
+          classLineIndex -= 1
+          childToken.range.lineEnd = classLineIndex
+        else:
+          childToken.range.lineEnd = classLineIndex
+
+        classToken.children.add(childToken)
+
+      classLineIndex += 1
+
+      return classLineIndex - 1
+
   while lineIndex < lines.len:
     let line = lines[lineIndex]
-    if line.isEmptyOrWhitespace():
-      lineIndex += 1
-      continue
-
     currentIndent = getIndentLevel(line)
+
     let (isNewDefinition, tokenType) = findDefinition(line)
 
     if isNewDefinition:
-      if tokenType == TokenType.Class:
-        isInsideClass = true
-      elif isInsideClass and currentIndent == 0:
-        isInsideClass = false
-
       # We don't want to collect local definitions
       if isInsideFunction and currentIndent > lastFunctionDefinitionIndent:
         lineIndex += 1
         continue
 
-      if isCollecting:
+      if isCollecting and not isInsideClass:
         currentToken.range.lineEnd = lineIndex - 1
-        # Only tokenize non-local definitions
         if not isInsideFunction or currentIndent <= lastFunctionDefinitionIndent:
           collectToken()
         isCollecting = false
@@ -214,28 +255,34 @@ proc parseGDScript*(code: string): seq[Token] =
         range: Range(lineStart: lineIndex, lineEnd: -1),
       )
 
-      if not isInsideFunction and tokenType == TokenType.Function:
+      if tokenType == TokenType.Class:
+        # Handle class parsing
+        currentToken.range.lineStart = lineIndex
+        lineIndex = parseClassBody(currentToken, lineIndex + 1)
+        currentToken.range.lineEnd = lineIndex
+        collectToken()
+      elif not isInsideFunction and tokenType == TokenType.Function:
         isInsideFunction = true
         lastFunctionDefinitionIndent = currentIndent
       elif currentIndent <= lastFunctionDefinitionIndent:
         isInsideFunction = false
 
-      if isMultiLineDefinition(line):
+      if isMultiLineDefinition(line) and tokenType != TokenType.Class:
         isCollecting = true
         lastDefinitionIndent = currentIndent
-      else:
+      elif tokenType != TokenType.Class:
         currentToken.range.lineEnd = lineIndex
         if not isInsideFunction or currentIndent <= lastFunctionDefinitionIndent:
           collectToken()
           if tokens[^1].tokenType != TokenType.Class:
             lastDefinitionIndent = currentIndent
-    elif isCollecting:
+    elif isCollecting and not isInsideClass:
       currentToken.lines.add(line)
 
     lineIndex += 1
 
   # Collect the last token
-  if isCollecting:
+  if isCollecting and not isInsideClass:
     currentToken.range.lineEnd = lineIndex - 1
     collectToken()
 
