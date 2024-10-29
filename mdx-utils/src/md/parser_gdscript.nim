@@ -160,6 +160,8 @@ proc extractName(lineDefinition: string, tokenType: TokenType): string =
 # 2. Parse the tokens and build a tree.
 #
 # Currently, the parser tries to both tokenize and separate definitions at once.
+# This different algorithm would allow capturing the definitions and bodies in one scan pass.
+# Also we wouldn't need to copy the lines to the tokens, we could just store the character ranges.
 proc parseGDScript*(code: string): seq[Token] =
   let lines = code.splitLines()
   var
@@ -185,23 +187,24 @@ proc parseGDScript*(code: string): seq[Token] =
       tokens.add(currentToken)
 
   proc parseClassBody(classToken: var Token, startLine: int): int =
-    # Parse the class body and collect both lines and child tokens
+    # Parse the class body and collect both lines and child tokens.
     var classLineIndex = startLine
-    var currentIndent = getIndentLevel(lines[startLine - 1])
 
     while classLineIndex < lines.len:
       let line = lines[classLineIndex]
       let lineIndent = getIndentLevel(line)
 
       # Check if we're still in class scope
-      if not line.isEmptyOrWhitespace() and lineIndent <= currentIndent:
+      let isEndOfClass = not line.isEmptyOrWhitespace() and lineIndent == 0
+      if isEndOfClass:
         return classLineIndex - 1
 
       classToken.lines.add(line)
 
       # Parse definitions within the class
       let (isNewDefinition, tokenType) = findDefinition(line)
-      if isNewDefinition and lineIndent > currentIndent:
+      let isClassChild = isNewDefinition and lineIndent > 0
+      if isClassChild:
         var childToken = Token(
           tokenType: tokenType,
           name: extractName(line, tokenType),
@@ -228,17 +231,17 @@ proc parseGDScript*(code: string): seq[Token] =
 
       classLineIndex += 1
 
-      return classLineIndex - 1
+    return classLineIndex - 1
 
   while lineIndex < lines.len:
     let line = lines[lineIndex]
     currentIndent = getIndentLevel(line)
 
     let (isNewDefinition, tokenType) = findDefinition(line)
-
     if isNewDefinition:
-      # We don't want to collect local definitions
-      if isInsideFunction and currentIndent > lastFunctionDefinitionIndent:
+      # We don't want to collect local definitions, so we skip them.
+      let isFunctionLocalDefinition = isInsideFunction and currentIndent > lastFunctionDefinitionIndent
+      if isFunctionLocalDefinition:
         lineIndex += 1
         continue
 
@@ -255,8 +258,11 @@ proc parseGDScript*(code: string): seq[Token] =
         range: Range(lineStart: lineIndex, lineEnd: -1),
       )
 
+      # For classes, we parse the body separately. This is due to how I
+      # approached the parsing algorithm initially, as I tried to tokenize per
+      # definition. See the comments at the top of the function for a different
+      # approach.
       if tokenType == TokenType.Class:
-        # Handle class parsing
         currentToken.range.lineStart = lineIndex
         lineIndex = parseClassBody(currentToken, lineIndex + 1)
         currentToken.range.lineEnd = lineIndex
@@ -286,8 +292,8 @@ proc parseGDScript*(code: string): seq[Token] =
     currentToken.range.lineEnd = lineIndex - 1
     collectToken()
 
-  # Remove empty lines from the end of each token
   proc removeTrailingEmptyLines(token: var Token) =
+    # Remove empty lines from the end of each token
     while token.lines.len > 0 and token.lines[^1].isEmptyOrWhitespace:
       token.lines.setLen(token.lines.len - 1)
     for child in token.children.mitems:
