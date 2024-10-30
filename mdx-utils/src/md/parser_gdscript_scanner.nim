@@ -31,6 +31,7 @@ type
     start: Position
     indentLevel: int
     bracketDepth: int
+    peekIndex: int
 
 #TODO: There could be a peek index and peeking moves that index without moving the scanner, so that we can peek multiple times without advancing the scanner
 # We could then jump to the peek index when we know we want to consume the peeked characters
@@ -52,6 +53,29 @@ proc advance(s: var Scanner): char =
     else:
       s.current.column += 1
 
+proc peekAt(s: Scanner, offset: int): char =
+  ## Peeks at a specific offset without advancing the scanner
+  let index = s.current.index + offset
+  if index >= s.source.len:
+    return '\0'
+  return s.source[index]
+
+proc peekString(s: var Scanner, expected: string): bool =
+  ## Peeks ahead to check if the expected string is present without advancing
+  for i in 0..<expected.len:
+    if peekAt(s, i) != expected[i]:
+      return false
+  return true
+
+proc setPeekIndex(s: var Scanner) =
+  ## Stores current position as peek index
+  s.peekIndex = s.current.index
+
+proc advanceToPeek(s: var Scanner) =
+  ## Advances the scanner to the stored peek index
+  while s.current.index < s.peekIndex:
+    discard s.advance()
+
 proc match(s: var Scanner, expected: char): bool =
   ## Returns true and advances the scanner if and only if the current character matches the expected character
   ## Otherwise, returns false
@@ -60,14 +84,18 @@ proc match(s: var Scanner, expected: char): bool =
   discard s.advance()
   true
 
+
 proc matchString(s: var Scanner, expected: string): bool =
   ## Returns true and advances the scanner if and only if the next characters match the expected string
-  # TODO: Issue: doesn't this advance the scanner even if the match fails, as long as the first characters match?
-  # Should peek instead and consume only if the match is successful?
+  if not peekString(s, expected):
+    return false
+
+  # If we found a match, advance the scanner by the length of the string
   for c in expected:
-    if not s.match(c):
-      return false
-  true
+    discard s.advance()
+  return true
+
+
 
 proc countIndentation(s: var Scanner): int =
   ## Counts the number of spaces and tabs starting from the current position
@@ -199,21 +227,62 @@ proc scanToken(s: var Scanner): Token =
       token.range.end = s.current
 
       return token
-  of 'v':
-    # TODO: add similar cases for enum, const, signal
-    # They're similar with the grammar kwd + identifier + (=.+)? for const and enum
-    if s.matchString("var"):
-      var token = Token(tokenType: TokenType.Variable)
+  of 'v', 'c', 'e':
+    var tokenType: TokenType
+    if s.peekString("var"):
+      tokenType = TokenType.Variable
+      discard s.matchString("var")
+    elif s.peekString("const"):
+      tokenType = TokenType.Constant
+      discard s.matchString("const")
+    elif s.peekString("enum"):
+      tokenType = TokenType.Enum
+      discard s.matchString("enum")
+    else:
+      discard s.advance()
+      return Token(tokenType: TokenType.Invalid)
+
+    var token = Token(tokenType: tokenType)
+    token.range.start = startPos
+    token.range.definitionStart = startPos
+
+    s.skipWhitespace()
+    token.name = s.scanIdentifier()
+    discard s.scanToEndOfDefinition()
+
+    token.range.end = s.current
+    return token
+  of 's':
+    if s.matchString("signal"):
+      var token = Token(tokenType: TokenType.Signal)
       token.range.start = startPos
       token.range.definitionStart = startPos
 
-      # TODO: scan to end of line or multiline definition
       s.skipWhitespace()
       token.name = s.scanIdentifier()
 
+      # Handle signal arguments if present
+      s.skipWhitespace()
+      if s.peek() == '(':
+        var bracketCount = 0
+        while not s.isAtEnd():
+          let c = s.peek()
+          case c
+          of '(':
+            bracketCount += 1
+            discard s.advance()
+          of ')':
+            bracketCount -= 1
+            discard s.advance()
+            if bracketCount == 0:
+              break
+          else:
+            discard s.advance()
+      else:
+        discard s.scanToEndOfLine()
+
       token.range.end = s.current
       return token
-  # Add other cases for remaining token types
   else:
     discard s.advance()
 
@@ -237,7 +306,8 @@ proc parseGDScript*(source: string): seq[Token] =
     current: Position(index: 0, line: 1, column: 1),
     start: Position(index: 0, line: 1, column: 1),
     indentLevel: 0,
-    bracketDepth: 0
+    bracketDepth: 0,
+    peekIndex: 0
   )
   while not scanner.isAtEnd():
     let token = scanToken(scanner)
