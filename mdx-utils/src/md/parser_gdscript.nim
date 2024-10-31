@@ -163,18 +163,27 @@ proc scanToEndOfDefinition(s: var Scanner): string =
     else:
       result.add(s.advance())
 
+proc isNewDefinition(s: var Scanner): bool =
+  ## Returns true if there's a new definition ahead, regardless of its indent level
+  ## or type
+  let savedPos = s.current
+  s.skipWhitespace()
+  let firstChar = s.peek()
+  # TODO: consider writing a proc to check for reserved keywords quickly instead of checking for the letter then keyword.
+  result = (firstChar == 'f' and s.peekString("func")) or
+            (firstChar == 'v' and s.peekString("var")) or
+            (firstChar == 'c' and (s.peekString("const") or s.peekString("class"))) or
+            (firstChar == 's' and s.peekString("signal")) or
+            (firstChar == 'e' and s.peekString("enum"))
+  s.current = savedPos
+  return result
+
 proc scanBody(s: var Scanner, startIndent: int): string =
   ## Scans the body of a function or class until we find a definition at the same indent level
   while not s.isAtEnd():
     let currentIndent = s.countIndentation()
     if currentIndent <= startIndent and not s.isAtEnd():
-      # Check if this is a new definition
-      let savedPos = s.current
-      s.skipWhitespace()
-      let firstChar = s.peek()
-      s.current = savedPos
-      # TODO: is it enough to check for these characters? or should we check for reserved keywords?
-      if firstChar in {'f', 'v', 'c', 's', 'e'}:
+      if isNewDefinition(s):
         break
 
     result.add(scanToEndOfLine(s))
@@ -312,7 +321,8 @@ proc parseClass(s: var Scanner, classToken: var Token) =
   while not s.isAtEnd():
     let currentIndent = s.countIndentation()
     if currentIndent <= classIndent:
-      break
+      if isNewDefinition(s):
+        break
 
     let childToken = s.scanToken()
     if childToken.tokenType != TokenType.Invalid:
