@@ -271,11 +271,6 @@ proc scanToken(s: var Scanner): Token =
     s.skipWhitespace()
     token.name = s.scanIdentifier()
     discard s.scanToEndOfDefinition()
-    if tokenType == TokenType.Class:
-      while s.peek() != ':':
-        discard s.advance()
-      discard s.scanToEndOfLine()
-
     token.range.end = s.current
     token.range.definitionEnd = s.current
     return token
@@ -318,6 +313,7 @@ proc scanToken(s: var Scanner): Token =
 proc parseClass(s: var Scanner, classToken: var Token) =
   ## Parses the body of a class, collecting child tokens
   let classIndent = s.indentLevel
+  s.current = classToken.range.bodyStart
   while not s.isAtEnd():
     let currentIndent = s.countIndentation()
     if currentIndent <= classIndent:
@@ -349,19 +345,9 @@ proc parseGDScript*(source: string): seq[Token] =
       token.range.end = scanner.current
     result.add(token)
 
-proc tokenTypeToString(tokenType: TokenType): string =
-  case tokenType:
-  of Invalid: "Invalid"
-  of Function: "Function"
-  of Variable: "Variable"
-  of Constant: "Constant"
-  of Signal: "Signal"
-  of Class: "Class"
-  of Enum: "Enum"
-
 proc printToken(token: Token, indent: int = 0) =
   let indentStr = "  ".repeat(indent)
-  echo indentStr, "Token: ", tokenTypeToString(token.tokenType)
+  echo indentStr, "Token: ", $token.tokenType
   echo indentStr, "  Name: ", token.name
   echo indentStr, "  Range:"
   echo indentStr, "    Start: (line: ", token.range.start.line, ", col: ", token.range.start.column, ")"
@@ -406,7 +392,6 @@ proc runUnitTests() =
   }
   """
       let tokens = parseGDScript(code)
-      printTokens(tokens)
       check:
         tokens.len == 2
       if tokens.len == 2:
@@ -485,7 +470,6 @@ class StateMachine extends Node:
 		Blackboard.player_died.connect(trigger_event.bind(Events.PLAYER_DIED))
 """
       let tokens = parseGDScript(code)
-      printTokens(tokens)
       check:
         tokens.len == 1
       if tokens.len == 1:
