@@ -1,6 +1,8 @@
 ## Minimal GDScript parser specialized for code include shortcodes. Tokenizes symbol definitions and their body and collects all their content.
 import std/[strutils, tables, unittest]
 import std/times
+when compileOption("profiler"):
+  import std/nimprof
 
 type
   TokenType = enum
@@ -139,9 +141,16 @@ proc scanIdentifier(s: var Scanner): int =
 
 proc scanToEndOfLine(s: var Scanner): tuple[start, `end`: int] =
   let start = s.current.index
-  while not s.isAtEnd() and s.peek() != '\n':
-    discard s.advance()
-  if not s.isAtEnd():
+  let length = s.source.len
+  var offset = 0
+  var c = s.source[s.current.index]
+  while c != '\n':
+    offset += 1
+    if s.current.index + offset >= length:
+      break
+    c = s.source[s.current.index + offset]
+  s.current.index += offset
+  if s.current.index < length:
     discard s.advance()
   result = (start, s.current.index)
 
@@ -204,6 +213,7 @@ proc scanToken(s: var Scanner): Token =
   let startPos = s.current
   let c = s.peek()
   case c
+  # Function definition
   of 'f':
     if s.matchString("func"):
       var token = Token(tokenType: TokenType.Function)
@@ -226,6 +236,7 @@ proc scanToken(s: var Scanner): Token =
       token.range.end = s.current
 
       return token
+  # Annotation
   of '@':
     var offset = 1
     var c2 = s.peekAt(offset)
@@ -252,6 +263,7 @@ proc scanToken(s: var Scanner): Token =
         discard s.scanToEndOfDefinition()
         token.range.end = s.current
         return token
+  # Variable, Constant, Class, Enum
   of 'v', 'c', 'e':
     var tokenType: TokenType
     if s.peekString("var"):
@@ -282,6 +294,7 @@ proc scanToken(s: var Scanner): Token =
     token.range.end = s.current
     token.range.definitionEnd = s.current
     return token
+  # Signal
   of 's':
     if s.matchString("signal"):
       var token = Token(tokenType: TokenType.Signal)
@@ -353,6 +366,7 @@ proc parseGDScript*(source: string): seq[Token] =
       token.range.bodyEnd = scanner.current
       token.range.end = scanner.current
     result.add(token)
+
 proc printToken(token: Token, indent: int = 0) =
   let indentStr = "  ".repeat(indent)
   echo indentStr, "Token: ", $token.tokenType
@@ -371,6 +385,31 @@ proc printTokens*(tokens: seq[Token]) =
   for token in tokens:
     printToken(token)
     echo "" # Add a blank line between top-level tokens
+
+proc runPerformanceTest() =
+  let codeTest = """
+class StateMachine extends Node:
+var transitions := {}: set = set_transitions
+var current_state: State
+var is_debugging := false: set = set_is_debugging
+
+func _init() -> void:
+set_physics_process(false)
+var blackboard := Blackboard.new()
+Blackboard.player_died.connect(trigger_event.bind(Events.PLAYER_DIED))
+"""
+
+  echo "Running performance test..."
+  var totalDuration = 0.0
+  for i in 0..<10:
+    let start = cpuTime()
+    for j in 0..<10000:
+      discard parseGDScript(codeTest)
+    let duration = (cpuTime() - start) * 1000
+    totalDuration += duration
+
+  let averageDuration = totalDuration / 10
+  echo "Average parse duration for 10 000 calls: ", averageDuration.formatFloat(ffDecimal, 3), "ms"
 
 proc runUnitTests() =
   suite "GDScript parser tests":
@@ -511,29 +550,5 @@ class Test extends Node:
       #  tokens[0].getDefinition() == "class Test extends #Node:"
       #  body == expected
 
-#when isMainModule:
-#  runUnitTests()
-
-let codeTest = """
-class StateMachine extends Node:
-	var transitions := {}: set = set_transitions
-	var current_state: State
-	var is_debugging := false: set = set_is_debugging
-
-	func _init() -> void:
-	set_physics_process(false)
-	var blackboard := Blackboard.new()
-	Blackboard.player_died.connect(trigger_event.bind(Events.PLAYER_DIED))
-"""
-
-echo "Running performance test..."
-var totalDuration = 0.0
-for i in 0..<10:
-  let start = cpuTime()
-  for j in 0..<10000:
-    discard parseGDScript(codeTest)
-  let duration = (cpuTime() - start) * 1000
-  totalDuration += duration
-
-let averageDuration = totalDuration / 10
-echo "Average parse duration for 10 000 calls: ", averageDuration.formatFloat(ffDecimal, 3), "ms"
+when isMainModule:
+  runUnitTests()
