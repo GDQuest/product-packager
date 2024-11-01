@@ -1,5 +1,6 @@
 ## Minimal GDScript parser specialized for code include shortcodes. Tokenizes symbol definitions and their body and collects all their content.
 import std/[strutils, tables, unittest]
+import std/times
 
 type
   TokenType = enum
@@ -24,6 +25,7 @@ type
     name: string
     range: TokenRange
     children: seq[Token]
+    source: string
 
   Scanner = object
     # TODO: store source globally? So that we don't have to pass it around and any code can retrieve text from tokens
@@ -79,7 +81,6 @@ proc match(s: var Scanner, expected: char): bool =
   discard s.advance()
   true
 
-
 proc matchString(s: var Scanner, expected: string): bool =
   ## Returns true and advances the scanner if and only if the next characters match the expected string
   if not peekString(s, expected):
@@ -130,38 +131,41 @@ proc isAlphanumericOrUnderscore(c: char): bool =
   let isDigit = c >= '0' and c <= '9'
   return isLetter or isDigit
 
-proc scanIdentifier(s: var Scanner): string =
+proc scanIdentifier(s: var Scanner): int =
+  let start = s.current.index
   while isAlphanumericOrUnderscore(s.peek()):
-    result.add(s.advance())
+    discard s.advance()
+  result = start
 
-proc scanToEndOfLine(s: var Scanner): string =
-  ## Advances the scanner until the end of the line, returning the content, including the \n character at the end
+proc scanToEndOfLine(s: var Scanner): tuple[start, `end`: int] =
+  let start = s.current.index
   while not s.isAtEnd() and s.peek() != '\n':
-    result.add(s.advance())
+    discard s.advance()
   if not s.isAtEnd():
-    result.add(s.advance())
+    discard s.advance()
+  result = (start, s.current.index)
 
-proc scanToEndOfDefinition(s: var Scanner): string =
-  ## Scans until the end of a definition, handling multiline definitions with brackets
-  # TODO: gotta check if this works for e.g. functions etc.
+proc scanToEndOfDefinition(s: var Scanner): tuple[defStart, defEnd: int] =
+  let start = s.current.index
   while not s.isAtEnd():
     let c = s.peek()
     case c
     of '(', '[', '{':
       s.bracketDepth += 1
-      result.add(s.advance())
+      discard s.advance()
     of ')', ']', '}':
       s.bracketDepth -= 1
-      result.add(s.advance())
+      discard s.advance()
       if s.bracketDepth == 0 and s.peek() == '\n':
-        result.add(s.advance())
+        discard s.advance()
         break
     of '\n':
-      result.add(s.advance())
+      discard s.advance()
       if s.bracketDepth == 0:
         break
     else:
-      result.add(s.advance())
+      discard s.advance()
+  result = (start, s.current.index)
 
 proc isNewDefinition(s: var Scanner): bool =
   ## Returns true if there's a new definition ahead, regardless of its indent level
@@ -178,15 +182,16 @@ proc isNewDefinition(s: var Scanner): bool =
   s.current = savedPos
   return result
 
-proc scanBody(s: var Scanner, startIndent: int): string =
-  ## Scans the body of a function or class until we find a definition at the same indent level
+proc scanBody(s: var Scanner, startIndent: int): tuple[bodyStart, bodyEnd: int] =
+  let start = s.current.index
   while not s.isAtEnd():
     let currentIndent = s.countIndentation()
     if currentIndent <= startIndent and not s.isAtEnd():
       if isNewDefinition(s):
         break
 
-    result.add(scanToEndOfLine(s))
+    let lineRange = scanToEndOfLine(s)
+  result = (start, s.current.index)
 
 proc scanToken(s: var Scanner): Token =
   s.start = s.current
@@ -205,13 +210,13 @@ proc scanToken(s: var Scanner): Token =
       token.range.start = startPos
       token.range.definitionStart = startPos
 
-      # Scan function definition
       s.skipWhitespace()
-      token.name = s.scanIdentifier()
-      var definition = "func " & token.name
+      let nameStart = s.scanIdentifier()
+      token.name = s.source[nameStart..<s.current.index]
+
       while s.peek() != ':':
-        definition.add(s.advance())
-      definition.add(s.scanToEndOfLine())
+        discard s.advance()
+      let lineRange = s.scanToEndOfLine()
 
       token.range.definitionEnd = s.current
       token.range.bodyStart = s.current
@@ -241,9 +246,10 @@ proc scanToken(s: var Scanner): Token =
         token.range.definitionStart = startPos
 
         s.skipWhitespace()
-        token.name = s.scanIdentifier()
-        discard s.scanToEndOfDefinition()
+        let nameStart = s.scanIdentifier()
+        token.name = s.source[nameStart..<s.current.index]
 
+        discard s.scanToEndOfDefinition()
         token.range.end = s.current
         return token
   of 'v', 'c', 'e':
@@ -269,7 +275,9 @@ proc scanToken(s: var Scanner): Token =
     token.range.definitionStart = startPos
 
     s.skipWhitespace()
-    token.name = s.scanIdentifier()
+    let nameStart = s.scanIdentifier()
+    token.name = s.source[nameStart..<s.current.index]
+
     discard s.scanToEndOfDefinition()
     token.range.end = s.current
     token.range.definitionEnd = s.current
@@ -281,7 +289,8 @@ proc scanToken(s: var Scanner): Token =
       token.range.definitionStart = startPos
 
       s.skipWhitespace()
-      token.name = s.scanIdentifier()
+      let nameStart = s.scanIdentifier()
+      token.name = s.source[nameStart..<s.current.index]
 
       # Handle signal arguments if present
       s.skipWhitespace()
@@ -344,7 +353,6 @@ proc parseGDScript*(source: string): seq[Token] =
       token.range.bodyEnd = scanner.current
       token.range.end = scanner.current
     result.add(token)
-
 proc printToken(token: Token, indent: int = 0) =
   let indentStr = "  ".repeat(indent)
   echo indentStr, "Token: ", $token.tokenType
@@ -503,5 +511,29 @@ class Test extends Node:
       #  tokens[0].getDefinition() == "class Test extends #Node:"
       #  body == expected
 
-when isMainModule:
-  runUnitTests()
+#when isMainModule:
+#  runUnitTests()
+
+let codeTest = """
+class StateMachine extends Node:
+	var transitions := {}: set = set_transitions
+	var current_state: State
+	var is_debugging := false: set = set_is_debugging
+
+	func _init() -> void:
+	set_physics_process(false)
+	var blackboard := Blackboard.new()
+	Blackboard.player_died.connect(trigger_event.bind(Events.PLAYER_DIED))
+"""
+
+echo "Running performance test..."
+var totalDuration = 0.0
+for i in 0..<10:
+  let start = cpuTime()
+  for j in 0..<10000:
+    discard parseGDScript(codeTest)
+  let duration = (cpuTime() - start) * 1000
+  totalDuration += duration
+
+let averageDuration = totalDuration / 10
+echo "Average parse duration for 10 000 calls: ", averageDuration.formatFloat(ffDecimal, 3), "ms"
