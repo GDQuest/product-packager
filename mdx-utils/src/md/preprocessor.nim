@@ -9,7 +9,7 @@
 ## 3. If a regex is matched, it calls the corresponding preprocessing to replace the matched text with preprocessed text.
 ##
 ## See the proc processContent() for the list of patterns and their handlers.
-import std/[nre, strformat, strutils, tables, options, os, terminal]
+import std/[nre, strformat, strutils, tables, options, os, terminal, sets]
 import assets
 import utils
 import ../settings
@@ -83,15 +83,45 @@ proc preprocessVideoFile(match: RegexMatch, context: HandlerContext): string =
     result.add(" " & after)
   result &= "/>"
 
+## Appends a react component for each Godot class name used in the markdown content, in inline code marks.
+## For example, it transforms `Node` to <IconGodot name="Node" colorGroup="node">Node</IconGodot>.
 proc preprocessGodotIcon(match: RegexMatch, context: HandlerContext): string =
   ## Replaces a Godot class name in inline code formatting with an icon component followed by the class name.
-  # TODO: replace with new icon component format. -> https://github.com/GDQuest/product-packager/pull/74
+
+  proc getGodotIconGroup(className: string): string =
+    ## Returns the group of the Godot icon for the given class name.
+    ## The group is used to color the icon in the same way as the Godot
+    ## documentation.
+    # TODO: complete the sets. Use compile time execution to build the editor category:
+    # we can assume it's all icons that don't match a class in the godot/doc/classes folder.
+    const CLASSES_ANIMATION = ["AnimationPlayer", "Tween", "AnimationTree"].toHashSet()
+    const CLASSES_UI =
+      ["Control", "ProgressBar", "HBoxContainer", "VBoxContainer"].toHashSet()
+    const CLASSES_EDITOR =
+      ["ToolMove", "ToolSelect", "ToolRotate", "ToolScale"].toHashSet()
+    result =
+      if className.endsWith("2D"):
+        "2d"
+      elif className.endsWith("3D"):
+        "3d"
+      elif className in CLASSES_ANIMATION:
+        "animation"
+      elif className in CLASSES_UI:
+        "ui"
+      elif className in CLASSES_EDITOR:
+        "editor"
+      elif className == "Node":
+        "node"
+      else:
+        "general"
+
   let className = match.captures.toTable()["class"].strip(chars = {'`'})
   if className in CACHE_GODOT_ICONS:
-    result = "<IconGodot name=\"" & className & "\"/> " & match.match
+    let group = getGodotIconGroup(className)
+    result =
+      fmt"""<IconGodot name="{className}" colorGroup="{group}">{match.match}</IconGodot>"""
   else:
-    # TODO: replace with warning log, and deduplicate warnings because the same class can be used multiple times
-    # echo(fmt"Couldn't find icon for `{className}`. Skipping...")
+    echo(fmt"Couldn't find icon for `{className}`. Skipping...")
     result = match.match
 
 proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): string =
