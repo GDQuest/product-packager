@@ -89,13 +89,32 @@ proc preprocessCodeListings(content: string): string =
 
   result = content.replace(regexMarkdownCodeBlock, replaceMarkdownCodeBlock)
 
+proc getGodotIconGroup(className: string): string =
+  ## Returns the group of the Godot icon for the given class name.
+  ## The group is used to color the icon in the same way as the Godot
+  ## documentation.
+  # TODO: complete the sets. Use compile time execution to build the editor category:
+  # we can assume it's all icons that don't match a class in the godot/doc/classes folder.
+  const CLASSES_ANIMATION = {"AnimationPlayer", "Tween", "AnimationTree"}
+  const CLASSES_UI = {"Control", "ProgressBar", "HBoxContainer", "VBoxContainer"}
+  const CLASSES_EDITOR = {"ToolMove", "ToolSelect", "ToolRotate", "ToolScale"}
+  result =
+    if className.endsWith("2D"): "2d"
+    elif className.endsWith("3D"): "3d"
+    elif className in CLASSES_ANIMATION: "animation"
+    elif className in CLASSES_UI: "ui"
+    elif className in CLASSES_EDITOR: "editor"
+    elif className == "Node": "node"
+    else: "general"
+
 ## Appends a react component for each Godot class name used in the markdown content, in inline code marks.
-## For example, it transforms `Node` to <IconGodot name="Node"/>.
+## For example, it transforms `Node` to <IconGodot name="Node" colorGroup="node">Node</IconGodot>.
 proc addGodotIcons(content: string): string =
   proc replaceGodotIcon(match: RegexMatch): string =
     let className = match.captures.toTable()["class"].strip(chars = {'`'})
     if className in CACHE_GODOT_ICONS:
-      result = "<IconGodot name=\"" & className & "\"/> " & match.match
+      let group = getGodotIconGroup(className)
+      result = "<IconGodot name=\"" & className & "\" colorGroup=\"" & group & "\">" & match.match & "</IconGodot>"
     else:
       info(fmt"Couldn't find icon for `{className}`. Skipping...")
       result = match.match
