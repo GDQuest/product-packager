@@ -37,101 +37,97 @@ type
     bracketDepth: int
     peekIndex: int
 
-proc peek(s: Scanner): char =
+proc getCurrentChar(s: Scanner): char {.inline.} =
   ## Returns the current character without advancing the scanner's current index
-  if s.current >= s.source.len:
-    return '\0'
   return s.source[s.current]
 
-proc advance(s: var Scanner): char =
-  ## Advances the scanner by one character and returns the character
-  ## Also, updates the current index, line, and column
+proc advance(s: var Scanner): char {.inline.} =
+  ## Reads and returns the current character, then advances the scanner by one
   result = s.source[s.current]
   s.current += 1
 
-proc peekAt(s: var Scanner, offset: int): char =
-  ## Peeks at a specific offset without advancing the scanner
+proc peekAt(s: var Scanner, offset: int): char {.inline.} =
+  ## Peeks at a specific offset and returns the character without advancing the scanner
   s.peekIndex = s.current + offset
   if s.peekIndex >= s.source.len:
     return '\0'
   return s.source[s.peekIndex]
 
-proc peekString(s: var Scanner, expected: string): bool =
+proc peekString(s: var Scanner, expected: string): bool {.inline.} =
   ## Peeks ahead to check if the expected string is present without advancing
-  for i in 0..<expected.len:
+  ## Returns true if the string is found, false otherwise
+  let length = expected.len
+  for i in 0..<length:
     if peekAt(s, i) != expected[i]:
       return false
+  s.peekIndex = s.current + length
   return true
 
-proc advanceToPeek(s: var Scanner) =
-  ## Advances the scanner to the stored peek index
+proc advanceToPeek(s: var Scanner) {.inline.} =
+  ## Advances the scanner to the stored getCurrentChar index
   s.current = s.peekIndex
 
-proc match(s: var Scanner, expected: char): bool =
+proc match(s: var Scanner, expected: char): bool {.inline.} =
   ## Returns true and advances the scanner if and only if the current character matches the expected character
   ## Otherwise, returns false
-  if s.peek() != expected:
+  if s.getCurrentChar() != expected:
     return false
   discard s.advance()
-  true
-
-proc matchString(s: var Scanner, expected: string): bool =
-  ## Returns true and advances the scanner if and only if the next characters match the expected string
-  if not peekString(s, expected):
-    return false
-
-  # If we found a match, advance the scanner by the length of the string
-  for c in expected:
-    discard s.advance()
   return true
 
-proc countIndentation(s: var Scanner): int =
+proc matchString(s: var Scanner, expected: string): bool {.inline.} =
+  ## Returns true and advances the scanner if and only if the next characters match the expected string
+  if s.peekString(expected):
+    s.advanceToPeek()
+    return true
+  return false
+
+proc countIndentation(s: var Scanner): int {.inline.} =
   ## Counts the number of spaces and tabs starting from the current position
   ## Call this function at the start of a line to count the indentation
   result = 0
   while true:
-    case s.peek()
+    case s.getCurrentChar()
     of '\t':
       result += 1
-      discard s.advance()
+      s.current += 1
     of ' ':
       var spaces = 0
-      while s.peek() == ' ':
+      while s.getCurrentChar() == ' ':
         spaces += 1
-        discard s.advance()
+        s.current += 1
       result += spaces div 4
       break
     else:
       break
   return result
 
-proc skipWhitespace(s: var Scanner) =
+proc skipWhitespace(s: var Scanner) {.inline.} =
   ## Peeks at the next characters and advances the scanner until a non-whitespace character is found
   while true:
-    let c = s.peek()
+    let c = s.getCurrentChar()
     case c:
     of ' ', '\r', '\t':
       discard s.advance()
     else:
       break
 
-proc isAtEnd(s: Scanner): bool =
-  # TODO: store length?
+proc isAtEnd(s: Scanner): bool {.inline.} =
   s.current >= s.source.len
 
-proc isAlphanumericOrUnderscore(c: char): bool =
+proc isAlphanumericOrUnderscore(c: char): bool {.inline.} =
   ## Returns true if the character is a letter, digit, or underscore
   let isLetter = (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_'
   let isDigit = c >= '0' and c <= '9'
   return isLetter or isDigit
 
-proc scanIdentifier(s: var Scanner): int =
+proc scanIdentifier(s: var Scanner): int {.inline.} =
   let start = s.current
-  while isAlphanumericOrUnderscore(s.peek()):
+  while isAlphanumericOrUnderscore(s.getCurrentChar()):
     discard s.advance()
   result = start
 
-proc scanToEndOfLine(s: var Scanner): tuple[start, `end`: int] =
+proc scanToEndOfLine(s: var Scanner): tuple[start, `end`: int] {.inline.} =
   let start = s.current
   let length = s.source.len
   var offset = 0
@@ -146,10 +142,10 @@ proc scanToEndOfLine(s: var Scanner): tuple[start, `end`: int] =
     discard s.advance()
   result = (start, s.current)
 
-proc scanToEndOfDefinition(s: var Scanner): tuple[defStart, defEnd: int] =
+proc scanToEndOfDefinition(s: var Scanner): tuple[defStart, defEnd: int] {.inline.} =
   let start = s.current
   while not s.isAtEnd():
-    let c = s.peek()
+    let c = s.getCurrentChar()
     case c
     of '(', '[', '{':
       s.bracketDepth += 1
@@ -157,7 +153,7 @@ proc scanToEndOfDefinition(s: var Scanner): tuple[defStart, defEnd: int] =
     of ')', ']', '}':
       s.bracketDepth -= 1
       discard s.advance()
-      if s.bracketDepth == 0 and s.peek() == '\n':
+      if s.bracketDepth == 0 and s.getCurrentChar() == '\n':
         discard s.advance()
         break
     of '\n':
@@ -168,12 +164,12 @@ proc scanToEndOfDefinition(s: var Scanner): tuple[defStart, defEnd: int] =
       discard s.advance()
   result = (start, s.current)
 
-proc isNewDefinition(s: var Scanner): bool =
+proc isNewDefinition(s: var Scanner): bool {.inline.} =
   ## Returns true if there's a new definition ahead, regardless of its indent level
   ## or type
   let savedPos = s.current
   s.skipWhitespace()
-  let firstChar = s.peek()
+  let firstChar = s.getCurrentChar()
   # TODO: consider writing a proc to check for reserved keywords quickly instead of checking for the letter then keyword.
   result = (firstChar == 'f' and s.peekString("func")) or
             (firstChar == 'v' and s.peekString("var")) or
@@ -202,7 +198,7 @@ proc scanToken(s: var Scanner): Token =
   s.skipWhitespace()
 
   let startPos = s.current
-  let c = s.peek()
+  let c = s.getCurrentChar()
   case c
   # Function definition
   of 'f':
@@ -215,7 +211,7 @@ proc scanToken(s: var Scanner): Token =
       let nameStart = s.scanIdentifier()
       token.name = s.source[nameStart..<s.current]
 
-      while s.peek() != ':':
+      while s.getCurrentChar() != ':':
         discard s.advance()
       discard s.scanToEndOfLine()
 
@@ -298,10 +294,10 @@ proc scanToken(s: var Scanner): Token =
 
       # Handle signal arguments if present
       s.skipWhitespace()
-      if s.peek() == '(':
+      if s.getCurrentChar() == '(':
         var bracketCount = 0
         while not s.isAtEnd():
-          let c = s.peek()
+          let c = s.getCurrentChar()
           case c
           of '(':
             bracketCount += 1
