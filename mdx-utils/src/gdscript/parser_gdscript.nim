@@ -34,6 +34,37 @@ type
     bracketDepth: int
     peekIndex: int
 
+proc getCode(token: Token, source: string): string {.inline.} =
+  return source[token.range.start ..< token.range.end]
+
+proc getName(token: Token, source: string): string {.inline.} =
+  return source[token.nameStart ..< token.nameEnd]
+
+proc getDefinition(token: Token, source: string): string {.inline.} =
+  return source[token.range.definitionStart ..< token.range.definitionEnd]
+
+proc getBody(token: Token, source: string): string {.inline.} =
+  return source[token.range.bodyStart ..< token.range.bodyEnd]
+
+proc printToken(token: Token, source: string, indent: int = 0) =
+  let indentStr = "  ".repeat(indent)
+  echo indentStr, "Token: ", $token.tokenType
+  echo indentStr, "  Name: ", getName(token, source)
+  echo indentStr, "  Range:"
+  echo indentStr, "    Start: ", token.range.start
+  echo indentStr, "    End: ", token.range.end
+
+  if token.children.len > 0:
+    echo indentStr, "  Children:"
+    for child in token.children:
+      printToken(child, source, indent + 2)
+
+proc printTokens(tokens: seq[Token], source: string) =
+  echo "Parsed Tokens:"
+  for token in tokens:
+    printToken(token, source)
+    echo ""
+
 proc getCurrentChar(s: Scanner): char {.inline.} =
   ## Returns the current character without advancing the scanner's current index
   return s.source[s.current]
@@ -166,7 +197,6 @@ proc isNewDefinition(s: var Scanner): bool {.inline.} =
   ## or type
   let savedPos = s.current
   s.skipWhitespace()
-  let firstChar = s.getCurrentChar()
   result = s.peekString("func") or
            s.peekString("var") or
            s.peekString("const") or
@@ -336,7 +366,7 @@ proc parseClass(s: var Scanner, classToken: var Token) =
     if childToken.tokenType != TokenType.Invalid:
       classToken.children.add(childToken)
 
-proc parseGDScript*(source: string): seq[Token] =
+proc parseGDScript(source: string): seq[Token] =
   var scanner =  Scanner(
     source: source,
     current: 0,
@@ -356,30 +386,65 @@ proc parseGDScript*(source: string): seq[Token] =
       token.range.end = scanner.current
     result.add(token)
 
-proc getName(token: Token, source: string): string {.inline.} =
-  return source[token.nameStart ..< token.nameEnd]
+type GDScriptFile = object
+  filePath: string
+  source: string
+  symbols: Table[string, Token]
 
-proc getBody(token: Token, source: string): string {.inline.} =
-  return source[token.range.bodyStart ..< token.range.bodyEnd]
+# Caches parsed GDScript files
+var gdscriptFiles = initTable[string, GDScriptFile]()
 
-proc printToken(token: Token, source: string, indent: int = 0) =
-  let indentStr = "  ".repeat(indent)
-  echo indentStr, "Token: ", $token.tokenType
-  echo indentStr, "  Name: ", getName(token, source)
-  echo indentStr, "  Range:"
-  echo indentStr, "    Start: ", token.range.start
-  echo indentStr, "    End: ", token.range.end
-
-  if token.children.len > 0:
-    echo indentStr, "  Children:"
-    for child in token.children:
-      printToken(child, source, indent + 2)
-
-proc printTokens*(tokens: seq[Token], source: string) =
-  echo "Parsed Tokens:"
+proc parseGDScriptFile(path: string) =
+  # Parses a GDScript file and caches it
+  let source = readFile(path)
+  let tokens = parseGDScript(source)
+  var symbols = initTable[string, Token]()
   for token in tokens:
-    printToken(token, source)
-    echo ""
+    let name = token.getName(source)
+    symbols[name] = token
+
+  gdscriptFiles[path] = GDScriptFile(
+    filePath: path,
+    source: source,
+    symbols: symbols
+  )
+
+proc getTokenFromCache(symbolName: string, filePath: string): Token =
+  # Gets a token from the cache given a symbol name and the path to the GDScript file
+  if not gdscriptFiles.hasKey(filePath):
+    parseGDScriptFile(filePath)
+
+  let file = gdscriptFiles[filePath]
+  if not file.symbols.hasKey(symbolName):
+    raise newException(ValueError, "Symbol not found: '" & symbolName & "' in file: '" & filePath & "'")
+
+  return file.symbols[symbolName]
+
+proc getGDScriptCodeFromCache(filePath: string): var string =
+  # Gets the code of a GDScript file from the cache given its path
+  if not gdscriptFiles.hasKey(filePath):
+    parseGDScriptFile(filePath)
+  return gdscriptFiles[filePath].source
+
+proc getSymbolText(symbolName: string, path: string): string =
+  # Gets the text of a symbol given its name and the path to the file
+  let token = getTokenFromCache(symbolName, path)
+  let file = gdscriptFiles[path]
+  return token.getCode(file.source)
+
+proc getSymbolDefinition(symbolName: string, path: string): string =
+  # Gets the definition of a symbol given its name and the path to the file
+  let token = getTokenFromCache(symbolName, path)
+  let file = gdscriptFiles[path]
+  return token.getDefinition(file.source)
+
+proc getSymbolBody(symbolName: string, path: string): string =
+  # Gets the body of a symbol given its name and the path to the file: it excludes the definition
+  let token = getTokenFromCache(symbolName, path)
+  if token.tokenType notin [TokenType.Class, TokenType.Function]:
+    raise newException(ValueError, "Symbol '" & symbolName & "' is not a class or function in file: '" & path & "'. Cannot get body: only functions and classes have a body.")
+  let file = gdscriptFiles[path]
+  return token.getBody(file.source)
 
 proc runPerformanceTest() =
   let codeTest = """
