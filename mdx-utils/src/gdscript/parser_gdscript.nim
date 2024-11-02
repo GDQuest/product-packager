@@ -14,23 +14,20 @@ type
     Class
     Enum
 
-  Position = object
-    index, line, column: int
-
   TokenRange = object
+    # Start and end character positions of the entire token (definition + body if applicable) in the source code
     start, `end`: int
     definitionStart, definitionEnd: int
     bodyStart, bodyEnd: int
 
   Token = object
     tokenType: TokenType
-    name: string
+    nameStart, nameEnd: int
     range: TokenRange
     children: seq[Token]
-    source: string
 
   Scanner = object
-    # TODO: store source globally? So that we don't have to pass it around and any code can retrieve text from tokens
+    # TODO: Cache the source elsewhere for reading the content of tokens after parsing.
     source: string
     current: int
     indentLevel: int
@@ -121,11 +118,11 @@ proc isAlphanumericOrUnderscore(c: char): bool {.inline.} =
   let isDigit = c >= '0' and c <= '9'
   return isLetter or isDigit
 
-proc scanIdentifier(s: var Scanner): int {.inline.} =
+proc scanIdentifier(s: var Scanner): tuple[start: int, `end`: int] {.inline.} =
   let start = s.current
   while isAlphanumericOrUnderscore(s.getCurrentChar()):
     discard s.advance()
-  result = start
+  result = (start, s.current)
 
 proc scanToEndOfLine(s: var Scanner): tuple[start, `end`: int] {.inline.} =
   let start = s.current
@@ -170,12 +167,12 @@ proc isNewDefinition(s: var Scanner): bool {.inline.} =
   let savedPos = s.current
   s.skipWhitespace()
   let firstChar = s.getCurrentChar()
-  # TODO: consider writing a proc to check for reserved keywords quickly instead of checking for the letter then keyword.
-  result = (firstChar == 'f' and s.peekString("func")) or
-            (firstChar == 'v' and s.peekString("var")) or
-            (firstChar == 'c' and (s.peekString("const") or s.peekString("class"))) or
-            (firstChar == 's' and s.peekString("signal")) or
-            (firstChar == 'e' and s.peekString("enum"))
+  result = s.peekString("func") or
+           s.peekString("var") or
+           s.peekString("const") or
+           s.peekString("class") or
+           s.peekString("signal") or
+           s.peekString("enum")
   s.current = savedPos
   return result
 
@@ -208,8 +205,9 @@ proc scanToken(s: var Scanner): Token =
       token.range.definitionStart = startPos
 
       s.skipWhitespace()
-      let nameStart = s.scanIdentifier()
-      token.name = s.source[nameStart..<s.current]
+      let (nameStart, nameEnd) = s.scanIdentifier()
+      token.nameStart = nameStart
+      token.nameEnd = nameEnd
 
       while s.getCurrentChar() != ':':
         discard s.advance()
@@ -230,7 +228,6 @@ proc scanToken(s: var Scanner): Token =
     while c2 != '\n' and c2 != 'v':
       offset += 1
       c2 = s.peekAt(offset)
-
     if c2 == '\n':
       # This is an annotation on a single line, we skip this for now.
       s.advanceToPeek()
@@ -244,8 +241,10 @@ proc scanToken(s: var Scanner): Token =
         token.range.definitionStart = startPos
 
         s.skipWhitespace()
-        let nameStart = s.scanIdentifier()
-        token.name = s.source[nameStart..<s.current]
+
+        let (nameStart, nameEnd) = s.scanIdentifier()
+        token.nameStart = nameStart
+        token.nameEnd = nameEnd
 
         discard s.scanToEndOfDefinition()
         token.range.end = s.current
@@ -274,8 +273,10 @@ proc scanToken(s: var Scanner): Token =
     token.range.definitionStart = startPos
 
     s.skipWhitespace()
-    let nameStart = s.scanIdentifier()
-    token.name = s.source[nameStart..<s.current]
+
+    let (nameStart, nameEnd) = s.scanIdentifier()
+    token.nameStart = nameStart
+    token.nameEnd = nameEnd
 
     discard s.scanToEndOfDefinition()
     token.range.end = s.current
@@ -289,8 +290,10 @@ proc scanToken(s: var Scanner): Token =
       token.range.definitionStart = startPos
 
       s.skipWhitespace()
-      let nameStart = s.scanIdentifier()
-      token.name = s.source[nameStart..<s.current]
+
+      let (nameStart, nameEnd) = s.scanIdentifier()
+      token.nameStart = nameStart
+      token.nameEnd = nameEnd
 
       # Handle signal arguments if present
       s.skipWhitespace()
@@ -353,10 +356,16 @@ proc parseGDScript*(source: string): seq[Token] =
       token.range.end = scanner.current
     result.add(token)
 
-proc printToken(token: Token, indent: int = 0) =
+proc getName(token: Token, source: string): string {.inline.} =
+  return source[token.nameStart ..< token.nameEnd]
+
+proc getBody(token: Token, source: string): string {.inline.} =
+  return source[token.range.bodyStart ..< token.range.bodyEnd]
+
+proc printToken(token: Token, source: string, indent: int = 0) =
   let indentStr = "  ".repeat(indent)
   echo indentStr, "Token: ", $token.tokenType
-  echo indentStr, "  Name: ", token.name
+  echo indentStr, "  Name: ", getName(token, source)
   echo indentStr, "  Range:"
   echo indentStr, "    Start: ", token.range.start
   echo indentStr, "    End: ", token.range.end
@@ -364,12 +373,12 @@ proc printToken(token: Token, indent: int = 0) =
   if token.children.len > 0:
     echo indentStr, "  Children:"
     for child in token.children:
-      printToken(child, indent + 2)
+      printToken(child, source, indent + 2)
 
-proc printTokens*(tokens: seq[Token]) =
+proc printTokens*(tokens: seq[Token], source: string) =
   echo "Parsed Tokens:"
   for token in tokens:
-    printToken(token)
+    printToken(token, source)
     echo ""
 
 proc runPerformanceTest() =
@@ -411,9 +420,9 @@ proc runUnitTests() =
       if tokens.len == 2:
         check:
           tokens[0].tokenType == TokenType.Signal
-          tokens[0].name == "health_depleted"
+          tokens[0].getName(code) == "health_depleted"
           tokens[1].tokenType == TokenType.Signal
-          tokens[1].name == "health_changed"
+          tokens[1].getName(code) == "health_changed"
 
     test "Parse enums":
       let code =
@@ -430,9 +439,9 @@ proc runUnitTests() =
       if tokens.len == 2:
         check:
           tokens[0].tokenType == TokenType.Enum
-          tokens[0].name == "Direction"
+          tokens[0].getName(code) == "Direction"
           tokens[1].tokenType == TokenType.Enum
-          tokens[1].name == "Events"
+          tokens[1].getName(code) == "Events"
 
     test "Parse variables":
       let code =
@@ -448,13 +457,13 @@ var health := max_health
       if tokens.len == 4:
         check:
           tokens[0].tokenType == TokenType.Variable
-          tokens[0].name == "skin"
+          tokens[0].getName(code) == "skin"
           tokens[1].tokenType == TokenType.Variable
-          tokens[1].name == "power"
+          tokens[1].getName(code) == "power"
           tokens[2].tokenType == TokenType.Variable
-          tokens[2].name == "dynamic_uninitialized"
+          tokens[2].getName(code) == "dynamic_uninitialized"
           tokens[3].tokenType == TokenType.Variable
-          tokens[3].name == "health"
+          tokens[3].getName(code) == "health"
 
     test "Parse constants":
       let code = "const MAX_HEALTH = 100"
@@ -464,7 +473,7 @@ var health := max_health
       if tokens.len == 1:
         check:
           tokens[0].tokenType == TokenType.Constant
-          tokens[0].name == "MAX_HEALTH"
+          tokens[0].getName(code) == "MAX_HEALTH"
 
     test "Parse functions":
       let code = """
@@ -483,9 +492,9 @@ func deactivate() -> void:
       if tokens.len == 2:
         check:
           tokens[0].tokenType == TokenType.Function
-          tokens[0].name == "_ready"
+          tokens[0].getName(code) == "_ready"
           tokens[1].tokenType == TokenType.Function
-          tokens[1].name == "deactivate"
+          tokens[1].getName(code) == "deactivate"
 
     test "Parse inner class":
       let code = """
@@ -506,7 +515,7 @@ class StateMachine extends Node:
         let classToken = tokens[0]
         check:
           classToken.tokenType == TokenType.Class
-          classToken.name == "StateMachine"
+          classToken.getName(code) == "StateMachine"
           classToken.children.len == 4
           classToken.children[0].tokenType == TokenType.Variable
           classToken.children[1].tokenType == TokenType.Variable
