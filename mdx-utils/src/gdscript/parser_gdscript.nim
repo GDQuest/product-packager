@@ -370,7 +370,7 @@ proc printTokens*(tokens: seq[Token]) =
   echo "Parsed Tokens:"
   for token in tokens:
     printToken(token)
-    echo "" # Add a blank line between top-level tokens
+    echo ""
 
 proc runPerformanceTest() =
   let codeTest = """
