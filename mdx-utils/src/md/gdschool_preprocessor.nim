@@ -2,7 +2,7 @@
 ## It find and replaces include shortcodes in code blocks and adds Godot icons
 ## for built-in class names in inline code marks.
 ## Also, produces a css file with the list of all Godot icons used in the content.
-import std/[nre, strformat, strutils, tables, options, os, terminal, logging]
+import std/[nre, strformat, strutils, tables, options, os, terminal, logging, sets]
 import assets
 import utils
 import ../types
@@ -89,22 +89,31 @@ proc preprocessCodeListings(content: string): string =
 
   result = content.replace(regexMarkdownCodeBlock, replaceMarkdownCodeBlock)
 
-proc getGodotIconGroup(className: string): string =
+proc getGodotIconGroup(iconName: string): string =
   ## Returns the group of the Godot icon for the given class name.
   ## The group is used to color the icon in the same way as the Godot
   ## documentation.
-  # TODO: complete the sets. Use compile time execution to build the editor category:
-  # we can assume it's all icons that don't match a class in the godot/doc/classes folder.
-  const CLASSES_ANIMATION = {"AnimationPlayer", "Tween", "AnimationTree"}
-  const CLASSES_UI = {"Control", "ProgressBar", "HBoxContainer", "VBoxContainer"}
-  const CLASSES_EDITOR = {"ToolMove", "ToolSelect", "ToolRotate", "ToolScale"}
+  const ICON_NAMES_UI = static:
+    toHashSet([
+      "Control", "Container", "AspectRatioContainer", "BoxContainer", "CenterContainer",
+      "HBoxContainer", "VBoxContainer", "ColorPicker",
+      "FlowContainer", "HFlowContainer", "VFlowContainer",
+      "GraphElement", "GraphFrame", "GraphNode",
+      "GridContainer", "SplitContainer", "HSplitContainer", "VSplitContainer",
+      "MarginContainer", "PanelContainer", "ScrollContainer", "SubViewportContainer", "TabContainer",
+      "Button", "LinkButton", "TextureButton", "TextEdit", "CodeEdit", "ColorRect", "GraphEdit",
+      "HScrollBar", "VScrollBar", "HSlider", "VSlider", "ProgressBar", "SpinBox", "TextureProgressBar",
+      "HSeparator", "VSeparator", "ItemList", "Label", "LineEdit", "MenuBar",
+      "NinePatchRect", "Panel", "ReferenceRect", "RichTextLabel", "TabBar", "TextureRect",
+      "Tree", "VideoStreamPlayer",
+    ])
   result =
-    if className.endsWith("2D"): "2d"
-    elif className.endsWith("3D"): "3d"
-    elif className in CLASSES_ANIMATION: "animation"
-    elif className in CLASSES_UI: "ui"
-    elif className in CLASSES_EDITOR: "editor"
-    elif className == "Node": "node"
+    if iconName.endsWith("2D"): "2d"
+    elif iconName.endsWith("3D"): "3d"
+    elif iconName.startsWith("Animation") or iconName == "Tween": "animation"
+    elif iconName in ICON_NAMES_UI: "ui"
+    elif iconName in CACHE_EDITOR_ICONS: "editor"
+    elif iconName == "Node": "node"
     else: "general"
 
 ## Appends a react component for each Godot class name used in the markdown content, in inline code marks.
