@@ -18,9 +18,9 @@ type
     index, line, column: int
 
   TokenRange = object
-    start, `end`: Position
-    definitionStart, definitionEnd: Position
-    bodyStart, bodyEnd: Position
+    start, `end`: int
+    definitionStart, definitionEnd: int
+    bodyStart, bodyEnd: int
 
   Token = object
     tokenType: TokenType
@@ -32,33 +32,26 @@ type
   Scanner = object
     # TODO: store source globally? So that we don't have to pass it around and any code can retrieve text from tokens
     source: string
-    current: Position
-    start: Position
+    current: int
     indentLevel: int
     bracketDepth: int
     peekIndex: int
 
 proc peek(s: Scanner): char =
   ## Returns the current character without advancing the scanner's current index
-  if s.current.index >= s.source.len:
+  if s.current >= s.source.len:
     return '\0'
-  return s.source[s.current.index]
+  return s.source[s.current]
 
-proc advance(s: var Scanner): char =
+proc advance(s: var Scanner): char {.inline.} =
   ## Advances the scanner by one character and returns the character
   ## Also, updates the current index, line, and column
-  result = s.peek()
-  if result != '\0':
-    s.current.index += 1
-    if result == '\n':
-      s.current.line += 1
-      s.current.column = 1
-    else:
-      s.current.column += 1
+  result = s.source[s.current]
+  s.current += 1
 
-proc peekAt(s: var Scanner, offset: int): char =
+proc peekAt(s: var Scanner, offset: int): char {.inline.} =
   ## Peeks at a specific offset without advancing the scanner
-  s.peekIndex = s.current.index + offset
+  s.peekIndex = s.current + offset
   if s.peekIndex >= s.source.len:
     return '\0'
   return s.source[s.peekIndex]
@@ -70,10 +63,9 @@ proc peekString(s: var Scanner, expected: string): bool =
       return false
   return true
 
-proc advanceToPeek(s: var Scanner) =
+proc advanceToPeek(s: var Scanner) {.inline.} =
   ## Advances the scanner to the stored peek index
-  while s.current.index < s.peekIndex:
-    discard s.advance()
+  s.current = s.peekIndex
 
 proc match(s: var Scanner, expected: char): bool =
   ## Returns true and advances the scanner if and only if the current character matches the expected character
@@ -123,39 +115,39 @@ proc skipWhitespace(s: var Scanner) =
     else:
       break
 
-proc isAtEnd(s: Scanner): bool =
+proc isAtEnd(s: Scanner): bool {.inline.} =
   # TODO: store length?
-  s.current.index >= s.source.len
+  s.current >= s.source.len
 
-proc isAlphanumericOrUnderscore(c: char): bool =
+proc isAlphanumericOrUnderscore(c: char): bool {.inline.} =
   ## Returns true if the character is a letter, digit, or underscore
   let isLetter = (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_'
   let isDigit = c >= '0' and c <= '9'
   return isLetter or isDigit
 
 proc scanIdentifier(s: var Scanner): int =
-  let start = s.current.index
+  let start = s.current
   while isAlphanumericOrUnderscore(s.peek()):
     discard s.advance()
   result = start
 
 proc scanToEndOfLine(s: var Scanner): tuple[start, `end`: int] =
-  let start = s.current.index
+  let start = s.current
   let length = s.source.len
   var offset = 0
-  var c = s.source[s.current.index]
+  var c = s.source[s.current]
   while c != '\n':
     offset += 1
-    if s.current.index + offset >= length:
+    if s.current + offset >= length:
       break
-    c = s.source[s.current.index + offset]
-  s.current.index += offset
-  if s.current.index < length:
+    c = s.source[s.current + offset]
+  s.current += offset
+  if s.current < length:
     discard s.advance()
-  result = (start, s.current.index)
+  result = (start, s.current)
 
 proc scanToEndOfDefinition(s: var Scanner): tuple[defStart, defEnd: int] =
-  let start = s.current.index
+  let start = s.current
   while not s.isAtEnd():
     let c = s.peek()
     case c
@@ -174,7 +166,7 @@ proc scanToEndOfDefinition(s: var Scanner): tuple[defStart, defEnd: int] =
         break
     else:
       discard s.advance()
-  result = (start, s.current.index)
+  result = (start, s.current)
 
 proc isNewDefinition(s: var Scanner): bool =
   ## Returns true if there's a new definition ahead, regardless of its indent level
@@ -192,18 +184,17 @@ proc isNewDefinition(s: var Scanner): bool =
   return result
 
 proc scanBody(s: var Scanner, startIndent: int): tuple[bodyStart, bodyEnd: int] =
-  let start = s.current.index
+  let start = s.current
   while not s.isAtEnd():
     let currentIndent = s.countIndentation()
     if currentIndent <= startIndent and not s.isAtEnd():
       if isNewDefinition(s):
         break
 
-    let lineRange = scanToEndOfLine(s)
-  result = (start, s.current.index)
+    discard scanToEndOfLine(s)
+  result = (start, s.current)
 
 proc scanToken(s: var Scanner): Token =
-  s.start = s.current
   if s.isAtEnd():
     return Token(tokenType: TokenType.Invalid)
 
@@ -222,11 +213,11 @@ proc scanToken(s: var Scanner): Token =
 
       s.skipWhitespace()
       let nameStart = s.scanIdentifier()
-      token.name = s.source[nameStart..<s.current.index]
+      token.name = s.source[nameStart..<s.current]
 
       while s.peek() != ':':
         discard s.advance()
-      let lineRange = s.scanToEndOfLine()
+      discard s.scanToEndOfLine()
 
       token.range.definitionEnd = s.current
       token.range.bodyStart = s.current
@@ -258,7 +249,7 @@ proc scanToken(s: var Scanner): Token =
 
         s.skipWhitespace()
         let nameStart = s.scanIdentifier()
-        token.name = s.source[nameStart..<s.current.index]
+        token.name = s.source[nameStart..<s.current]
 
         discard s.scanToEndOfDefinition()
         token.range.end = s.current
@@ -288,7 +279,7 @@ proc scanToken(s: var Scanner): Token =
 
     s.skipWhitespace()
     let nameStart = s.scanIdentifier()
-    token.name = s.source[nameStart..<s.current.index]
+    token.name = s.source[nameStart..<s.current]
 
     discard s.scanToEndOfDefinition()
     token.range.end = s.current
@@ -303,7 +294,7 @@ proc scanToken(s: var Scanner): Token =
 
       s.skipWhitespace()
       let nameStart = s.scanIdentifier()
-      token.name = s.source[nameStart..<s.current.index]
+      token.name = s.source[nameStart..<s.current]
 
       # Handle signal arguments if present
       s.skipWhitespace()
@@ -349,8 +340,7 @@ proc parseClass(s: var Scanner, classToken: var Token) =
 proc parseGDScript*(source: string): seq[Token] =
   var scanner =  Scanner(
     source: source,
-    current: Position(index: 0, line: 1, column: 1),
-    start: Position(index: 0, line: 1, column: 1),
+    current: 0,
     indentLevel: 0,
     bracketDepth: 0,
     peekIndex: 0
@@ -372,8 +362,8 @@ proc printToken(token: Token, indent: int = 0) =
   echo indentStr, "Token: ", $token.tokenType
   echo indentStr, "  Name: ", token.name
   echo indentStr, "  Range:"
-  echo indentStr, "    Start: (line: ", token.range.start.line, ", col: ", token.range.start.column, ")"
-  echo indentStr, "    End: (line: ", token.range.end.line, ", col: ", token.range.end.column, ")"
+  echo indentStr, "    Start: ", token.range.start
+  echo indentStr, "    End: ", token.range.end
 
   if token.children.len > 0:
     echo indentStr, "  Children:"
@@ -389,14 +379,14 @@ proc printTokens*(tokens: seq[Token]) =
 proc runPerformanceTest() =
   let codeTest = """
 class StateMachine extends Node:
-var transitions := {}: set = set_transitions
-var current_state: State
-var is_debugging := false: set = set_is_debugging
+    var transitions := {}: set = set_transitions
+    var current_state: State
+    var is_debugging := false: set = set_is_debugging
 
-func _init() -> void:
-set_physics_process(false)
-var blackboard := Blackboard.new()
-Blackboard.player_died.connect(trigger_event.bind(Events.PLAYER_DIED))
+    func _init() -> void:
+        set_physics_process(false)
+        var blackboard := Blackboard.new()
+        Blackboard.player_died.connect(trigger_event.bind(Events.PLAYER_DIED))
 """
 
   echo "Running performance test..."
@@ -500,9 +490,6 @@ func deactivate() -> void:
           tokens[0].name == "_ready"
           tokens[1].tokenType == TokenType.Function
           tokens[1].name == "deactivate"
-          # Instead of checking lines count, verify the ranges
-          tokens[1].range.bodyStart.line < tokens[1].range.bodyEnd.line
-          tokens[1].range.bodyEnd.line - tokens[1].range.bodyStart.line >= 4
 
     test "Parse inner class":
       let code = """
@@ -552,3 +539,4 @@ class Test extends Node:
 
 when isMainModule:
   runUnitTests()
+  runPerformanceTest()
