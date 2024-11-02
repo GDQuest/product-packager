@@ -43,13 +43,13 @@ proc peek(s: Scanner): char =
     return '\0'
   return s.source[s.current]
 
-proc advance(s: var Scanner): char {.inline.} =
+proc advance(s: var Scanner): char =
   ## Advances the scanner by one character and returns the character
   ## Also, updates the current index, line, and column
   result = s.source[s.current]
   s.current += 1
 
-proc peekAt(s: var Scanner, offset: int): char {.inline.} =
+proc peekAt(s: var Scanner, offset: int): char =
   ## Peeks at a specific offset without advancing the scanner
   s.peekIndex = s.current + offset
   if s.peekIndex >= s.source.len:
@@ -63,7 +63,7 @@ proc peekString(s: var Scanner, expected: string): bool =
       return false
   return true
 
-proc advanceToPeek(s: var Scanner) {.inline.} =
+proc advanceToPeek(s: var Scanner) =
   ## Advances the scanner to the stored peek index
   s.current = s.peekIndex
 
@@ -115,11 +115,11 @@ proc skipWhitespace(s: var Scanner) =
     else:
       break
 
-proc isAtEnd(s: Scanner): bool {.inline.} =
+proc isAtEnd(s: Scanner): bool =
   # TODO: store length?
   s.current >= s.source.len
 
-proc isAlphanumericOrUnderscore(c: char): bool {.inline.} =
+proc isAlphanumericOrUnderscore(c: char): bool =
   ## Returns true if the character is a letter, digit, or underscore
   let isLetter = (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_'
   let isDigit = c >= '0' and c <= '9'
@@ -539,4 +539,4 @@ class Test extends Node:
 
 when isMainModule:
   runUnitTests()
-  runPerformanceTest()
+  #runPerformanceTest()
