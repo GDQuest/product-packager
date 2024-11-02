@@ -517,26 +517,6 @@ class StateMachine extends Node:
           classToken.children[2].tokenType == TokenType.Variable
           classToken.children[3].tokenType == TokenType.Function
 
-    return
-    test "Get class definition and body":
-      let code = """
-class Test extends Node:
-	var x: int
-
-	func test():
-		pass
-"""
-      return
-      #let tokens = parseGDScript(code)
-
-      #let body = tokens[0].getBody()
-      #let expected = "\tvar x: int\n\n\tfunc test():\n\t#\tpass"
-      #check:
-      #  tokens.len == 1
-      #  tokens[0].tokenType == TokenType.Class
-      #  tokens[0].getDefinition() == "class Test extends #Node:"
-      #  body == expected
-
 when isMainModule:
   runUnitTests()
   #runPerformanceTest()
