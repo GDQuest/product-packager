@@ -7,7 +7,7 @@
 # - Track line and column numbers for better error messages
 # - Add support for nested components
 type
-  BlockType = enum
+  BlockType* = enum
     Heading
     Paragraph
     CodeBlock
@@ -17,10 +17,10 @@ type
     SelfClosingMdxComponent
     MdxComponent
 
-  Range = object
+  Range* = object
     start, `end`: int
 
-  BlockToken = ref object
+  BlockToken* = ref object
     type: BlockType
     # Index range for the entire string corresponding to the token
     range: Range
@@ -35,7 +35,6 @@ type
         # This allows us to distinguish the opening tag and body for further parsing
         openingTagRange: Range
         bodyRange: Range
-
 
   Scanner* = ref object
     source: string
@@ -136,106 +135,83 @@ proc scanToEndOfLine(s: Scanner): tuple[start, `end`: int] {.inline.} =
     discard s.advance()
   result = (start, s.current)
 
-# BLOCK-LEVEL PARSING
-proc parseMdxDocumentBlocks(s: Scanner): seq[BlockToken] =
-  # Performs block-level parsing of the document. Returns a sequence of tokens that provide an outline of the document.
-  # These block tokens can then be fed to leaf parsing functions for further processing.
-  var tokens: seq[Token]
-  while not s.isAtEnd():
-    let token = parseBlockToken(s)
-    tokens.add(token)
-  return tokens
 
-proc parseBlockToken(s: Scanner): BlockToken =
-  # Parses and returns one block-level token.
-  # TODO: block-level tokens start from a newline?
+proc blockParseMdxBlock*(s: Scanner): BlockToken =
+  # TODO: this is currently assumes that the block is formed properly, but this needs to handle errors
+  # TODO: test <></> syntax
+  # TODO: use s's peek offset prop?
+  # TODO: consider case of parsing mdx with line returns within a markdown paragraph. E.g.
+  # Bla bla <Component>
+  #
+  # ...
+  #
+  # </Component>
+  # This is not supported by the MDX package.
   let start = s.current
+  var offset = 1
+  while s.peekAt(offset) == ' ':
+    offset += 1
+
+  # Get component name
+  var name: Range
+  name.start = s.current + offset
+  while isAlphanumericOrUnderscore(s.peekAt(offset)):
+    offset += 1
+  name.end = s.current + offset
+
+  # Look for end of opening tag or self-closing mark
+  var isSelfClosing = false
   while not s.isAtEnd():
-    let c = s.getCurrentChar()
-    case c
-    of '`':
-      if s.peekString("```"):
-        return parseCodeBlock(s)
-
-    # Potential start of an mdx component
-    of '<':
-      # TODO: test <></> syntax
-      # TODO: use s's peek offset prop?
-      # TODO: consider case of parsing mdx with line returns within a markdown paragraph. E.g.
-      # Bla bla <Component>
-      #
-      # ...
-      #
-      # </Component>
-      # This is not supported by the MDX package.
-      let start = s.current
-      var offset = 1
-      while s.peekAt(offset) == ' ':
+    case s.peekAt(offset):
+      of '>':
         offset += 1
-
-      # Get component name
-      var name: Range
-      name.start = s.current + offset
-      while isAlphanumericOrUnderscore(s.peekAt(offset)):
-        offset += 1
-      name.end = s.current + offset
-
-      # Look for end of opening tag or self-closing mark
-      var isSelfClosing = false
-      while not s.isAtEnd():
-        case s.peekAt(offset):
-          of '>':
-            offset += 1
-            break
-          of '/':
-            if s.peekAt(offset + 1) == '>':
-              isSelfClosing = true
-              offset += 2
-              break
-          else:
-            offset += 1
-
-      let openingTagEnd = s.current + offset
-      var bodyEnd = openingTagEnd
-      # Find matching closing tag
-      if not isSelfClosing:
-        let componentName = s.source[nameStart..<nameEnd]
-        while not s.isAtEnd():
-          if s.peekString("</"):
-            bodyEnd = s.current
-            # TODO: use s.peekIndex throughout code, removing need for this and offset var
-            offset += 2
-            while s.peekAt(offset) == ' ':
-              offset += 1
-            if s.peekString(componentName):
-              offset += componentName.len
-              if s.peekAt(offset) == '>':
-                offset += 1
-                break
-            offset = s.peekIndex - s.current
-            break
-          offset += 1
-
-      s.current += offset
-      if isSelfClosing:
-        return BlockToken(
-          kind: SelfClosingMdxComponent,
-          start: start, end: s.current,
-          name: name,
-        )
+        break
+      of '/':
+        if s.peekAt(offset + 1) == '>':
+          isSelfClosing = true
+          offset += 2
+          break
       else:
-        return BlockToken(
-          kind: MdxComponent,
-          start: start, end: s.current,
-          name: name,
-          openingTagRange: Range(start: start, `end`: openingTagEnd),
-          bodyRange: Range(start: openingTagEnd + 1, `end`: bodyEnd),
-        )
+        offset += 1
 
-    else:
-      discard s.advance()
+  let openingTagEnd = s.current + offset
+  var bodyEnd = openingTagEnd
+  # Find matching closing tag
+  if not isSelfClosing:
+    let componentName = s.source[nameStart..<nameEnd]
+    while not s.isAtEnd():
+      if s.peekString("</"):
+        bodyEnd = s.current
+        # TODO: use s.peekIndex throughout code, removing need for this and offset var
+        offset += 2
+        while s.peekAt(offset) == ' ':
+          offset += 1
+        if s.peekString(componentName):
+          offset += componentName.len
+          if s.peekAt(offset) == '>':
+            offset += 1
+            break
+        offset = s.peekIndex - s.current
+        break
+      offset += 1
 
-proc parseCodeBlock(s: Scanner): Token =
+  s.current += offset
+  if isSelfClosing:
+    return BlockToken(
+      kind: SelfClosingMdxComponent,
+      start: start, end: s.current,
+      name: name,
+    )
+  else:
+    return BlockToken(
+      kind: MdxComponent,
+      start: start, end: s.current,
+      name: name,
+      openingTagRange: Range(start: start, `end`: openingTagEnd),
+      bodyRange: Range(start: openingTagEnd + 1, `end`: bodyEnd),
+    )
+
+proc blockParseCodeBlock(s: Scanner): BlockToken =
   # The parsing starts at the first of the top three backticks
   let start = s.current
   s.advanceToPeek()
@@ -245,13 +221,32 @@ proc parseCodeBlock(s: Scanner): Token =
     if s.matchString("```"):
       bodyEnd = s.current - 3
       break
-    discard s.advance()
+    s.current += 1
 
   let end = s.current
   let languageStart = start + 3
   let languageEnd = s.current - 3
-  return Token(
+  return BlockToken(
     tokenType: CodeBlock,
     range: Range(start: start, `end`: end),
     language: Range(start: languageStart, `end`: languageEnd)
   )
+
+# BLOCK-LEVEL PARSING
+proc parseMdxDocumentBlocks* (s: Scanner): seq[BlockToken] =
+  # Performs block-level parsing of the document. Returns a sequence of block tokens that provide an outline of the document.
+  # These block tokens can then be fed to leaf parsing functions for further processing.
+  var tokens: seq[BlockToken]
+  while not s.isAtEnd():
+    let c = s.getCurrentChar()
+    case c
+    of '`':
+      if s.peekString("```"):
+        tokens.add(parseCodeBlock(s))
+      else:
+        s.current += 1
+    of '<':
+      tokens.add(blockParseMdxBlock(s))
+    else:
+      s.current += 1
+  return tokens
