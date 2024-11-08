@@ -12,6 +12,124 @@
 # ...
 # </Component>
 # This is not supported by the MDX package.
+
+# TOKENIZE PASS
+type
+  TokenType = enum
+    Backtick      # `
+    OpenBrace     # {
+    CloseBrace    # }
+    OpenBracket   # [
+    CloseBracket  # ]
+    OpenAngle     # <
+    CloseAngle    # >
+    Slash         # /
+    Asterisk      # *
+    Underscore    # _
+    Equals        # =
+    Exclamation   # !
+    OpenParen     # (
+    CloseParen    # )
+    DoubleQuote   # "
+    SingleQuote   # '
+    Comma         # ,
+    Semicolon     # ;
+    Text          # Any text or whitespace
+    Newline       # \n
+
+  Token = object
+    type: TokenType
+    range: Range
+
+proc tokenize(source: string): seq[Token] =
+  var tokens: seq[Token] = @[]
+  var current = 0
+
+  proc addToken(tokenType: TokenType, start, ende: int) =
+    tokens.add(Token(
+      type: tokenType,
+      range: Range(start: start, `end`: ende)
+    ))
+
+  while current < source.len:
+    let start = current
+    let c = source[current]
+
+    case c
+    of '`':
+      addToken(Backtick, start, current + 1)
+      current += 1
+    of '{':
+      addToken(OpenBrace, start, current + 1)
+      current += 1
+    of '}':
+      addToken(CloseBrace, start, current + 1)
+      current += 1
+    of '[':
+      addToken(OpenBracket, start, current + 1)
+      current += 1
+    of ']':
+      addToken(CloseBracket, start, current + 1)
+      current += 1
+    of '<':
+      addToken(OpenAngle, start, current + 1)
+      current += 1
+    of '>':
+      addToken(CloseAngle, start, current + 1)
+      current += 1
+    of '/':
+      addToken(Slash, start, current + 1)
+      current += 1
+    of '*':
+      addToken(Asterisk, start, current + 1)
+      current += 1
+    of '_':
+      addToken(Underscore, start, current + 1)
+      current += 1
+    of '=':
+      addToken(Equals, start, current + 1)
+      current += 1
+    of '!':
+      addToken(Exclamation, start, current + 1)
+      current += 1
+    of '(':
+      addToken(OpenParen, start, current + 1)
+      current += 1
+    of ')':
+      addToken(CloseParen, start, current + 1)
+      current += 1
+    of '"':
+      addToken(DoubleQuote, start, current + 1)
+      current += 1
+    of '\'':
+      addToken(SingleQuote, start, current + 1)
+      current += 1
+    of ',':
+      addToken(Comma, start, current + 1)
+      current += 1
+    of ';':
+      addToken(Semicolon, start, current + 1)
+      current += 1
+    of '\n':
+      addToken(Newline, start, current + 1)
+      current += 1
+    else:
+      let textStart = current
+      while current < source.len:
+        let c = source[current]
+        case c
+        of '`', '{', '}', '[', ']', '<', '>', '/', '*', '_', '=', '!', '(', ')', '"', '\'', ',', ';', '\n':
+          break
+        else:
+          current += 1
+      let textRange = Range(textStart, current)
+      if textRange.start != textRange.end:
+        tokens.add(Token(
+          type: ttText,
+          range: Range(start: textRange.start, `end`: textRange.end),
+        ))
+  return tokens
+
 type
   BlockType* = enum
     Heading
@@ -48,6 +166,10 @@ type
     indentLevel: int
     bracketDepth: int
     peekIndex: int
+
+  TokenScanner = ref object
+    tokens: seq[Token]
+    current: int
 
   Position* = object
     line, column: int
