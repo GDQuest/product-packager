@@ -3,6 +3,7 @@
 # 2. parse the block tokens
 #
 # TODO:
+# - Do a tokenization pass with smaller tokens like <, >, {, }, text, etc. To help with error handling later
 # - Add error handling for invalid syntax
 # - Add support for nested components (parse MDX and code inside code fences)
 # - test <></> syntax
