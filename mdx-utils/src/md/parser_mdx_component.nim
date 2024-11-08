@@ -4,16 +4,11 @@
 #
 # TODO:
 # - Add error handling for invalid syntax
-# - Track line and column numbers for better error messages
-# - Add support for nested components
-#
-#
-# TODO: test <></> syntax
-# TODO: consider case of parsing mdx with line returns within a markdown paragraph. E.g.
+# - Add support for nested components (parse MDX and code inside code fences)
+# - test <></> syntax
+# - consider case of parsing mdx with line returns within a markdown paragraph. E.g.
 # Bla bla <Component>
-#
 # ...
-#
 # </Component>
 # This is not supported by the MDX package.
 type
@@ -55,6 +50,10 @@ type
 
   Position* = object
     line, column: int
+
+  ParseError* = ref object of Exception
+    range: Range
+    message: string
 
 proc getString(range: Range, source: string): string {.inline.} =
   return source[range.start..<range.end]
@@ -151,6 +150,7 @@ proc scanToEndOfLine(s: Scanner): tuple[start, `end`: int] {.inline.} =
 # BLOCK-LEVEL PARSING
 proc blockParseMdxBlock*(s: Scanner): BlockToken =
   # TODO: this is currently assumes that the block is formed properly, but this needs to handle errors
+  # TODO: What about a case like "The < sign is bla bla bla"? This will be parsed as a potential MdxComponent and might trigger an error. We need to handle this case.
   let start = s.current
   while s.peekAt(1) == ' ':
     s.peekIndex += 1
@@ -158,25 +158,37 @@ proc blockParseMdxBlock*(s: Scanner): BlockToken =
   # Get component name
   var name: Range
   name.start = s.peekIndex
-  while isAlphanumericOrUnderscore(s.peekAt(s.peekIndex - s.current)):
-    s.peekIndex += 1
-  name.end = s.peekIndex
+  let firstChar = s.peekAt(s.peekIndex - s.current)
+  if (firstChar >= 'A' and firstChar <= 'Z'):
+    while isAlphanumericOrUnderscore(s.peekAt(s.peekIndex - s.current)):
+      s.peekIndex += 1
+    name.end = s.peekIndex
+  else:
+    return nil
 
   # Look for end of opening tag or self-closing mark
+  var wasClosingMarkFound = false
   var isSelfClosing = false
   while not s.isAtEnd():
     case s.peekAt(s.peekIndex - s.current):
       of '>':
         s.peekIndex += 1
+        wasClosingMarkFound = true
         break
       of '/':
         if s.peekAt(s.peekIndex - s.current + 1) == '>':
           isSelfClosing = true
           s.peekIndex += 2
+          wasClosingMarkFound = true
           break
       else:
         s.peekIndex += 1
 
+  if not wasClosingMarkFound:
+    raise new ParseError(
+      range: Range(start, s.peekIndex),
+      message: "Expected closing mark '>' or self-closing mark '/>'"
+    )
   let openingTagEnd = s.peekIndex
   var bodyEnd = openingTagEnd
   # Find matching closing tag
@@ -248,7 +260,13 @@ proc parseMdxDocumentBlocks* (s: Scanner): seq[BlockToken] =
       else:
         s.current += 1
     of '<':
-      tokens.add(blockParseMdxBlock(s))
+      # A < may indicate the start of an MdxComponent, but it can also be part of regular text
+      let token = blockParseMdxBlock(s)
+      if token != nil:
+        tokens.add(token)
+      else:
+        s.current += 1
+        continue
     else:
       s.current += 1
   return tokens
