@@ -1,9 +1,10 @@
 # Algorithm:
-# 1. Find mdx components as block tokens
-# 2. parse the block tokens
+# 1. Tokenize into smaller tokens
+# 2. Find block-level tokens (e.g. code blocks, mdx components) from the tokens
+# 3. parse the block tokens in greater detail and find their significant elements
 #
 # TODO:
-# - Do a tokenization pass with smaller tokens like <, >, {, }, text, etc. To help with error handling later
+# - "Consume" tokens when finding block tokens (set an index that prevents backtracking)
 # - Add error handling for invalid syntax
 # - Add support for nested components (parse MDX and code inside code fences)
 # - test <></> syntax
@@ -13,8 +14,10 @@
 # </Component>
 # This is not supported by the MDX package.
 
-# TOKENIZE PASS
 type
+  Range* = object
+    start, `end`: int
+
   TokenType = enum
     Backtick      # `
     OpenBrace     # {
@@ -37,9 +40,49 @@ type
     Text          # Any text or whitespace
     Newline       # \n
 
+  BlockType* = enum
+      Heading
+      Paragraph
+      CodeBlock
+      # A self-closing component (<Name ... />) is a leaf in the document
+      # That's why we differentiate it: it doesn't need to be fed back for
+      # recursive parsing.
+      SelfClosingMdxComponent
+      MdxComponent
+
   Token = object
     type: TokenType
     range: Range
+
+  BlockToken* = ref object
+    type: BlockType
+    # Index range for the entire set of tokens corresponding to this block
+    # Allows us to retrieve both the tokens and the source text from the first and last token's ranges'
+    range: Range
+    case type
+      of CodeBlock:
+        language: Range
+        code: Range
+      of SelfClosingMdxComponent:
+        name: Range
+      of MdxComponent:
+        name: Range
+        # This allows us to distinguish the opening tag and body for further parsing
+        openingTagRange: Range
+        bodyRange: Range
+
+  TokenScanner* = ref object
+    tokens: seq[Token]
+    current: int
+    source: string
+    peekIndex: int
+
+  Position* = object
+    line, column: int
+
+  ParseError* = ref object of Exception
+    range: Range
+    message: string
 
 proc tokenize(source: string): seq[Token] =
   var tokens: seq[Token] = @[]
@@ -58,61 +101,42 @@ proc tokenize(source: string): seq[Token] =
     case c
     of '`':
       addToken(Backtick, start, current + 1)
-      current += 1
     of '{':
       addToken(OpenBrace, start, current + 1)
-      current += 1
     of '}':
       addToken(CloseBrace, start, current + 1)
-      current += 1
     of '[':
       addToken(OpenBracket, start, current + 1)
-      current += 1
     of ']':
       addToken(CloseBracket, start, current + 1)
-      current += 1
     of '<':
       addToken(OpenAngle, start, current + 1)
-      current += 1
     of '>':
       addToken(CloseAngle, start, current + 1)
-      current += 1
     of '/':
       addToken(Slash, start, current + 1)
-      current += 1
     of '*':
       addToken(Asterisk, start, current + 1)
-      current += 1
     of '_':
       addToken(Underscore, start, current + 1)
-      current += 1
     of '=':
       addToken(Equals, start, current + 1)
-      current += 1
     of '!':
       addToken(Exclamation, start, current + 1)
-      current += 1
     of '(':
       addToken(OpenParen, start, current + 1)
-      current += 1
     of ')':
       addToken(CloseParen, start, current + 1)
-      current += 1
     of '"':
       addToken(DoubleQuote, start, current + 1)
-      current += 1
     of '\'':
       addToken(SingleQuote, start, current + 1)
-      current += 1
     of ',':
       addToken(Comma, start, current + 1)
-      current += 1
     of ';':
       addToken(Semicolon, start, current + 1)
-      current += 1
     of '\n':
       addToken(Newline, start, current + 1)
-      current += 1
     else:
       let textStart = current
       while current < source.len:
@@ -128,164 +152,49 @@ proc tokenize(source: string): seq[Token] =
           type: ttText,
           range: Range(start: textRange.start, `end`: textRange.end),
         ))
+      continue
+    current += 1
   return tokens
-
-type
-  BlockType* = enum
-    Heading
-    Paragraph
-    CodeBlock
-    # A self-closing component (<Name ... />) is a leaf in the document
-    # That's why we differentiate it: it doesn't need to be fed back for
-    # recursive parsing.
-    SelfClosingMdxComponent
-    MdxComponent
-
-  Range* = object
-    start, `end`: int
-
-  BlockToken* = ref object
-    type: BlockType
-    # Index range for the entire string corresponding to the token
-    range: Range
-    case type
-      of CodeBlock:
-        language: Range
-        code: Range
-      of SelfClosingMdxComponent:
-        name: Range
-      of MdxComponent:
-        name: Range
-        # This allows us to distinguish the opening tag and body for further parsing
-        openingTagRange: Range
-        bodyRange: Range
-
-  Scanner* = ref object
-    source: string
-    current: int
-    indentLevel: int
-    bracketDepth: int
-    peekIndex: int
-
-  TokenScanner = ref object
-    tokens: seq[Token]
-    current: int
-
-  Position* = object
-    line, column: int
-
-  ParseError* = ref object of Exception
-    range: Range
-    message: string
 
 proc getString(range: Range, source: string): string {.inline.} =
   return source[range.start..<range.end]
 
-proc getCurrentChar(s: Scanner): char {.inline.} =
-  ## Returns the current character without advancing the scanner's current index
-  return s.source[s.current]
+proc getCurrentToken(s: TokenScanner): Token {.inline.} =
+  return s.tokens[s.current]
 
-proc advance(s: Scanner): char {.inline.} =
-  ## Reads and returns the current character, then advances the scanner by one
-  result = s.source[s.current]
+proc advance(s: TokenScanner): Token {.inline.} =
+  result = s.getCurrentToken()
   s.current += 1
 
-proc peekAt(s: Scanner, offset: int): char {.inline.} =
-  ## Peeks at a specific offset and returns the character without advancing the scanner
+proc peek(s: TokenScanner, offset: int = 0): Token {.inline.} =
+  if s.current + offset >= s.tokens.len:
+    return s.tokens[^1] # Return last token
   s.peekIndex = s.current + offset
-  if s.peekIndex >= s.source.len:
-    return '\0'
-  return s.source[s.peekIndex]
+  return s.tokens[s.peekIndex]
 
-proc peekString(s: Scanner, expected: string): bool {.inline.} =
-  ## Peeks ahead to check if the expected string is present without advancing
-  ## Returns true if the string is found, false otherwise
-  let length = expected.len
-  for i in 0..<length:
-    if peekAt(s, i) != expected[i]:
-      return false
-  s.peekIndex = s.current + length
-  return true
-
-proc advanceToPeek(s: Scanner) {.inline.} =
-  ## Advances the scanner to the stored getCurrentChar index
-  s.current = s.peekIndex
-
-proc match(s: Scanner, expected: char): bool {.inline.} =
-  ## Returns true and advances the scanner if and only if the current character matches the expected character
-  ## Otherwise, returns false
-  if s.getCurrentChar() != expected:
+proc matchToken(s: TokenScanner, expected: TokenType): bool {.inline.} =
+  if s.getCurrentToken().type != expected:
     return false
   discard s.advance()
   return true
 
-proc matchString(s: Scanner, expected: string): bool {.inline.} =
-  ## Returns true and advances the scanner if and only if the next characters match the expected string
-  if s.peekString(expected):
-    s.advanceToPeek()
-    return true
-  return false
-
-proc skipWhitespace(s: Scanner) {.inline.} =
-  ## Peeks at the next characters and advances the scanner until a non-whitespace character is found
-  while true:
-    let c = s.getCurrentChar()
-    case c:
-    of ' ', '\r', '\t':
-      discard s.advance()
-    else:
-      break
-
-proc isAtEnd(s: Scanner): bool {.inline.} =
-  s.current >= s.source.len
-
-proc isAlphanumericOrUnderscore(c: char): bool {.inline.} =
-  ## Returns true if the character is a letter, digit, or underscore
-  let isLetter = (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_'
-  let isDigit = c >= '0' and c <= '9'
-  return isLetter or isDigit
-
-proc isAlphaOrDash(c: char): bool {.inline.} =
-  ## Returns true if the character is a letter, digit, or underscore
-  return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '-' or c == '_'
-
-proc scanIdentifier(s: Scanner): tuple[start: int, `end`: int] {.inline.} =
-  let start = s.current
-  while isAlphanumericOrUnderscore(s.getCurrentChar()):
-    discard s.advance()
-  result = (start, s.current)
-
-proc scanToEndOfLine(s: Scanner): tuple[start, `end`: int] {.inline.} =
-  let start = s.current
-  let length = s.source.len
-  var offset = 0
-  var c = s.source[s.current]
-  while c != '\n':
-    offset += 1
-    if s.current + offset >= length:
-      break
-    c = s.source[s.current + offset]
-  s.current += offset
-  if s.current < length:
-    discard s.advance()
-  result = (start, s.current)
+proc isAtEnd((s: TokenScanner): bool {.inline.} =
+  return s.current >= s.tokens.len
 
 # BLOCK-LEVEL PARSING
-proc blockParseMdxBlock*(s: Scanner): BlockToken =
-  # TODO: this is currently assumes that the block is formed properly, but this needs to handle errors
-  # TODO: What about a case like "The < sign is bla bla bla"? This will be parsed as a potential MdxComponent and might trigger an error. We need to handle this case.
+proc blockParseMdxBlock*(s: TokenScanner): BlockToken =
   let start = s.current
-  while s.peekAt(1) == ' ':
-    s.peekIndex += 1
 
   # Get component name
   var name: Range
-  name.start = s.peekIndex
-  let firstChar = s.peekAt(s.peekIndex - s.current)
-  if (firstChar >= 'A' and firstChar <= 'Z'):
-    while isAlphanumericOrUnderscore(s.peekAt(s.peekIndex - s.current)):
-      s.peekIndex += 1
-    name.end = s.peekIndex
+  let firstToken = s.getCurrentToken()
+  if firstToken.type == Text:
+    let firstChar = s.source[firstToken.range.start]
+    if firstChar >= 'A' and firstChar <= 'Z':
+      name = firstToken.range
+      discard s.advance()
+    else:
+      return nil
   else:
     return nil
 
@@ -293,106 +202,121 @@ proc blockParseMdxBlock*(s: Scanner): BlockToken =
   var wasClosingMarkFound = false
   var isSelfClosing = false
   while not s.isAtEnd():
-    case s.peekAt(s.peekIndex - s.current):
-      of '>':
-        s.peekIndex += 1
+    let token = s.getCurrentToken()
+    case token.type:
+      of CloseAngle:
         wasClosingMarkFound = true
+        discard s.advance()
         break
-      of '/':
-        if s.peekAt(s.peekIndex - s.current + 1) == '>':
+      of Slash:
+        if s.peek().type == CloseAngle:
           isSelfClosing = true
-          s.peekIndex += 2
           wasClosingMarkFound = true
+          s.current += 2
           break
       else:
-        s.peekIndex += 1
+        discard s.advance()
 
   if not wasClosingMarkFound:
     raise new ParseError(
-      range: Range(start, s.peekIndex),
+      range: Range(start: start, `end`: s.current),
       message: "Expected closing mark '>' or self-closing mark '/>'"
     )
-  let openingTagEnd = s.peekIndex
+
+  let openingTagEnd = s.current
   var bodyEnd = openingTagEnd
+
   # Find matching closing tag
   if not isSelfClosing:
     let componentName = s.source[name.start..<name.end]
     while not s.isAtEnd():
-      if s.peekString("</"):
+      if s.getCurrentToken().type == OpenAngle and
+          s.peek().type == Slash:
         bodyEnd = s.current
-        while s.peekAt(s.peekIndex - s.current) == ' ':
-          s.peekIndex += 1
-        if s.peekString(componentName):
-          s.peekIndex += componentName.len
-          if s.peekAt(s.peekIndex - s.current) == '>':
-            s.peekIndex += 1
+        s.current += 2
+        let nameToken = s.getCurrentToken()
+        if nameToken.type == Text and
+            s.source[nameToken.range.start..<nameToken.range.end] == componentName:
+          discard s.advance()
+          if s.getCurrentToken().type == CloseAngle:
+            discard s.advance()
             break
         break
-      s.peekIndex += 1
+      discard s.advance()
 
-  s.current = s.peekIndex
   if isSelfClosing:
     return BlockToken(
-      kind: SelfClosingMdxComponent,
-      start: start, end: s.current,
-      name: name,
+      type: SelfClosingMdxComponent,
+      range: Range(start: start, `end`: s.current),
+      name: name
     )
   else:
     return BlockToken(
-      kind: MdxComponent,
-      start: start, end: s.current,
+      type: MdxComponent,
+      range: Range(start: start, `end`: s.current),
       name: name,
       openingTagRange: Range(start: start, `end`: openingTagEnd),
-      bodyRange: Range(start: openingTagEnd + 1, `end`: bodyEnd),
+      bodyRange: Range(start: openingTagEnd, `end`: bodyEnd)
     )
 
-proc blockParseCodeBlock(s: Scanner): BlockToken =
-  # The parsing starts at the first of the top three backticks
+proc blockParseCodeBlock(s: TokenScanner): BlockToken =
   let start = s.current
-  # Jump after the first three backticks
-  s.advanceToPeek()
+  # Skip three backticks
+  for i in 0..2:
+    if not matchToken(s, Backtick):
+      return nil
 
-  # Assume the language follows the first three backticks
-  let languageRange = scanToEndOfLine(s)
+  # Get language
+  let languageStart = s.current
+  while not s.isAtEnd() and s.getCurrentToken().type != Newline:
+    discard s.advance()
+  let languageEnd = s.current
 
-  var bodyEnd = -1
+  # Skip newline
+  if s.getCurrentToken().type == Newline:
+    discard s.advance()
+
+  let codeStart = s.current
+  var codeEnd = codeStart
+  # Find closing backticks
   while not s.isAtEnd():
-    if s.matchString("```"):
-      bodyEnd = s.current - 3
+    if s.getCurrentToken().type == Backtick and
+        s.peek(1).type == Backtick and
+        s.peek(2).type == Backtick:
+      codeEnd = s.current
+      s.current += 3
       break
-    s.current += 1
+    discard s.advance()
 
-  let end = s.current
   return BlockToken(
-    tokenType: CodeBlock,
-    range: Range(start: start, `end`: end),
-    language: languageRange,
-    code: Range(start: languageRange.end + 1, `end`: bodyEnd),
+    type: CodeBlock,
+    range: Range(start: start, `end`: s.current),
+    language: Range(start: languageStart, `end`: languageEnd),
+    code: Range(start: codeStart, `end`: codeEnd)
   )
 
-proc parseMdxDocumentBlocks* (s: Scanner): seq[BlockToken] =
-  # Performs block-level parsing of the document. Returns a sequence of block tokens that provide an outline of the document.
-  # These block tokens can then be fed to leaf parsing functions for further processing.
-  var tokens: seq[BlockToken]
+proc parseMdxDocumentBlocks*(s: TokenScanner): seq[BlockToken] =
+  var blocks: seq[BlockToken]
   while not s.isAtEnd():
-    let c = s.getCurrentChar()
-    case c
-    of '`':
-      if s.peekString("```"):
-        tokens.add(parseCodeBlock(s))
+    let token = s.getCurrentToken()
+    case token.type:
+      of Backtick:
+        if s.peek(1).type == Backtick and s.peek(2).type == Backtick:
+          let block = blockParseCodeBlock(s)
+          if block != nil:
+            blocks.add(block)
+          else:
+            discard s.advance()
+        else:
+          discard s.advance()
+      of OpenAngle:
+        discard s.advance()
+        let currentBlock = blockParseMdxBlock(s)
+        if currentBlock != nil:
+          blocks.add(currentBlock)
       else:
-        s.current += 1
-    of '<':
-      # A < may indicate the start of an MdxComponent, but it can also be part of regular text
-      let token = blockParseMdxBlock(s)
-      if token != nil:
-        tokens.add(token)
-      else:
-        s.current += 1
-        continue
-    else:
-      s.current += 1
-  return tokens
+        discard s.advance()
+  return blocks
 
 # Utilities to get line and column numbers
 # Use these when you need to report errors or warnings
