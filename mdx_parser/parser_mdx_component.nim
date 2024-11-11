@@ -12,7 +12,7 @@
 # 3. parse the block tokens in greater detail and find their significant elements
 #
 # TODO:
-# - "Consume" tokens when finding block tokens (set an index that prevents backtracking)
+# - "Consume" tokens when finding block tokens (set an index that prevents backtracking)?
 # - Add error handling for invalid syntax
 # - Add support for nested components (parse MDX and code inside code fences etc.)
 # - test <></> syntax
@@ -25,7 +25,8 @@ type
   Range* = object
     start*, `end`*: int
 
-  TokenType* = enum
+  # Basic tokens for the lexer
+  LexerTokenType* = enum
     Backtick      # `
     OpenBrace     # {
     CloseBrace    # }
@@ -52,31 +53,46 @@ type
     Heading
     Paragraph
     CodeBlock
-    MdxComponent
+    #UnorderedList
+    #OrderedList
+    #Blockquote
 
-  Token* = object
-    kind*: TokenType
+  InlineType* = enum
+    MdxComponent
+    #Link
+    #Image
+    #Bold
+    #Italic
+
+  LexerToken* = object
+    # Basic tokens used to then identify the structure of the document
+    kind*: LexerTokenType
     range*: Range
 
   BlockToken* = ref object
     # Index range for the entire set of tokens corresponding to this block
-    # Allows us to retrieve both the tokens and the source text from the first and last token's ranges'
+    # Allows us to retrieve both the tokens and the source text from the first
+    # and last token's ranges'
     range*: Range
     case kind*: BlockType
-      of CodeBlock:
-        language*: Range
-        code*: Range
-      of MdxComponent:
-        name*: Range
-        isSelfClosing*: bool
-        # This allows us to distinguish the opening tag and body for further parsing
-        openingTagRange*: Range
-        bodyRange*: Range
-      of Heading, Paragraph:
-        discard
+    of CodeBlock:
+      language*: Range
+      code*: Range
+    of Heading, Paragraph:
+      discard
+
+  InlineToken* = ref object
+    range*: Range
+    case kind*: InlineType
+    of MdxComponent:
+      name*: Range
+      isSelfClosing*: bool
+      # This allows us to distinguish the opening tag and body for further parsing
+      openingTagRange*: Range
+      bodyRange*: Range
 
   TokenScanner* = ref object
-    tokens*: seq[Token]
+    tokens*: seq[LexerToken]
     current*: int
     source*: string
     peekIndex*: int
@@ -88,12 +104,12 @@ type
     range*: Range
     message*: string
 
-proc tokenize*(source: string): seq[Token] =
-  var tokens: seq[Token] = @[]
+proc tokenize*(source: string): seq[LexerToken] =
+  var tokens: seq[LexerToken] = @[]
   var current = 0
 
-  proc addToken(tokenType: TokenType, start, ende: int) =
-    tokens.add(Token(
+  proc addToken(tokenType: LexerTokenType, start, ende: int) =
+    tokens.add(LexerToken(
       kind: tokenType,
       range: Range(start: start, `end`: ende)
     ))
@@ -154,7 +170,7 @@ proc tokenize*(source: string): seq[Token] =
           current += 1
       let textRange = Range(start: textStart, `end`: current)
       if textRange.start != textRange.end:
-        tokens.add(Token(
+        tokens.add(LexerToken(
           kind: Text,
           range: Range(start: textRange.start, `end`: textRange.end),
         ))
@@ -165,20 +181,18 @@ proc tokenize*(source: string): seq[Token] =
 proc getString*(range: Range, source: string): string {.inline.} =
   return source[range.start..<range.end]
 
-proc getCurrentToken(s: TokenScanner): Token {.inline.} =
+proc getCurrentToken(s: TokenScanner): LexerToken {.inline.} =
   return s.tokens[s.current]
 
-proc advance(s: TokenScanner): Token {.inline.} =
-  result = s.getCurrentToken()
-  s.current += 1
-
-proc peek(s: TokenScanner, offset: int = 0): Token {.inline.} =
+proc peek(s: TokenScanner, offset: int = 0): LexerToken {.inline.} =
   s.peekIndex = s.current + offset
   if s.peekIndex >= s.tokens.len:
     return s.tokens[^1]
   return s.tokens[s.peekIndex]
 
-proc matchToken(s: TokenScanner, expected: TokenType): bool {.inline.} =
+proc matchToken(s: TokenScanner, expected: LexerTokenType): bool {.inline.} =
+  ## Returns true and advances the scanner if the current token matches the
+  ## expected type
   if s.getCurrentToken().kind != expected:
     return false
   s.current += 1
@@ -194,7 +208,7 @@ proc isAlphanumericOrUnderscore(c: char): bool {.inline.} =
   return isLetter or isDigit
 
 # BLOCK-LEVEL PARSING
-proc blockParseMdxBlock*(s: TokenScanner): BlockToken =
+proc inlineParseMdxComponent*(s: TokenScanner): InlineToken =
   let start = s.current
 
   # Get component name. It has to start with an uppercase letter.
@@ -267,14 +281,14 @@ proc blockParseMdxBlock*(s: TokenScanner): BlockToken =
       s.current += 1
 
   if isSelfClosing:
-    return BlockToken(
+    return InlineToken(
       kind: MdxComponent,
       isSelfClosing: true,
       range: Range(start: start, `end`: s.current),
       name: name
     )
   else:
-    return BlockToken(
+    return InlineToken(
       kind: MdxComponent,
       isSelfClosing: false,
       range: Range(start: start, `end`: s.current),
