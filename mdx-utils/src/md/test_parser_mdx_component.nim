@@ -24,7 +24,7 @@ Content here.
     check:
       blocks.len == 1
       blocks[0].kind == MdxComponent
-      blocks[0].source[blocks[0].name.start..<blocks[0].name.end] == "Component"
+      getString(blocks[0].name, source) == "Component"
 
   test "Parse code block":
     const source = """
@@ -44,7 +44,7 @@ Some more text.
     check:
       blocks.len == 1
       blocks[0].kind == CodeBlock
-      blocks[0].source[blocks[0].language.start..<blocks[0].language.end] == "gdscript"
+      getString(blocks[0].language, source) == "gdscript"
 
   test "Parse self-closing MDX component":
     const source = """
@@ -58,8 +58,9 @@ More content.
 
     check:
       blocks.len == 1
-      blocks[0].kind == SelfClosingMdxComponent
-      blocks[0].source[blocks[0].name.start..<blocks[0].name.end] == "SelfClosingComponent"
+      blocks[0].kind == MdxComponent
+      blocks[0].isSelfClosing == true
+
 
   test "Parse mixed MDX and code blocks":
     const source = """
@@ -83,10 +84,10 @@ Followed by text.
 
     check:
       blocks.len == 2
-      blocks[0].kind == SelfClosingMdxComponent
-      blocks[0].source[blocks[0].name.start..<blocks[0].name.end] == "Component"
+      blocks[0].kind == MdxComponent and blocks[0].isSelfClosing == true
+      getString(blocks[0].name, source) == "Component"
       blocks[1].kind == CodeBlock
-      blocks[1].source[blocks[1].language.start..<blocks[1].language.end] == "gdscript"
+      getString(blocks[0].language, source) == "gdscript"
 
   test "Component name must start with capital letter":
     const source = """
@@ -108,4 +109,4 @@ Content
     check:
       blocks.len == 1
       blocks[0].kind == MdxComponent
-      blocks[0].source[blocks[0].name.start..<blocks[0].name.end] == "Component"
+      getString(blocks[0].name, source) == "Component"
