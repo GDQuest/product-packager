@@ -189,7 +189,7 @@ proc isAlphanumericOrUnderscore(c: char): bool {.inline.} =
 proc blockParseMdxBlock*(s: TokenScanner): BlockToken =
   let start = s.current
 
-  # Get component name
+  # Get component name. It has to start with an uppercase letter.
   var name: Range
   let firstToken = s.getCurrentToken()
   if firstToken.kind == Text:
@@ -281,10 +281,10 @@ proc blockParseCodeBlock(s: TokenScanner): BlockToken =
       return nil
 
   # Get language
-  let languageStart = s.current
-  while not s.isAtEnd() and s.getCurrentToken().kind != Newline:
-    s.current += 1
-  let languageEnd = s.current
+  var languageRange = Range(start: 0, `end`: 0)
+  if s.getCurrentToken().kind == Text:
+    languageRange = s.getCurrentToken().range
+  s.current += 1
 
   # Skip newline
   if s.getCurrentToken().kind == Newline:
@@ -305,7 +305,7 @@ proc blockParseCodeBlock(s: TokenScanner): BlockToken =
   return BlockToken(
     kind: CodeBlock,
     range: Range(start: start, `end`: s.current),
-    language: Range(start: languageStart, `end`: languageEnd),
+    language: languageRange,
     code: Range(start: codeStart, `end`: codeEnd)
   )
 
