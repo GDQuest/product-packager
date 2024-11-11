@@ -13,12 +13,11 @@
 # ...
 # </Component>
 # This is not supported by the MDX package.
-
 type
   Range* = object
-    start, `end`: int
+    start*, `end`*: int
 
-  TokenType = enum
+  TokenType* = enum
     Backtick      # `
     OpenBrace     # {
     CloseBrace    # }
@@ -42,44 +41,44 @@ type
     EOF           # End of file marker
 
   BlockType* = enum
-      Heading
-      Paragraph
-      CodeBlock
-      MdxComponent
+    Heading
+    Paragraph
+    CodeBlock
+    MdxComponent
 
   Token* = object
-    kind: TokenType
-    range: Range
+    kind*: TokenType
+    range*: Range
 
   BlockToken* = ref object
     # Index range for the entire set of tokens corresponding to this block
     # Allows us to retrieve both the tokens and the source text from the first and last token's ranges'
-    range: Range
-    case kind: BlockType
+    range*: Range
+    case kind*: BlockType
       of CodeBlock:
-        language: Range
-        code: Range
+        language*: Range
+        code*: Range
       of MdxComponent:
-        name: Range
-        isSelfClosing: bool
+        name*: Range
+        isSelfClosing*: bool
         # This allows us to distinguish the opening tag and body for further parsing
-        openingTagRange: Range
-        bodyRange: Range
+        openingTagRange*: Range
+        bodyRange*: Range
       of Heading, Paragraph:
         discard
 
   TokenScanner* = ref object
-    tokens: seq[Token]
-    current: int
-    source: string
-    peekIndex: int
+    tokens*: seq[Token]
+    current*: int
+    source*: string
+    peekIndex*: int
 
   Position* = object
-    line, column: int
+    line*, column*: int
 
   ParseError* = ref object of ValueError
-    range: Range
-    message: string
+    range*: Range
+    message*: string
 
 proc tokenize*(source: string): seq[Token] =
   var tokens: seq[Token] = @[]
@@ -155,7 +154,7 @@ proc tokenize*(source: string): seq[Token] =
     current += 1
   return tokens
 
-proc getString(range: Range, source: string): string {.inline.} =
+proc getString*(range: Range, source: string): string {.inline.} =
   return source[range.start..<range.end]
 
 proc getCurrentToken(s: TokenScanner): Token {.inline.} =
@@ -180,6 +179,12 @@ proc matchToken(s: TokenScanner, expected: TokenType): bool {.inline.} =
 proc isAtEnd(s: TokenScanner): bool {.inline.} =
   return s.current >= s.tokens.len
 
+proc isAlphanumericOrUnderscore(c: char): bool {.inline.} =
+  ## Returns true if the character is a letter, digit, or underscore
+  let isLetter = (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_'
+  let isDigit = c >= '0' and c <= '9'
+  return isLetter or isDigit
+
 # BLOCK-LEVEL PARSING
 proc blockParseMdxBlock*(s: TokenScanner): BlockToken =
   let start = s.current
@@ -190,7 +195,14 @@ proc blockParseMdxBlock*(s: TokenScanner): BlockToken =
   if firstToken.kind == Text:
     let firstChar = s.source[firstToken.range.start]
     if firstChar >= 'A' and firstChar <= 'Z':
-      name = firstToken.range
+      # Find end of component name (first non-alphanumeric/underscore character)
+      var nameEnd = firstToken.range.start + 1
+      while nameEnd < firstToken.range.end:
+        let c = s.source[nameEnd]
+        if not isAlphanumericOrUnderscore(c):
+          break
+        nameEnd += 1
+      name = Range(start: firstToken.range.start, `end`: nameEnd)
       s.current += 1
     else:
       return nil
@@ -216,8 +228,9 @@ proc blockParseMdxBlock*(s: TokenScanner): BlockToken =
       else:
         s.current += 1
 
+  # TODO: Handle self-closing tags
   if not wasClosingMarkFound:
-    raise new ParseError(
+    raise ParseError(
       range: Range(start: start, `end`: s.current),
       message: "Expected closing mark '>' or self-closing mark '/>'"
     )
@@ -317,6 +330,8 @@ proc parseMdxDocumentBlocks*(s: TokenScanner): seq[BlockToken] =
           blocks.add(mdxBlock)
         else:
           s.current += 1
+      else:
+        s.current += 1
   result = blocks
 
 # Utilities to get line and column numbers
