@@ -56,6 +56,8 @@ More content.
 """
     let blocks = testBlockParsing(source)
 
+    echoBlockTokens(blocks, source)
+
     check:
       blocks.len == 1
       blocks[0].kind == MdxComponent
@@ -87,7 +89,7 @@ Followed by text.
       blocks[0].kind == MdxComponent and blocks[0].isSelfClosing == true
       getString(blocks[0].name, source) == "Component"
       blocks[1].kind == CodeBlock
-      getString(blocks[0].language, source) == "gdscript"
+      getString(blocks[1].language, source) == "gdscript"
 
   test "Component name must start with capital letter":
     const source = """

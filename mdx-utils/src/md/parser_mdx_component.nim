@@ -1,3 +1,11 @@
+# Minimal MDX parser for the needs of the GDQuest platform.
+#
+# This parser is a work in progress.
+#
+# It is not meant to become a full commonmark-compliant parser: many markdown
+# features are replaced well with react or web components.
+# Instead, this parser aims to run fast and be easy to maintain.
+#
 # Algorithm:
 # 1. Tokenize into smaller tokens
 # 2. Find block-level tokens (e.g. code blocks, mdx components) from the tokens
@@ -6,7 +14,7 @@
 # TODO:
 # - "Consume" tokens when finding block tokens (set an index that prevents backtracking)
 # - Add error handling for invalid syntax
-# - Add support for nested components (parse MDX and code inside code fences)
+# - Add support for nested components (parse MDX and code inside code fences etc.)
 # - test <></> syntax
 # - consider case of parsing mdx with line returns within a markdown paragraph. E.g.
 # Bla bla <Component>
@@ -215,18 +223,19 @@ proc blockParseMdxBlock*(s: TokenScanner): BlockToken =
   while not s.isAtEnd():
     let token = s.getCurrentToken()
     case token.kind:
-      of CloseAngle:
-        wasClosingMarkFound = true
-        s.current += 1
-        break
       of Slash:
-        if s.peek().kind == CloseAngle:
+        let nextToken = s.peek(1)
+        if nextToken.kind == CloseAngle:
           isSelfClosing = true
           wasClosingMarkFound = true
           s.current += 2
           break
         else:
           s.current += 1
+      of CloseAngle:
+        wasClosingMarkFound = true
+        s.current += 1
+        break
       else:
         s.current += 1
 
@@ -363,3 +372,28 @@ proc getLineAndColumn(lineStartIndices: seq[int], index: int): Position =
         line: middle + 1,
         column: index - lineStartIndex + 1
       )
+
+proc echoBlockToken*(token: BlockToken, source: string, indent: int = 0) =
+  echo "Block: ", $token.kind
+  echo "Range:"
+  echo "  Start: ", token.range.start
+  echo "  End: ", token.range.end
+
+  case token.kind:
+    of CodeBlock:
+      echo "Language: ", getString(token.language, source)
+      echo "Code: ", getString(token.code, source)
+    of MdxComponent:
+      echo "Name: ", getString(token.name, source)
+      echo "Self closing: ", token.isSelfClosing
+      if not token.isSelfClosing:
+        echo "Opening tag range: ", token.openingTagRange.start, "..", token.openingTagRange.end
+        echo "Body range: ", token.bodyRange.start, "..", token.bodyRange.end
+    else:
+      discard
+
+proc echoBlockTokens*(tokens: seq[BlockToken], source: string) =
+  echo "Parsed Block Tokens:"
+  for token in tokens:
+    echoBlockToken(token, source)
+    echo ""
