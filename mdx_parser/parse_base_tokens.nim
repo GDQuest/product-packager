@@ -4,7 +4,7 @@
 import shared
 
 const SpecialChars = {
-  '`', '{', '}', '[', ']', '#', '<', '>', '/', '*', '_', '=', '!', '(', ')', '"', '\'', ',', ';', '\n'
+  '`', '{', '}', '[', ']', '#', '<', '>', '/', '*', '_', '=', '!', '(', ')', '"', '\'', ',', ';', '\n', '-'
 }
 
 type
@@ -28,6 +28,7 @@ type
     SingleQuote   # '
     Comma         # ,
     Semicolon     # ;
+    Dash          # -
     Text          # Any text or whitespace
     Newline       # \n
     EOF           # End of file marker
@@ -95,6 +96,8 @@ proc tokenize*(source: string): seq[LexerToken] =
       addToken(Comma, start, current + 1)
     of ';':
       addToken(Semicolon, start, current + 1)
+    of '-':
+      addToken(Dash, start, current + 1)
     of '\n':
       addToken(Newline, start, current + 1)
     of '\0':
@@ -113,7 +116,6 @@ proc tokenize*(source: string): seq[LexerToken] =
       continue
     current += 1
   return tokens
-
 proc getString*(range: Range, source: string): string {.inline.} =
   return source[range.start..<range.end]
 
