@@ -1,13 +1,20 @@
+# The purpose of this pass is to chop the document into blocks, like headings,
+# paragraphs, etc. This is done by looking at the first token of each line and
+# determining what kind of block it is.
+#
+# TODO:
+# - Differentiate ranges of tokens from text ranges. Currently, it's confusing. Consider having two different types of ranges.
 import parse_base_tokens
+import shared
 
 type
   BlockType* = enum
     Heading
     CodeBlock
     Paragraph
-    #UnorderedList
-    #OrderedList
-    #Blockquote
+    UnorderedList
+    OrderedList
+    Blockquote
 
   BlockToken* = ref object
     # Index range for the entire set of tokens corresponding to this block
@@ -21,23 +28,28 @@ type
     of Heading:
       level*: int
       text*: Range
-    of Paragraph:
+    of Paragraph, UnorderedList, OrderedList, Blockquote:
       discard
+
+proc advanceToNewline(s: TokenScanner) {.inline.} =
+  while not s.isAtEnd() and s.getCurrentToken().kind != Newline:
+    s.current += 1
 
 proc parseCodeBlock(s: TokenScanner): BlockToken =
   let start = s.current
   # Skip three backticks
   for i in 0..2:
-    if not matchToken(s, Backtick):
+    if s.peek(i).kind != Backtick:
       return nil
+  s.current += 3
 
-  # Get language
+  # Language is in a text token following the backticks
   var languageRange = Range(start: 0, `end`: 0)
   if s.getCurrentToken().kind == Text:
-    languageRange = s.getCurrentToken().range
-  s.current += 1
+    languageRange.start = s.getCurrentToken().range.start
+    s.advanceToNewline()
+    languageRange.end = s.getCurrentToken().range.end
 
-  # Skip newline
   if s.getCurrentToken().kind == Newline:
     s.current += 1
 
@@ -64,51 +76,57 @@ proc parseHeading(s: TokenScanner): BlockToken =
   let start = s.current
   var level = 0
 
-  while not s.isAtEnd() and s.getCurrentToken().kind == Asterisk:
+  while not s.isAtEnd() and s.getCurrentToken().kind == Hash:
     level += 1
     s.current += 1
 
-  # Must be followed by text
-  if s.getCurrentToken().kind != Text:
-    s.current = start
-    return nil
+  s.advanceToNewline()
+  return BlockToken(
+    kind: Heading,
+    range: Range(start: start, `end`: s.current),
+    level: level,
+  )
 
-  let textStart = s.current
-  var textEnd = textStart
-
-  # Find end of line
+proc parseParagraph(s: TokenScanner): BlockToken =
+  let start = s.current
   while not s.isAtEnd():
-    if s.getCurrentToken().kind == Newline:
-      textEnd = s.current
+    if s.getCurrentToken().kind == Newline and s.peek(1).kind == Newline:
       s.current += 1
       break
     s.current += 1
 
   return BlockToken(
-    kind: Heading,
+    kind: Paragraph,
     range: Range(start: start, `end`: s.current),
-    level: level,
-    text: Range(start: textStart, `end`: textEnd)
   )
 
 proc parseMdxDocumentBlocks*(s: TokenScanner): seq[BlockToken] =
+  # Parses blocks by checking the token at the start of a line (or of the document)
+  # Algorithm:
+  # - Check the token at the start of the line
+  # - If it's a backtick, check if it's a code block
+  # - If it's a dash, check if it's a heading
+  #
   var blocks: seq[BlockToken]
   while not s.isAtEnd():
     let token = s.getCurrentToken()
     case token.kind:
       of Backtick:
         if s.peek(1).kind == Backtick and s.peek(2).kind == Backtick:
-          let codeBlock = parseCodeBlock(s)
-          if codeBlock != nil:
-            blocks.add(codeBlock)
+          let codeListing = parseCodeBlock(s)
+          if codeListing != nil:
+            blocks.add(codeListing)
             continue
-      of Asterisk:
-        let headingBlock = parseHeading(s)
-        if headingBlock != nil:
-          blocks.add(headingBlock)
+      of Hash:
+        let heading = parseHeading(s)
+        if heading != nil:
+          blocks.add(heading)
           continue
-      else:
-        discard
+        else:
+          let paragraph = parseParagraph(s)
+          if paragraph != nil:
+            blocks.add(paragraph)
+            continue
     s.current += 1
   result = blocks
 
@@ -122,14 +140,14 @@ proc echoBlockToken*(token: BlockToken, source: string, indent: int = 0) =
     of CodeBlock:
       echo "Language: ", getString(token.language, source)
       echo "Code: ", getString(token.code, source)
+    of Paragraph, UnorderedList, OrderedList, Blockquote, Heading:
+      echo "Text: ", getString(token.text, source)
     #of MdxComponent:
     #  echo "Name: ", getString(token.name, source)
     #  echo "Self closing: ", token.isSelfClosing
     #  if not token.isSelfClosing:
     #    echo "Opening tag range: ", token.openingTagRange.start, "..", token.openingTagRange.end
     #    echo "Body range: ", token.bodyRange.start, "..", token.bodyRange.end
-    else:
-      discard
 
 proc echoBlockTokens*(tokens: seq[BlockToken], source: string) =
   echo "Parsed Block Tokens:"
