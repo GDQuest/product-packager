@@ -39,6 +39,7 @@ type
     Semicolon     # ;
     Text          # Any text or whitespace
     Newline       # \n
+    EOF           # End of file marker
 
   BlockType* = enum
       Heading
@@ -137,6 +138,8 @@ proc tokenize(source: string): seq[Token] =
       addToken(Semicolon, start, current + 1)
     of '\n':
       addToken(Newline, start, current + 1)
+    of '\0':
+      addToken(EOF, start, current + 1)
     else:
       let textStart = current
       while current < source.len:
@@ -167,15 +170,15 @@ proc advance(s: TokenScanner): Token {.inline.} =
   s.current += 1
 
 proc peek(s: TokenScanner, offset: int = 0): Token {.inline.} =
-  if s.current + offset >= s.tokens.len:
-    return s.tokens[^1] # Return last token
   s.peekIndex = s.current + offset
+  if s.peekIndex >= s.tokens.len:
+    return s.tokens[^1]
   return s.tokens[s.peekIndex]
 
 proc matchToken(s: TokenScanner, expected: TokenType): bool {.inline.} =
   if s.getCurrentToken().type != expected:
     return false
-  discard s.advance()
+  s.current += 1
   return true
 
 proc isAtEnd((s: TokenScanner): bool {.inline.} =
@@ -192,7 +195,7 @@ proc blockParseMdxBlock*(s: TokenScanner): BlockToken =
     let firstChar = s.source[firstToken.range.start]
     if firstChar >= 'A' and firstChar <= 'Z':
       name = firstToken.range
-      discard s.advance()
+      s.current += 1
     else:
       return nil
   else:
@@ -206,7 +209,7 @@ proc blockParseMdxBlock*(s: TokenScanner): BlockToken =
     case token.type:
       of CloseAngle:
         wasClosingMarkFound = true
-        discard s.advance()
+        s.current += 1
         break
       of Slash:
         if s.peek().type == CloseAngle:
@@ -215,7 +218,7 @@ proc blockParseMdxBlock*(s: TokenScanner): BlockToken =
           s.current += 2
           break
       else:
-        discard s.advance()
+        s.current += 1
 
   if not wasClosingMarkFound:
     raise new ParseError(
@@ -237,12 +240,12 @@ proc blockParseMdxBlock*(s: TokenScanner): BlockToken =
         let nameToken = s.getCurrentToken()
         if nameToken.type == Text and
             s.source[nameToken.range.start..<nameToken.range.end] == componentName:
-          discard s.advance()
+          s.current += 1
           if s.getCurrentToken().type == CloseAngle:
-            discard s.advance()
+            s.current += 1
             break
         break
-      discard s.advance()
+      s.current += 1
 
   if isSelfClosing:
     return BlockToken(
@@ -269,12 +272,12 @@ proc blockParseCodeBlock(s: TokenScanner): BlockToken =
   # Get language
   let languageStart = s.current
   while not s.isAtEnd() and s.getCurrentToken().type != Newline:
-    discard s.advance()
+    s.current += 1
   let languageEnd = s.current
 
   # Skip newline
   if s.getCurrentToken().type == Newline:
-    discard s.advance()
+    s.current += 1
 
   let codeStart = s.current
   var codeEnd = codeStart
@@ -286,7 +289,7 @@ proc blockParseCodeBlock(s: TokenScanner): BlockToken =
       codeEnd = s.current
       s.current += 3
       break
-    discard s.advance()
+    s.current += 1
 
   return BlockToken(
     type: CodeBlock,
@@ -302,21 +305,21 @@ proc parseMdxDocumentBlocks*(s: TokenScanner): seq[BlockToken] =
     case token.type:
       of Backtick:
         if s.peek(1).type == Backtick and s.peek(2).type == Backtick:
-          let block = blockParseCodeBlock(s)
-          if block != nil:
-            blocks.add(block)
+          let codeBlock = blockParseCodeBlock(s)
+          if codeBlock != nil:
+            blocks.add(codeBlock)
           else:
-            discard s.advance()
+            s.current += 1
         else:
-          discard s.advance()
+          s.current += 1
       of OpenAngle:
-        discard s.advance()
-        let currentBlock = blockParseMdxBlock(s)
-        if currentBlock != nil:
-          blocks.add(currentBlock)
-      else:
-        discard s.advance()
-  return blocks
+        s.current += 1
+        let mdxBlock = blockParseMdxBlock(s)
+        if mdxBlock != nil:
+          blocks.add(mdxBlock)
+        else:
+          s.current += 1
+  result = blocks
 
 # Utilities to get line and column numbers
 # Use these when you need to report errors or warnings
