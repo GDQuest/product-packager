@@ -3,6 +3,7 @@
 # determining what kind of block it is.
 #
 # TODO:
+# - Next goal: complete paragraph parsing, then move on to inline parsing of MDX components and code blocks, then preprocessing and "rendering" the document as MDX.
 # - Differentiate ranges of tokens from text ranges. Currently, it's confusing. Consider having two different types of ranges.
 import parse_base_tokens
 import shared
