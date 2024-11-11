@@ -225,10 +225,11 @@ proc blockParseMdxBlock*(s: TokenScanner): BlockToken =
           wasClosingMarkFound = true
           s.current += 2
           break
+        else:
+          s.current += 1
       else:
         s.current += 1
 
-  # TODO: Handle self-closing tags
   if not wasClosingMarkFound:
     raise ParseError(
       range: Range(start: start, `end`: s.current),
