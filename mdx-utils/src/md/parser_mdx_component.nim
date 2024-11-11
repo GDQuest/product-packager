@@ -45,32 +45,28 @@ type
       Heading
       Paragraph
       CodeBlock
-      # A self-closing component (<Name ... />) is a leaf in the document
-      # That's why we differentiate it: it doesn't need to be fed back for
-      # recursive parsing.
-      SelfClosingMdxComponent
       MdxComponent
 
-  Token = object
-    type: TokenType
+  Token* = object
+    kind: TokenType
     range: Range
 
   BlockToken* = ref object
-    type: BlockType
     # Index range for the entire set of tokens corresponding to this block
     # Allows us to retrieve both the tokens and the source text from the first and last token's ranges'
     range: Range
-    case type
+    case kind: BlockType
       of CodeBlock:
         language: Range
         code: Range
-      of SelfClosingMdxComponent:
-        name: Range
       of MdxComponent:
         name: Range
+        isSelfClosing: bool
         # This allows us to distinguish the opening tag and body for further parsing
         openingTagRange: Range
         bodyRange: Range
+      of Heading, Paragraph:
+        discard
 
   TokenScanner* = ref object
     tokens: seq[Token]
@@ -81,17 +77,17 @@ type
   Position* = object
     line, column: int
 
-  ParseError* = ref object of Exception
+  ParseError* = ref object of ValueError
     range: Range
     message: string
 
-proc tokenize(source: string): seq[Token] =
+proc tokenize*(source: string): seq[Token] =
   var tokens: seq[Token] = @[]
   var current = 0
 
   proc addToken(tokenType: TokenType, start, ende: int) =
     tokens.add(Token(
-      type: tokenType,
+      kind: tokenType,
       range: Range(start: start, `end`: ende)
     ))
 
@@ -149,10 +145,10 @@ proc tokenize(source: string): seq[Token] =
           break
         else:
           current += 1
-      let textRange = Range(textStart, current)
+      let textRange = Range(start: textStart, `end`: current)
       if textRange.start != textRange.end:
         tokens.add(Token(
-          type: ttText,
+          kind: Text,
           range: Range(start: textRange.start, `end`: textRange.end),
         ))
       continue
@@ -176,12 +172,12 @@ proc peek(s: TokenScanner, offset: int = 0): Token {.inline.} =
   return s.tokens[s.peekIndex]
 
 proc matchToken(s: TokenScanner, expected: TokenType): bool {.inline.} =
-  if s.getCurrentToken().type != expected:
+  if s.getCurrentToken().kind != expected:
     return false
   s.current += 1
   return true
 
-proc isAtEnd((s: TokenScanner): bool {.inline.} =
+proc isAtEnd(s: TokenScanner): bool {.inline.} =
   return s.current >= s.tokens.len
 
 # BLOCK-LEVEL PARSING
@@ -191,7 +187,7 @@ proc blockParseMdxBlock*(s: TokenScanner): BlockToken =
   # Get component name
   var name: Range
   let firstToken = s.getCurrentToken()
-  if firstToken.type == Text:
+  if firstToken.kind == Text:
     let firstChar = s.source[firstToken.range.start]
     if firstChar >= 'A' and firstChar <= 'Z':
       name = firstToken.range
@@ -206,13 +202,13 @@ proc blockParseMdxBlock*(s: TokenScanner): BlockToken =
   var isSelfClosing = false
   while not s.isAtEnd():
     let token = s.getCurrentToken()
-    case token.type:
+    case token.kind:
       of CloseAngle:
         wasClosingMarkFound = true
         s.current += 1
         break
       of Slash:
-        if s.peek().type == CloseAngle:
+        if s.peek().kind == CloseAngle:
           isSelfClosing = true
           wasClosingMarkFound = true
           s.current += 2
@@ -233,15 +229,15 @@ proc blockParseMdxBlock*(s: TokenScanner): BlockToken =
   if not isSelfClosing:
     let componentName = s.source[name.start..<name.end]
     while not s.isAtEnd():
-      if s.getCurrentToken().type == OpenAngle and
-          s.peek().type == Slash:
+      if s.getCurrentToken().kind == OpenAngle and
+          s.peek().kind == Slash:
         bodyEnd = s.current
         s.current += 2
         let nameToken = s.getCurrentToken()
-        if nameToken.type == Text and
+        if nameToken.kind == Text and
             s.source[nameToken.range.start..<nameToken.range.end] == componentName:
           s.current += 1
-          if s.getCurrentToken().type == CloseAngle:
+          if s.getCurrentToken().kind == CloseAngle:
             s.current += 1
             break
         break
@@ -249,13 +245,15 @@ proc blockParseMdxBlock*(s: TokenScanner): BlockToken =
 
   if isSelfClosing:
     return BlockToken(
-      type: SelfClosingMdxComponent,
+      kind: MdxComponent,
+      isSelfClosing: true,
       range: Range(start: start, `end`: s.current),
       name: name
     )
   else:
     return BlockToken(
-      type: MdxComponent,
+      kind: MdxComponent,
+      isSelfClosing: false,
       range: Range(start: start, `end`: s.current),
       name: name,
       openingTagRange: Range(start: start, `end`: openingTagEnd),
@@ -271,28 +269,28 @@ proc blockParseCodeBlock(s: TokenScanner): BlockToken =
 
   # Get language
   let languageStart = s.current
-  while not s.isAtEnd() and s.getCurrentToken().type != Newline:
+  while not s.isAtEnd() and s.getCurrentToken().kind != Newline:
     s.current += 1
   let languageEnd = s.current
 
   # Skip newline
-  if s.getCurrentToken().type == Newline:
+  if s.getCurrentToken().kind == Newline:
     s.current += 1
 
   let codeStart = s.current
   var codeEnd = codeStart
   # Find closing backticks
   while not s.isAtEnd():
-    if s.getCurrentToken().type == Backtick and
-        s.peek(1).type == Backtick and
-        s.peek(2).type == Backtick:
+    if s.getCurrentToken().kind == Backtick and
+        s.peek(1).kind == Backtick and
+        s.peek(2).kind == Backtick:
       codeEnd = s.current
       s.current += 3
       break
     s.current += 1
 
   return BlockToken(
-    type: CodeBlock,
+    kind: CodeBlock,
     range: Range(start: start, `end`: s.current),
     language: Range(start: languageStart, `end`: languageEnd),
     code: Range(start: codeStart, `end`: codeEnd)
@@ -302,9 +300,9 @@ proc parseMdxDocumentBlocks*(s: TokenScanner): seq[BlockToken] =
   var blocks: seq[BlockToken]
   while not s.isAtEnd():
     let token = s.getCurrentToken()
-    case token.type:
+    case token.kind:
       of Backtick:
-        if s.peek(1).type == Backtick and s.peek(2).type == Backtick:
+        if s.peek(1).kind == Backtick and s.peek(2).kind == Backtick:
           let codeBlock = blockParseCodeBlock(s)
           if codeBlock != nil:
             blocks.add(codeBlock)
