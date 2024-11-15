@@ -1,5 +1,5 @@
 import std/[unittest, tables, os]
-import get_image_size
+import image_size
 
 let DIR_THIS = currentSourcePath.parentDir()
 let testImages = {

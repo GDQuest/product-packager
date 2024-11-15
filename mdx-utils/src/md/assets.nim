@@ -8,7 +8,7 @@ const
   DIR_GODOT_DOC_CLASSES = "godot/doc/classes"
   DIR_THIS = currentSourcePath.parentDir()
 
-  CACHE_GODOT_BUILTIN_CLASSES* = block:
+  CACHE_GODOT_BUILTIN_CLASSES* = static:
     var result: seq[string]
 
     echo DIR_THIS
@@ -24,7 +24,7 @@ const
         result.add path.splitFile.name
     result.sorted((x, y) => cmp(x.len, y.len), Descending)
 
-  CACHE_GODOT_ICONS* = block:
+  CACHE_GODOT_ICONS* = static:
     var result: Table[string, string]
 
     for node in walkDir(DIR_THIS / DIR_GODOT_ICONS):
