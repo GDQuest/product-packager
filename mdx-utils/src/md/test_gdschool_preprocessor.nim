@@ -1,6 +1,6 @@
 import unittest
 import gdschool_preprocessor
-import ../get_image_size
+import ../image_size
 
 # NOTE: currently the paths are relative to where the tests are run from. You need to be in this directory to run the tests.
 # TODO: make the tests use file paths and extract the dirpaths from the file paths, using functions from the program.

@@ -6,7 +6,7 @@ import std/[nre, strformat, strutils, tables, options, os, terminal, logging]
 import assets
 import utils
 import ../types
-import ../get_image_size
+import ../image_size
 
 ## Collects all error messages generated during the preprocessing of
 ## all files to group them at the end of the program's execution.
