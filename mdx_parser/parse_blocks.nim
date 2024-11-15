@@ -128,6 +128,8 @@ proc parseMdxDocumentBlocks*(s: TokenScanner): seq[BlockToken] =
           if paragraph != nil:
             blocks.add(paragraph)
             continue
+      else:
+        discard
     s.current += 1
   result = blocks
 
