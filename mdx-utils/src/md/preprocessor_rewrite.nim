@@ -18,60 +18,17 @@ type
 var preprocessorErrorMessages*: seq[string] = @[]
 
 const
-  regexAnchorLine = re"(?m)(?s)\h*(#|\/\/)\h*(ANCHOR|END).*?(\v|$)"
-
-proc handleIncludeShortcode(match: RegexMatch, context: HandlerContext): string =
-  let args = match.captures.toTable()
-  let includeFileName = cache.findCodeFile(args["file"])
-
-  try:
-    result = readFile(includeFileName)
-
-    if "anchor" in args:
-      let
-        anchor = args["anchor"]
-        regexAnchor = re(
-          fmt(
-            r"(?s)\h*(?:#|\/\/)\h*ANCHOR:\h*\b{anchor}\b\h*\v(?P<contents>.*?)\s*(?:#|\/\/)\h*END:\h*\b{anchor}\b"
-          )
-        )
-
-      let anchorMatch = result.find(regexAnchor)
-      if anchorMatch.isSome():
-        let
-          anchorCaptures = anchorMatch.get.captures.toTable()
-          output = anchorCaptures["contents"]
-          lines = output.splitLines()
-        var prefixedLines: seq[string] = @[]
-
-        # If we're in a code block, preserve indentation
-        let prefix = if "prefix" in args: args["prefix"] else: ""
-        for line in lines:
-          prefixedLines.add(prefix & line)
-        result = prefixedLines.join("\n")
-      else:
-        let errorMessage =
-          fmt"Can't find matching contents for anchor {anchor} in file {includeFileName}."
-        stderr.styledWriteLine(fgRed, errorMessage)
-        preprocessorErrorMessages.add(errorMessage)
-        return match.match
-
-    # Clean up anchor markers and extra newlines
-    result = result.replace(regexAnchorLine, "").strip(chars = {'\n'})
-
-  except IOError:
-    let errorMessage =
-      fmt"Failed to read include file: {includeFileName}"
-    stderr.styledWriteLine(fgRed, errorMessage)
-    preprocessorErrorMessages.add(errorMessage)
-    return match.match
+  REGEX_ANCHOR_LINE = re"(?m)(?s)\h*(#|\/\/)\h*(ANCHOR|END).*?(\v|$)"
 
 const
   PATTERNS = {
     '`': @[
       PatternHandler(
+        # TODO: add all node classes from assets module
         pattern: re"(`(?P<class>Node|Control|Sprite2D)`)"),
         handler: proc(match: RegexMatch, context: HandlerContext): string =
+          ## Replaces a Godot class name in inline code formatting with an icon component followed by the class name.
+          ## TODO: replace with new icon component format.
           let className = match.captures.toTable()["class"].strip(chars = {'`'})
           if className in CACHE_GODOT_ICONS:
             result = "<IconGodot name=\"" & className & "\"/> " & match.match
@@ -82,14 +39,62 @@ const
     ],
     '<': @[
       PatternHandler(
+        # Code include components
         pattern: re(
           r"""(?P<prefix>.*?)?< *Include\s+file=["'](?P<file>.+?\.[a-zA-Z0-9]+)["']\s*(?:anchor=["'](?P<anchor>\w+)["'])?\s*/>"""
         ),
-        handler: handleIncludeShortcode
+        handler: proc handleIncludeShortcode(match: RegexMatch, context: HandlerContext): string =
+          ## Replaces the Include shortcode with the contents of the section of a file or full file it points to.
+          let args = match.captures.toTable()
+          let includeFileName = cache.findCodeFile(args["file"])
+
+          try:
+            result = readFile(includeFileName)
+
+            if "anchor" in args:
+              let
+                anchor = args["anchor"]
+                regexAnchor = re(
+                  fmt(
+                    r"(?s)\h*(?:#|\/\/)\h*ANCHOR:\h*\b{anchor}\b\h*\v(?P<contents>.*?)\s*(?:#|\/\/)\h*END:\h*\b{anchor}\b"
+                  )
+                )
+
+              let anchorMatch = result.find(regexAnchor)
+              if anchorMatch.isSome():
+                let
+                  anchorCaptures = anchorMatch.get.captures.toTable()
+                  output = anchorCaptures["contents"]
+                  lines = output.splitLines()
+                var prefixedLines: seq[string] = @[]
+
+                # If we're in a code block, preserve indentation
+                let prefix = if "prefix" in args: args["prefix"] else: ""
+                for line in lines:
+                  prefixedLines.add(prefix & line)
+                result = prefixedLines.join("\n")
+              else:
+                let errorMessage =
+                  fmt"Can't find matching contents for anchor {anchor} in file {includeFileName}."
+                stderr.styledWriteLine(fgRed, errorMessage)
+                preprocessorErrorMessages.add(errorMessage)
+                return match.match
+
+            # Clean up anchor markers and extra newlines
+            result = result.replace(REGEX_ANCHOR_LINE, "").strip(chars = {'\n'})
+
+          except IOError:
+            let errorMessage =
+              fmt"Failed to read include file: {includeFileName}"
+            stderr.styledWriteLine(fgRed, errorMessage)
+            preprocessorErrorMessages.add(errorMessage)
+            return match.match
       ),
       PatternHandler(
+        # Video file component
         pattern: re"<VideoFile\s*(?P<before>.*?)?src=[\"'](?P<src>[^\"']+)[\"'](?P<after>.*?)?/>",
         handler: proc(match: RegexMatch, context: HandlerContext): string =
+          ## Replaces the relative input video path with an absolute path in the website's public directory.
           let
             captures = match.captures.toTable()
             src = captures["src"]
@@ -101,8 +106,11 @@ const
     ],
     '!': @[
       PatternHandler(
+        # Markdown images
         pattern: re"!\[(?P<alt>.*?)\]\((?P<path>.+?)\)",
-        handler: proc(match: RegexMatch, context: HandlerContext): string =
+        handler: proc handleMarkdownImage(match: RegexMatch, context: HandlerContext): string =
+          ## Replaces the relative input image path with an absolute path in the website's public directory.
+          ## Also gives the image a class depending on its aspect ratio.
           let
             captures = match.captures.toTable()
             alt = captures["alt"].replace("\"", "'")
@@ -126,6 +134,9 @@ proc processContent*(
     outputDirPath: string = "",
     appSettings: AppSettingsBuildGDSchool,
 ): string =
+  ## Runs through the content character by character, looking for patterns to replace.
+  ## Once the first character of a pattern is found, it tries to match it with the regex patterns in the PATTERNS table.
+  ## And if a regex is matched, it calls the handler function to replace the matched text with the new text.
   var
     i = 0
     lastMatchEnd = 0
