@@ -2,7 +2,7 @@
 ## It find and replaces include shortcodes in code blocks and adds Godot icons
 ## for built-in class names in inline code marks.
 ## Also, produces a css file with the list of all Godot icons used in the content.
-import std/[nre, strformat, strutils, tables, options, os, terminal, logging]
+import std/[nre, strformat, strutils, tables, options, os, terminal, logging, sets]
 import assets
 import utils
 import ../types
@@ -89,13 +89,41 @@ proc preprocessCodeListings(content: string): string =
 
   result = content.replace(regexMarkdownCodeBlock, replaceMarkdownCodeBlock)
 
+proc getGodotIconGroup(iconName: string): string =
+  ## Returns the group of the Godot icon for the given class name.
+  ## The group is used to color the icon in the same way as the Godot
+  ## documentation.
+  const ICON_NAMES_UI = static:
+    toHashSet([
+      "Control", "Container", "AspectRatioContainer", "BoxContainer", "CenterContainer",
+      "HBoxContainer", "VBoxContainer", "ColorPicker",
+      "FlowContainer", "HFlowContainer", "VFlowContainer",
+      "GraphElement", "GraphFrame", "GraphNode",
+      "GridContainer", "SplitContainer", "HSplitContainer", "VSplitContainer",
+      "MarginContainer", "PanelContainer", "ScrollContainer", "SubViewportContainer", "TabContainer",
+      "Button", "LinkButton", "TextureButton", "TextEdit", "CodeEdit", "ColorRect", "GraphEdit",
+      "HScrollBar", "VScrollBar", "HSlider", "VSlider", "ProgressBar", "SpinBox", "TextureProgressBar",
+      "HSeparator", "VSeparator", "ItemList", "Label", "LineEdit", "MenuBar",
+      "NinePatchRect", "Panel", "ReferenceRect", "RichTextLabel", "TabBar", "TextureRect",
+      "Tree", "VideoStreamPlayer",
+    ])
+  result =
+    if iconName.endsWith("2D"): "2d"
+    elif iconName.endsWith("3D"): "3d"
+    elif iconName.startsWith("Animation") or iconName == "Tween": "animation"
+    elif iconName in ICON_NAMES_UI: "ui"
+    elif iconName in CACHE_EDITOR_ICONS: "editor"
+    elif iconName == "Node": "node"
+    else: "general"
+
 ## Appends a react component for each Godot class name used in the markdown content, in inline code marks.
-## For example, it transforms `Node` to <IconGodot name="Node"/>.
+## For example, it transforms `Node` to <IconGodot name="Node" colorGroup="node">Node</IconGodot>.
 proc addGodotIcons(content: string): string =
   proc replaceGodotIcon(match: RegexMatch): string =
     let className = match.captures.toTable()["class"].strip(chars = {'`'})
     if className in CACHE_GODOT_ICONS:
-      result = "<IconGodot name=\"" & className & "\"/> " & match.match
+      let group = getGodotIconGroup(className)
+      result = "<IconGodot name=\"" & className & "\" colorGroup=\"" & group & "\">" & match.match & "</IconGodot>"
     else:
       info(fmt"Couldn't find icon for `{className}`. Skipping...")
       result = match.match
