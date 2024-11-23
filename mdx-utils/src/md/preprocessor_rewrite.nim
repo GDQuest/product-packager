@@ -185,44 +185,49 @@ proc preprocessMarkdownImage(match: RegexMatch, context: HandlerContext): string
       else: "landscape-image"
   result = fmt"""<PublicImage src="{outputPath}" alt="{alt}" className="{className}" width="{dimensions.width}" height="{dimensions.height}"/>"""
 
-const
-  PATTERNS = {
-    '`': @[
-      PatternHandler(
-        # TODO: add all node classes from assets module
-        pattern: ["(`(?P<class>", CACHE_GODOT_BUILTIN_CLASSES.join("|"), ")`)"].join.re(),
-        handler: preprocessGodotIcon,
-      )
-    ],
-    '<': @[
-      PatternHandler(
-        # Code include components
-        pattern: re(
-          r"""<\s*Include.+?/>"""
-        ),
-        handler: preprocessIncludeComponent,
-      ),
-      PatternHandler(
-        # Video file component
-        pattern: re"""<VideoFile\s*(?P<before>.*?)?src=["'](?P<src>[^\"']+)["'](?P<after>.*?)?/>""",
-        handler: preprocessVideoFile,
-      )
-    ],
-    '!': @[
-      PatternHandler(
-        # Markdown images
-        pattern: re"!\[(?P<alt>.*?)\]\((?P<path>.+?)\)",
-        handler: preprocessMarkdownImage,
-      )
-    ]
-  }.toTable()
-
 proc processContent*(
     content: string,
     inputDirPath: string = "",
     outputDirPath: string = "",
     appSettings: AppSettingsBuildGDSchool,
 ): string =
+
+  let
+    regexGodotIcon = ["(`(?P<class>", CACHE_GODOT_BUILTIN_CLASSES.join("|"), ")`)"].join.re()
+    regexInclude = re(r"""<\s*Include.+?/>""")
+    regexVideoFile = re"""<VideoFile\s*(?P<before>.*?)?src=["'](?P<src>[^\"']+)["'](?P<after>.*?)?/>"""
+    regexMarkdownImage = re"!\[(?P<alt>.*?)\]\((?P<path>.+?)\)"
+
+  const
+    PATTERNS = {
+      '`': @[
+        PatternHandler(
+          # TODO: add all node classes from assets module
+          pattern: regexGodotIcon,
+          handler: preprocessGodotIcon,
+        )
+      ],
+      '<': @[
+        PatternHandler(
+          # Code include components
+          pattern: regexInclude,
+          handler: preprocessIncludeComponent,
+        ),
+        PatternHandler(
+          # Video file component
+          pattern: regexVideoFile,
+          handler: preprocessVideoFile,
+        )
+      ],
+      '!': @[
+        PatternHandler(
+          # Markdown images
+          pattern: regexMarkdownImage,
+          handler: preprocessMarkdownImage,
+        )
+      ]
+    }.toTable()
+
   ## Runs through the content character by character, looking for patterns to replace.
   ## Once the first character of a pattern is found, it tries to match it with the regex patterns in the PATTERNS table.
   ## And if a regex is matched, it calls the handler function to replace the matched text with the new text.
