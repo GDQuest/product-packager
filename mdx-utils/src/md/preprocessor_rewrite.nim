@@ -5,14 +5,19 @@ import ../types
 import ../image_size
 
 type
-  PatternHandler = object
+  PatternHandler = ref object
     pattern: Regex
     handler: proc(match: RegexMatch, context: HandlerContext): string
 
-  HandlerContext = object
+  HandlerContext = ref object
     inputDirPath: string
     outputDirPath: string
     appSettings: AppSettingsBuildGDSchool
+
+  ParsedMDXComponent = ref object
+    name: string
+    props: Table[string, string]
+
 
 ## Collects all error messages generated during the preprocessing of
 ## all files to group them at the end of the program's execution.
@@ -20,11 +25,6 @@ var preprocessorErrorMessages*: seq[string] = @[]
 
 let
   regexAnchorLine = re"(?m)(?s)\h*(#|\/\/)\h*(ANCHOR|END).*?(\v|$)"
-
-
-type ParsedMDXComponent = ref object
-  name: string
-  props: Table[string, string]
 
 proc parseMDXComponent(componentText: string): ParsedMDXComponent =
   ## Parses an MDX component string into a ParsedMDXComponent object.
@@ -56,7 +56,7 @@ proc preprocessVideoFile(match: RegexMatch, context: HandlerContext): string =
     outputPath = context.outputDirPath / src
   result = "<VideoFile " & before & " src=\"" & outputPath & "\"" & " " & after & "/>"
 
-proc replaceGodotIcon(match: RegexMatch, context: HandlerContext): string =
+proc preprocessGodotIcon(match: RegexMatch, context: HandlerContext): string =
   ## Replaces a Godot class name in inline code formatting with an icon component followed by the class name.
   ## TODO: replace with new icon component format. -> https://github.com/GDQuest/product-packager/pull/74
   let className = match.captures.toTable()["class"].strip(chars = {'`'})
@@ -68,9 +68,12 @@ proc replaceGodotIcon(match: RegexMatch, context: HandlerContext): string =
 
 proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): string =
   ## Replaces the Include shortcode with the contents of the section of a file or full file it points to.
-  let args = match.captures.toTable()
+  let component = parseMDXComponent(match.match)
+  let args = component.props
+
   let includeFileName = cache.findCodeFile(args["file"])
 
+  # TODO: Replace with gdscript parser, get symbols or anchors from the parser
   try:
     result = readFile(includeFileName)
     if "anchor" in args:
@@ -110,7 +113,7 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
       fmt"Failed to read include file: {includeFileName}"
     stderr.styledWriteLine(fgRed, errorMessage)
     preprocessorErrorMessages.add(errorMessage)
-    return match.match
+    result = match.match
 
 proc preprocessMarkdownImage(match: RegexMatch, context: HandlerContext): string =
   ## Replaces the relative input image path with an absolute path in the website's public directory.
@@ -135,14 +138,14 @@ const
       PatternHandler(
         # TODO: add all node classes from assets module
         pattern: ["(`(?P<class>", CACHE_GODOT_BUILTIN_CLASSES.join("|"), ")`)"].join.re(),
-        handler: replaceGodotIcon,
+        handler: preprocessGodotIcon,
       )
     ],
     '<': @[
       PatternHandler(
         # Code include components
         pattern: re(
-          r"""(?<=(?P<prefix>[-+]))?<\s*Include\s+file=["'](?P<file>.+?\.[a-zA-Z0-9]+)["']\s*(?:anchor=["'](?P<anchor>\w+)["'])?\s*/>"""
+          r"""<\s*Include.+?/>"""
         ),
         handler: preprocessIncludeComponent,
       ),
