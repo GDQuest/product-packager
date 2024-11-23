@@ -73,7 +73,13 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
 
   let includeFileName = cache.findCodeFile(args["file"])
 
-  # TODO: Replace with gdscript parser, get symbols or anchors from the parser
+  # TODO: Replace with gdscript parser, get symbols or anchors from the parser:
+  # TODO: add support for symbol prop
+  # TODO: replace prefixes in lesson material with include prop
+  # TODO: error handling:
+    # - if there's a replace prop, ensure it's correctly formatted
+    # - warn about using anchor + symbol (one should take precedence)
+    # - check that prefix is valid (- or +)
   try:
     result = readFile(includeFileName)
     if "anchor" in args:
@@ -93,11 +99,23 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
           lines = output.splitLines()
         var prefixedLines: seq[string] = @[]
 
-        # If we're in a code block, preserve indentation
-        let prefix = args.getOrDefault("prefix", "")
+        # Add prefix and dedent the code block if applicable
+        let
+          prefix = args.getOrDefault("prefix", "")
+          dedent = try: parseInt(args.getOrDefault("dedent", "0")) except: 0
+
         for line in lines:
-          prefixedLines.add(prefix & line)
+          var processedLine = line
+          if dedent > 0:
+            for i in 1..dedent:
+              if processedLine.startsWith("\t"):
+                processedLine = processedLine[1..^1]
+          prefixedLines.add(prefix & processedLine)
         result = prefixedLines.join("\n")
+
+        if "replace" in args:
+          let replace = args["replace"]
+          result = result.replace(replace, args["with"])
       else:
         let errorMessage =
           fmt"Can't find matching contents for anchor {anchor} in file {includeFileName}."
