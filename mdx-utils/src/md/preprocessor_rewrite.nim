@@ -114,8 +114,43 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
         result = prefixedLines.join("\n")
 
         if "replace" in args:
-          let replace = args["replace"]
-          result = result.replace(replace, args["with"])
+          type
+            SearchAndReplace = object
+              source: string
+              replacement: string
+
+          # Parse the replace prop. It's a JSX expression with either a single object or an array of objects.
+          # TODO: add error handling
+          let replaces = try:
+            # Remove the array mark if relevant, then parse objects - this should work
+            # for both array and single object formats
+            let replacesStr = args["replace"].strip(chars = {'[', ']'})
+            let matches = replacesStr.findAll(re"\{.+?\}")
+            var searchesAndReplaces: seq[SearchAndReplace] = @[]
+
+            for match in matches:
+              var keyValuePairs = match.strip(chars = {'{', '}'}).split(",")
+              var source, replacement: string
+
+              for part in keyValuePairs:
+                let kv = part.strip().split(":")
+                if kv.len == 2:
+                  let key = kv[0].strip().strip(chars = {'"'})
+                  let value = kv[1].strip().strip(chars = {'"'})
+                  if key == "source":
+                    source = value
+                  elif key == "replacement":
+                    replacement = value
+
+              searchesAndReplaces.add(SearchAndReplace(source: source, replacement: replacement))
+
+            searchesAndReplaces
+          except:
+            @[]
+
+          # Apply all replacements
+          for searchAndReplace in replaces:
+            result = result.replace(searchAndReplace.source, searchAndReplace.replacement)
       else:
         let errorMessage =
           fmt"Can't find matching contents for anchor {anchor} in file {includeFileName}."
