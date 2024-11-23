@@ -21,6 +21,31 @@ var preprocessorErrorMessages*: seq[string] = @[]
 let
   regexAnchorLine = re"(?m)(?s)\h*(#|\/\/)\h*(ANCHOR|END).*?(\v|$)"
 
+
+type ParsedMDXComponent = ref object
+  name: string
+  props: Table[string, string]
+
+proc parseMDXComponent(componentText: string): ParsedMDXComponent =
+  ## Parses an MDX component string into a ParsedMDXComponent object.
+  result = ParsedMDXComponent(
+    name: "",
+    props: initTable[string, string]()
+  )
+
+  let namePattern = re"^<\s*([A-Z][^\s>]+)"
+  let attrPattern = re"""\s+([\w-]+)(?:=["']([^"']*)["'])?"""
+
+  let nameMatch = componentText.match(namePattern)
+  if not nameMatch.isSome:
+    raise newException(ValueError, "No valid component name found for string \"" & componentText & "\"")
+
+  result.name = nameMatch.get.captures[0]
+  for match in componentText.findIter(attrPattern, nameMatch.get().matchBounds.b):
+    let name = match.captures[0]
+    let value = match.captures[1]
+    result.props[name] = value
+
 proc preprocessVideoFile(match: RegexMatch, context: HandlerContext): string =
   ## Replaces the relative input video path with an absolute path in the website's public directory.
   let
@@ -33,7 +58,7 @@ proc preprocessVideoFile(match: RegexMatch, context: HandlerContext): string =
 
 proc replaceGodotIcon(match: RegexMatch, context: HandlerContext): string =
   ## Replaces a Godot class name in inline code formatting with an icon component followed by the class name.
-  ## TODO: replace with new icon component format.
+  ## TODO: replace with new icon component format. -> https://github.com/GDQuest/product-packager/pull/74
   let className = match.captures.toTable()["class"].strip(chars = {'`'})
   if className in CACHE_GODOT_ICONS:
     result = "<IconGodot name=\"" & className & "\"/> " & match.match
@@ -117,7 +142,7 @@ const
       PatternHandler(
         # Code include components
         pattern: re(
-          r"""(?P<prefix>.*?)?< *Include\s+file=["'](?P<file>.+?\.[a-zA-Z0-9]+)["']\s*(?:anchor=["'](?P<anchor>\w+)["'])?\s*/>"""
+          r"""(?<=(?P<prefix>[-+]))?<\s*Include\s+file=["'](?P<file>.+?\.[a-zA-Z0-9]+)["']\s*(?:anchor=["'](?P<anchor>\w+)["'])?\s*/>"""
         ),
         handler: preprocessIncludeComponent,
       ),
