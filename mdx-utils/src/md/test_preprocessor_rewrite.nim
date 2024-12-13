@@ -1,3 +1,8 @@
+# TODO: instead of doing setup and teardown, prepare a sample project with all the files needed for a true integration test:
+# - a Godot project with a script file
+# - a content folder with markdown files
+# - images and videos
+# - a folder with the expected output
 import unittest
 import tables
 import strutils
