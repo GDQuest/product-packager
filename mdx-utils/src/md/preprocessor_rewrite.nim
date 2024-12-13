@@ -70,9 +70,9 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
   ## Replaces the Include shortcode with the contents of the section of a file or full file it points to.
   let component = parseMDXComponent(match.match)
   let args = component.props
+  let file = args.getOrDefault("file", "")
 
-  #TODO:FIXME: When running tests this is empty and causes a SIGSERV error
-  let includeFileName = cache.findCodeFile(args["file"])
+  let includeFileName = utils.cache.findCodeFile(file)
 
   # TODO: Replace with gdscript parser, get symbols or anchors from the parser:
   # TODO: add support for symbol prop

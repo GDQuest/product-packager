@@ -24,6 +24,8 @@ type
     errors*: int
     skipped*: int
 
+# TODO: try to find a way to not start this as nil, to avoid errors when the cache is not initialized
+# TODO: make this a ref object
 var cache*: Cache
   ## |
   ## Global cache that has to be initialized with `prepareCache()`.

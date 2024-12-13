@@ -4,9 +4,11 @@ import strutils
 import os
 import preprocessor_rewrite
 import ../types
+import utils
 
-# Mock AppSettings
+
 let mockAppSettings = AppSettingsBuildGDSchool()
+utils.cache = utils.prepareCache(mockAppSettings)
 
 suite "MDX Preprocessor":
   setup:
