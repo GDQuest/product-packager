@@ -191,18 +191,25 @@ proc processContent*(
     outputDirPath: string = "",
     appSettings: AppSettingsBuildGDSchool,
 ): string =
+  ## Runs through the content character by character, looking for patterns to replace.
+  ## Once the first character of a pattern is found, it tries to match it with the regex patterns in the patterns_table table.
+  ## And if a regex is matched, it calls the handler function to replace the matched text with the new text.
 
   let
-    regexGodotIcon = ["(`(?P<class>", CACHE_GODOT_BUILTIN_CLASSES.join("|"), ")`)"].join.re()
+    regexGodotIcon = re("(`(?P<class>" & assets.CACHE_GODOT_BUILTIN_CLASSES.join("|") & ")`)")
     regexInclude = re(r"""<\s*Include.+?/>""")
     regexVideoFile = re"""<VideoFile\s*(?P<before>.*?)?src=["'](?P<src>[^\"']+)["'](?P<after>.*?)?/>"""
     regexMarkdownImage = re"!\[(?P<alt>.*?)\]\((?P<path>.+?)\)"
 
-  const
-    PATTERNS = {
+  # The table that maps chars to pattern handlers uses a proc to work around
+  # compile time expression evaluation, otherwise, the use of the regexGodotIcon
+  # would cause a compilation error as it depends on the
+  # CACHE_GODOT_BUILTIN_CLASSES constant.
+  proc makePatterns(): Table[char, seq[PatternHandler]] =
+    result = {
       '`': @[
         PatternHandler(
-          # TODO: add all node classes from assets module
+          # Builtin class names in inline code formatting, like `Node2D`
           pattern: regexGodotIcon,
           handler: preprocessGodotIcon,
         )
@@ -228,25 +235,23 @@ proc processContent*(
       ]
     }.toTable()
 
-  ## Runs through the content character by character, looking for patterns to replace.
-  ## Once the first character of a pattern is found, it tries to match it with the regex patterns in the PATTERNS table.
-  ## And if a regex is matched, it calls the handler function to replace the matched text with the new text.
+  let patterns_table = makePatterns()
   var
     i = 0
     lastMatchEnd = 0
-    result = ""
     context = HandlerContext(
       inputDirPath: inputDirPath,
       outputDirPath: outputDirPath,
       appSettings: appSettings
     )
 
+
   while i < content.len:
     let currentChar = content[i]
 
-    if currentChar in PATTERNS:
+    if currentChar in patterns_table:
       var matched = false
-      let patterns = PATTERNS[currentChar]
+      let patterns = patterns_table[currentChar]
 
       for pattern in patterns:
         let match = content.match(pattern.pattern, i)
