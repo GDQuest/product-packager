@@ -71,6 +71,7 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
   let component = parseMDXComponent(match.match)
   let args = component.props
 
+  #TODO:FIXME: When running tests this is empty and causes a SIGSERV error
   let includeFileName = cache.findCodeFile(args["file"])
 
   # TODO: Replace with gdscript parser, get symbols or anchors from the parser:
