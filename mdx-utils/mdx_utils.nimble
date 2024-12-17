@@ -1,7 +1,7 @@
 # Package
 
-version     = "0.6.0"
-author      = "razcore-rad"
+version     = "1.0.0"
+author      = "GDQuest"
 description = "Suite of utilities for GDQuest courses from Markdown files and Godot projects"
 license     = "MIT"
 srcDir      = "src"
