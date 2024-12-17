@@ -1,3 +1,14 @@
+## Preprocesses MDX documents to replace markdown and some react components with other components and settings properties.
+##
+## The processContent() function is the main entry point for the preprocessor. You pass it the file's content, and it returns the processed content.
+##
+## The algorithm works like this:
+##
+## 1. It goes through the content character by character.
+## 2. When it finds a character that matches a pattern, it tries to match the pattern with the regex patterns in a table.
+## 3. If a regex is matched, it calls the corresponding preprocessing to replace the matched text with preprocessed text.
+##
+## See the proc processContent() for the list of patterns and their handlers.
 import std/[nre, strformat, strutils, tables, options, os, terminal]
 import assets
 import utils
@@ -18,27 +29,24 @@ type
     name: string
     props: Table[string, string]
 
-
 ## Collects all error messages generated during the preprocessing of
 ## all files to group them at the end of the program's execution.
 var preprocessorErrorMessages*: seq[string] = @[]
 
-let
-  regexAnchorLine = re"(?m)(?s)\h*(#|\/\/)\h*(ANCHOR|END).*?(\v|$)"
+let regexAnchorLine = re"(?m)(?s)\h*(#|\/\/)\h*(ANCHOR|END).*?(\v|$)"
 
 proc parseMDXComponent(componentText: string): ParsedMDXComponent =
   ## Parses an MDX component string into a ParsedMDXComponent object.
-  result = ParsedMDXComponent(
-    name: "",
-    props: initTable[string, string]()
-  )
+  result = ParsedMDXComponent(name: "", props: initTable[string, string]())
 
   let namePattern = re"^<\s*([A-Z][^\s>]+)"
   let attrPattern = re"""\s+([\w-]+)(?:=["']([^"']*)["'])?"""
 
   let nameMatch = componentText.match(namePattern)
   if not nameMatch.isSome:
-    raise newException(ValueError, "No valid component name found for string \"" & componentText & "\"")
+    raise newException(
+      ValueError, "No valid component name found for string \"" & componentText & "\""
+    )
 
   result.name = nameMatch.get.captures[0]
   for match in componentText.findIter(attrPattern, nameMatch.get().matchBounds.b):
@@ -58,7 +66,7 @@ proc preprocessVideoFile(match: RegexMatch, context: HandlerContext): string =
 
 proc preprocessGodotIcon(match: RegexMatch, context: HandlerContext): string =
   ## Replaces a Godot class name in inline code formatting with an icon component followed by the class name.
-  ## TODO: replace with new icon component format. -> https://github.com/GDQuest/product-packager/pull/74
+  # TODO: replace with new icon component format. -> https://github.com/GDQuest/product-packager/pull/74
   let className = match.captures.toTable()["class"].strip(chars = {'`'})
   if className in CACHE_GODOT_ICONS:
     result = "<IconGodot name=\"" & className & "\"/> " & match.match
@@ -78,9 +86,9 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
   # TODO: add support for symbol prop
   # TODO: replace prefixes in lesson material with include prop
   # TODO: error handling:
-    # - if there's a replace prop, ensure it's correctly formatted
-    # - warn about using anchor + symbol (one should take precedence)
-    # - check that prefix is valid (- or +)
+  # - if there's a replace prop, ensure it's correctly formatted
+  # - warn about using anchor + symbol (one should take precedence)
+  # - check that prefix is valid (- or +)
   try:
     result = readFile(includeFileName)
     if "anchor" in args:
@@ -103,55 +111,62 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
         # Add prefix and dedent the code block if applicable
         let
           prefix = args.getOrDefault("prefix", "")
-          dedent = try: parseInt(args.getOrDefault("dedent", "0")) except: 0
+          dedent =
+            try:
+              parseInt(args.getOrDefault("dedent", "0"))
+            except:
+              0
 
         for line in lines:
           var processedLine = line
           if dedent > 0:
-            for i in 1..dedent:
+            for i in 1 .. dedent:
               if processedLine.startsWith("\t"):
-                processedLine = processedLine[1..^1]
+                processedLine = processedLine[1 ..^ 1]
           prefixedLines.add(prefix & processedLine)
         result = prefixedLines.join("\n")
 
         if "replace" in args:
-          type
-            SearchAndReplace = object
-              source: string
-              replacement: string
+          type SearchAndReplace = object
+            source: string
+            replacement: string
 
           # Parse the replace prop. It's a JSX expression with either a single object or an array of objects.
           # TODO: add error handling
-          let replaces = try:
-            # Remove the array mark if relevant, then parse objects - this should work
-            # for both array and single object formats
-            let replacesStr = args["replace"].strip(chars = {'[', ']'})
-            let matches = replacesStr.findAll(re"\{.+?\}")
-            var searchesAndReplaces: seq[SearchAndReplace] = @[]
+          let replaces =
+            try:
+              # Remove the array mark if relevant, then parse objects - this should work
+              # for both array and single object formats
+              let replacesStr = args["replace"].strip(chars = {'[', ']'})
+              let matches = replacesStr.findAll(re"\{.+?\}")
+              var searchesAndReplaces: seq[SearchAndReplace] = @[]
 
-            for match in matches:
-              var keyValuePairs = match.strip(chars = {'{', '}'}).split(",")
-              var source, replacement: string
+              for match in matches:
+                var keyValuePairs = match.strip(chars = {'{', '}'}).split(",")
+                var source, replacement: string
 
-              for part in keyValuePairs:
-                let kv = part.strip().split(":")
-                if kv.len == 2:
-                  let key = kv[0].strip().strip(chars = {'"'})
-                  let value = kv[1].strip().strip(chars = {'"'})
-                  if key == "source":
-                    source = value
-                  elif key == "replacement":
-                    replacement = value
+                for part in keyValuePairs:
+                  let kv = part.strip().split(":")
+                  if kv.len == 2:
+                    let key = kv[0].strip().strip(chars = {'"'})
+                    let value = kv[1].strip().strip(chars = {'"'})
+                    if key == "source":
+                      source = value
+                    elif key == "replacement":
+                      replacement = value
 
-              searchesAndReplaces.add(SearchAndReplace(source: source, replacement: replacement))
+                searchesAndReplaces.add(
+                  SearchAndReplace(source: source, replacement: replacement)
+                )
 
-            searchesAndReplaces
-          except:
-            @[]
+              searchesAndReplaces
+            except:
+              @[]
 
           # Apply all replacements
           for searchAndReplace in replaces:
-            result = result.replace(searchAndReplace.source, searchAndReplace.replacement)
+            result =
+              result.replace(searchAndReplace.source, searchAndReplace.replacement)
       else:
         let errorMessage =
           fmt"Can't find matching contents for anchor {anchor} in file {includeFileName}."
@@ -161,10 +176,8 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
 
     # Clean up anchor markers and extra newlines
     result = result.replace(regexAnchorLine, "").strip(chars = {'\n'})
-
   except IOError:
-    let errorMessage =
-      fmt"Failed to read include file: {includeFileName}"
+    let errorMessage = fmt"Failed to read include file: {includeFileName}"
     stderr.styledWriteLine(fgRed, errorMessage)
     preprocessorErrorMessages.add(errorMessage)
     result = match.match
@@ -181,10 +194,14 @@ proc preprocessMarkdownImage(match: RegexMatch, context: HandlerContext): string
   let
     ratio = dimensions.width / dimensions.height
     className =
-      if ratio < 1.0: "portrait-image"
-      elif ratio == 1.0: "square-image"
-      else: "landscape-image"
-  result = fmt"""<PublicImage src="{outputPath}" alt="{alt}" className="{className}" width="{dimensions.width}" height="{dimensions.height}"/>"""
+      if ratio < 1.0:
+        "portrait-image"
+      elif ratio == 1.0:
+        "square-image"
+      else:
+        "landscape-image"
+  result =
+    fmt"""<PublicImage src="{outputPath}" alt="{alt}" className="{className}" width="{dimensions.width}" height="{dimensions.height}"/>"""
 
 proc processContent*(
     content: string,
@@ -196,10 +213,16 @@ proc processContent*(
   ## Once the first character of a pattern is found, it tries to match it with the regex patterns in the patterns_table table.
   ## And if a regex is matched, it calls the handler function to replace the matched text with the new text.
 
+  # Preallocate enough space ahead of time to avoid memory allocations on individual string concatenations.
+  # We know that the result will be at least as long as the input content, so we use the input content length as a base.
+  result = newString(content.len)
+
   let
-    regexGodotIcon = re("(`(?P<class>" & assets.CACHE_GODOT_BUILTIN_CLASSES.join("|") & ")`)")
+    regexGodotIcon =
+      re("(`(?P<class>" & assets.CACHE_GODOT_BUILTIN_CLASSES.join("|") & ")`)")
     regexInclude = re(r"""<\s*Include.+?/>""")
-    regexVideoFile = re"""<VideoFile\s*(?P<before>.*?)?src=["'](?P<src>[^\"']+)["'](?P<after>.*?)?/>"""
+    regexVideoFile =
+      re"""<VideoFile\s*(?P<before>.*?)?src=["'](?P<src>[^\"']+)["'](?P<after>.*?)?/>"""
     regexMarkdownImage = re"!\[(?P<alt>.*?)\]\((?P<path>.+?)\)"
 
   # The table that maps chars to pattern handlers uses a proc to work around
@@ -208,32 +231,35 @@ proc processContent*(
   # CACHE_GODOT_BUILTIN_CLASSES constant.
   proc makePatterns(): Table[char, seq[PatternHandler]] =
     result = {
-      '`': @[
-        PatternHandler(
-          # Builtin class names in inline code formatting, like `Node2D`
-          pattern: regexGodotIcon,
-          handler: preprocessGodotIcon,
-        )
-      ],
-      '<': @[
-        PatternHandler(
-          # Code include components
-          pattern: regexInclude,
-          handler: preprocessIncludeComponent,
-        ),
-        PatternHandler(
-          # Video file component
-          pattern: regexVideoFile,
-          handler: preprocessVideoFile,
-        )
-      ],
-      '!': @[
-        PatternHandler(
-          # Markdown images
-          pattern: regexMarkdownImage,
-          handler: preprocessMarkdownImage,
-        )
-      ]
+      '`':
+        @[
+          PatternHandler(
+            # Builtin class names in inline code formatting, like `Node2D`
+            pattern: regexGodotIcon,
+            handler: preprocessGodotIcon,
+          )
+        ],
+      '<':
+        @[
+          PatternHandler(
+            # Code include components
+            pattern: regexInclude,
+            handler: preprocessIncludeComponent,
+          ),
+          PatternHandler(
+            # Video file component
+            pattern: regexVideoFile,
+            handler: preprocessVideoFile,
+          ),
+        ],
+      '!':
+        @[
+          PatternHandler(
+            # Markdown images
+            pattern: regexMarkdownImage,
+            handler: preprocessMarkdownImage,
+          )
+        ],
     }.toTable()
 
   let patterns_table = makePatterns()
@@ -241,11 +267,8 @@ proc processContent*(
     i = 0
     lastMatchEnd = 0
     context = HandlerContext(
-      inputDirPath: inputDirPath,
-      outputDirPath: outputDirPath,
-      appSettings: appSettings
+      inputDirPath: inputDirPath, outputDirPath: outputDirPath, appSettings: appSettings
     )
-
 
   while i < content.len:
     let currentChar = content[i]
