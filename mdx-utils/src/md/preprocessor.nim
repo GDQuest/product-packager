@@ -33,26 +33,31 @@ type
 ## all files to group them at the end of the program's execution.
 var preprocessorErrorMessages*: seq[string] = @[]
 
-let regexAnchorLine = re"(?m)(?s)\h*(#|\/\/)\h*(ANCHOR|END).*?(\v|$)"
-let regexVideoFile* =
-  re"""(?s)<VideoFile\s*(?P<before>.*?)?src=["'](?P<src>[^\"']+)["'](?P<after>.*?)?/>"""
-let regexMarkdownImage* = re"!\[(?P<alt>.*?)\]\((?P<path>.+?)\)"
+# Precompile regex patterns to avoid recompiling them in different functions
+let
+  regexAnchorLine = re"(?m)(?s)\h*(#|\/\/)\h*(ANCHOR|END).*?(\v|$)"
+  regexVideoFile* =
+    re"""(?s)<VideoFile\s*(?P<before>.*?)?src=["'](?P<src>[^\"']+)["'](?P<after>.*?)?/>"""
+  regexMarkdownImage* = re"!\[(?P<alt>.*?)\]\((?P<path>.+?)\)"
+  regexMDXName = re"^<\s*([A-Z][^\s>]+)"
+  regexMDXAttr = re"""\s+([\w-]+)(?:=["']([^"']*)["'])?"""
+  regexInclude = re(r"""<\s*Include.+?/>""")
+  regexObjectPattern = re"\{.+?\}"
+# This regex needs to be initialized after the assets.CACHE_GODOT_BUILTIN_CLASSES constant is defined.
+var regexGodotIcon: Regex
 
 proc parseMDXComponent(componentText: string): ParsedMDXComponent =
   ## Parses an MDX component string into a ParsedMDXComponent object.
   result = ParsedMDXComponent(name: "", props: initTable[string, string]())
 
-  let namePattern = re"^<\s*([A-Z][^\s>]+)"
-  let attrPattern = re"""\s+([\w-]+)(?:=["']([^"']*)["'])?"""
-
-  let nameMatch = componentText.match(namePattern)
+  let nameMatch = componentText.match(regexMDXName)
   if not nameMatch.isSome:
     raise newException(
       ValueError, "No valid component name found for string \"" & componentText & "\""
     )
 
   result.name = nameMatch.get.captures[0]
-  for match in componentText.findIter(attrPattern, nameMatch.get().matchBounds.b):
+  for match in componentText.findIter(regexMDXAttr, nameMatch.get().matchBounds.b):
     let name = match.captures[0]
     let value = match.captures[1]
     result.props[name] = value
@@ -142,12 +147,13 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
 
           # Parse the replace prop. It's a JSX expression with either a single object or an array of objects.
           # TODO: add error handling
+          # TODO: this currently cannot work because the MDX component parsing cannot capture JSX expressions as props
           let replaces =
             try:
               # Remove the array mark if relevant, then parse objects - this should work
               # for both array and single object formats
               let replacesStr = args["replace"].strip(chars = {'[', ']'})
-              let matches = replacesStr.findAll(re"\{.+?\}")
+              let matches = replacesStr.findAll(regexObjectPattern)
               var searchesAndReplaces: seq[SearchAndReplace] = @[]
 
               for match in matches:
@@ -222,10 +228,8 @@ proc processContent*(
   ## Once the first character of a pattern is found, it tries to match it with the regex patterns in the patterns_table table.
   ## And if a regex is matched, it calls the handler function to replace the matched text with the new text.
 
-  let
-    regexGodotIcon =
-      re("(`(?P<class>" & assets.CACHE_GODOT_BUILTIN_CLASSES.join("|") & ")`)")
-    regexInclude = re(r"""<\s*Include.+?/>""")
+  regexGodotIcon =
+    re("(`(?P<class>" & assets.CACHE_GODOT_BUILTIN_CLASSES.join("|") & ")`)")
 
   # The table that maps chars to pattern handlers uses a proc to work around
   # compile time expression evaluation, otherwise, the use of the regexGodotIcon
