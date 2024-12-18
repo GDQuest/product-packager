@@ -1,3 +1,4 @@
+# TODO: refactor to get rid of unnecessary imports
 import std/[algorithm, os, sequtils, strformat, strutils, sugar, tables]
 import fuzzy
 import itertools
@@ -25,7 +26,7 @@ type
     skipped*: int
 
 # TODO: try to find a way to not start this as nil, to avoid errors when the cache is not initialized
-# TODO: make this a ref object
+# TODO: make this a ref object?
 var cache*: Cache
   ## |
   ## Global cache that has to be initialized with `prepareCache()`.
@@ -34,7 +35,7 @@ proc `$`*(r: Report): string =
   fmt"Summary: {r.built} built, {r.errors} errors, {r.skipped} skipped."
 
 proc prepareCache*(appSettings: AppSettingsBuildGDSchool): Cache =
-  ## Retruns a `Cache` object with:
+  ## Returns a `Cache` object with:
   ##   - `return.files`: `seq[string]` stores all Markdown, GDScript and Shader
   ##                     paths.
   ##   - `return.table`: `Table[string, seq[string]]` with keys being the file

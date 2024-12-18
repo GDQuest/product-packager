@@ -6,7 +6,7 @@ import
     logging, os, parseopt, parsecfg, sequtils, strformat, strutils, terminal, nre,
     tables, times,
   ]
-import md/[gdschool_preprocessor, utils]
+import md/[preprocessor, utils]
 import customlogger, types
 
 const
