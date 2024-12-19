@@ -5,21 +5,17 @@ import itertools
 import ../settings
 
 const
-  SPACE* = " "
   GD_EXT* = ".gd"
   MD_EXT* = ".md"
   MDX_EXT* = ".mdx"
   SHADER_EXT* = ".gdshader"
-  HTML_EXT* = ".html"
 
 type
-  Cache =
-    tuple[
-      codeFiles: seq[string],
-      contentFiles: seq[string],
-      table: Table[string, seq[string]],
-      findCodeFile: string -> string,
-    ]
+  Cache* = object
+    codeFiles*: seq[string]
+    contentFiles*: seq[string]
+    codeFilenameToPath: Table[string, seq[string]]
+
   Report* = object
     built*: int
     errors*: int
@@ -83,39 +79,39 @@ proc prepareCache*(appSettings: BuildSettings): Cache =
       let fullPath = relativePath(appSettings.contentDir / path, appSettings.projectDir)
       contentFiles.add(fullPath)
 
-  let cacheTable = collect(
+  result.codeFiles = codeFiles
+  result.contentFiles = contentFiles
+  result.codeFilenameToPath = collect(
     for k, v in codeFiles.groupBy((s) => extractFilename(s)):
       {k: v}
   )
 
-  result.codeFiles = codeFiles
-  result.contentFiles = contentFiles
-  result.table = cacheTable
-  result.findCodeFile =
-    func (name: string): string =
-      if not (name in cacheTable or name in codeFiles):
-        let
-          filteredCandidates =
-            codeFiles.filterIt(it.toLower.endsWith(name.splitFile.ext))
-          candidates = filteredCandidates
-          .mapIt((score: name.fuzzyMatchSmart(it), path: it))
-          .sorted((x, y) => cmp(x.score, y.score), Descending)[
-            0 .. min(5, filteredCandidates.len - 1)
-          ].mapIt("\t" & it.path)
+proc findCodeFile*(cache: Cache, name: string): string =
+  if not (name in cache.codeFilenameToPath or name in cache.codeFiles):
+    let
+      filteredCandidates =
+        cache.codeFiles.filterIt(it.toLower.endsWith(name.splitFile.ext))
+      candidates = filteredCandidates
+      .mapIt((score: name.fuzzyMatchSmart(it), path: it))
+      .sorted((x, y) => cmp(x.score, y.score), Descending)[
+        0 .. min(5, filteredCandidates.len - 1)
+      ].mapIt("\t" & it.path)
 
-        raise newException(
-          ValueError,
-          (fmt"`{name}` doesn't exist. Possible candidates:" & candidates).join("\n"),
-        )
-      elif name in cacheTable and cacheTable[name].len != 1:
-        raise newException(
-          ValueError,
-          (
-            fmt"`{name}` is associated with multiple files:" & cacheTable[name] &
-            fmt"Relative to the current working directory. Use a file path in your shortcode instead."
-          ).join("\n"),
-        )
-      elif name in cacheTable:
-        return cacheTable[name][0]
-      else:
-        return name
+    raise newException(
+      ValueError,
+      (fmt"`{name}` doesn't exist. Possible candidates:" & candidates).join("\n"),
+    )
+  elif name in cache.codeFilenameToPath and cache.codeFilenameToPath[name].len != 1:
+    raise newException(
+      ValueError,
+      (
+        fmt"`{name}` is associated with multiple files:" & cache.codeFilenameToPath[
+          name
+        ] &
+        fmt"Relative to the current working directory. Use a file path in your shortcode instead."
+      ).join("\n"),
+    )
+  elif name in cache.codeFilenameToPath:
+    return cache.codeFilenameToPath[name][0]
+  else:
+    return name
