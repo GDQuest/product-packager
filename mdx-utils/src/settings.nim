@@ -6,6 +6,7 @@ import std/parseopt
 import std/parsecfg
 import std/os
 import std/sequtils
+import std/logging
 import customlogger
 
 type BuildSettings* = ref object
@@ -13,6 +14,7 @@ type BuildSettings* = ref object
   ## The fields are filled with either default values or values found in `CFG_FILE`
   inputDir*: string
 
+  ## The root folder of the project where the program is run. By default the program looks in the current working directory and parent directories for a configuration file or the content directory.
   projectDir*: string
   ## The directory where the source course content is stored.
   contentDir*: string
@@ -198,7 +200,7 @@ proc getAppSettings*(): BuildSettings =
       of "ignore-dir", "i":
         result.ignoreDirs.add value
       of "verbose", "v":
-        logger.levelThreshold = lvlAll
+        logger.levelThreshold = logging.lvlAll
       of "quiet", "q":
         result.isQuiet = true
       of "dry-run":
