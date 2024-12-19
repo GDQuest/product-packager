@@ -31,10 +31,11 @@ proc process(appSettings: BuildSettings) =
     mediaFiles: Table[string, string] = initTable[string, string]()
     missingMediaFiles: seq[string] = @[]
 
+  let pathPartContent = appSettings.contentDir & DirSep
+  let pathPartReplace = appSettings.distDir & DirSep & pathPartContent
   # Process all MDX and MD files and save them to the dist directory.
   for fileIn in cache.contentFiles:
-    let fileOut =
-      fileIn.replace(appSettings.contentDir & DirSep, appSettings.distDir & DirSep)
+    let fileOut = fileIn.replace(pathPartContent, pathPartReplace)
 
     # Preprocessing and writing files only happens if the file has changed,
     # but we need to read the file contents to find the media files it uses and which are missing.
@@ -59,8 +60,7 @@ proc process(appSettings: BuildSettings) =
       )
 
     # Collect media files found in the content.
-    let distDirMedia =
-      appSettings.distDir / "public" / "media" / "courses" / inputFileDir
+    let distDirMedia = appSettings.distDir / "public/media/courses" / inputFileDir
     var inputMediaFiles: seq[string] =
       fileInContents.findIter(regexMarkdownImage).toSeq().mapIt(it.captures["path"])
     inputMediaFiles.add(
