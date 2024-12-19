@@ -1,7 +1,8 @@
 ## Program to preprocess mdx files for GDQuest courses on GDSchool.
 ## Replaces include shortcodes with the contents of the included source code files.
 ## It also inserts components representing Godot icons in front of Godot class names.
-import std/[logging, os, sequtils, strformat, strutils, terminal, nre, tables, times]
+import
+  std/[logging, os, sequtils, strformat, strutils, terminal, nre, tables, times, sets]
 import md/[preprocessor, utils]
 import customlogger
 import settings
@@ -31,7 +32,7 @@ proc process(appSettings: BuildSettings) =
     processedFiles: seq[ProcessedFile] = @[]
     # This table maps media files found in content to their destination paths.
     mediaFiles: Table[string, string] = initTable[string, string]()
-    missingMediaFiles: seq[string] = @[]
+    missingMediaFiles: HashSet[string] = initHashSet[string]()
 
   let pathPartContent = appSettings.contentDir & DirSep
   let pathPartReplace =
@@ -80,7 +81,7 @@ proc process(appSettings: BuildSettings) =
         if hasFileChanged(inputPath, outputPath):
           mediaFiles[inputPath] = outputPath
       else:
-        missingMediaFiles.add(inputPath)
+        missingMediaFiles.incl(inputPath)
 
   # Show all media files processed and output collected errors
   if appSettings.isShowingMedia:
@@ -97,7 +98,7 @@ proc process(appSettings: BuildSettings) =
     stderr.styledWriteLine(
       fgRed,
       fmt"Found {missingMediaFiles.len()} missing media files:" & "\n\n" &
-        missingMediaFiles.join("\n") & "\n",
+        missingMediaFiles.toSeq().join("\n") & "\n",
     )
 
   # Create directories and write files to output directory

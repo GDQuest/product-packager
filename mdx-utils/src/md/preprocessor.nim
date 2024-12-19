@@ -102,7 +102,6 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
 
   # TODO: Replace with gdscript parser, get symbols or anchors from the parser:
   # TODO: add support for symbol prop
-  # TODO: replace prefixes in lesson material with include prop
   # TODO: error handling:
   # - if there's a replace prop, ensure it's correctly formatted
   # - warn about using anchor + symbol (one should take precedence)
