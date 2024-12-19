@@ -14,6 +14,7 @@ import assets
 import utils
 import ../settings
 import ../image_size
+import ../gdscript/parser_gdscript
 when compileOption("profiler"):
   import std/nimprof
 
@@ -187,10 +188,10 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
               result.replace(searchAndReplace.source, searchAndReplace.replacement)
       else:
         let errorMessage =
-          fmt"Can't find matching contents for anchor {anchor} in file {includeFileName}."
+          fmt"Can't find matching contents for anchor {anchor} in file {includeFileName}. Nothing will be included."
         stderr.styledWriteLine(fgRed, errorMessage)
         preprocessorErrorMessages.add(errorMessage)
-        return match.match
+        return ""
 
     # Clean up anchor markers and extra newlines
     result = result.replace(regexAnchorLine, "").strip(chars = {'\n'})
