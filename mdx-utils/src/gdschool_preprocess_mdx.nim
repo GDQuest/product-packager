@@ -1,16 +1,12 @@
 ## Program to preprocess mdx files for GDQuest courses on GDSchool.
 ## Replaces include shortcodes with the contents of the included source code files.
 ## It also inserts components representing Godot icons in front of Godot class names.
-import
-  std/[
-    logging, os, parseopt, parsecfg, sequtils, strformat, strutils, terminal, nre,
-    tables, times,
-  ]
+import std/[logging, os, sequtils, strformat, strutils, terminal, nre, tables, times]
 import md/[preprocessor, utils]
 import customlogger
 import settings
 
-proc process(appSettings: AppSettingsBuildGDSchool) =
+proc process(appSettings: BuildSettings) =
   proc hasFileChanged(pathSrc, pathDist: string): bool =
     ## Returns `true` if the source file has been accessed or modified since the destination file was last modified.
     ## For non-existent destination files, it returns `true`.
@@ -48,7 +44,7 @@ proc process(appSettings: AppSettingsBuildGDSchool) =
     if hasFileChanged(fileIn, fileOut):
       if not appSettings.isQuiet:
         let processingMsg =
-          fmt"Processing `{fileIn.relativePath(appSettings.workingDir)}` -> `{fileOut.relativePath(appSettings.workingDir)}`..."
+          fmt"Processing `{fileIn.relativePath(appSettings.projectDir)}` -> `{fileOut.relativePath(appSettings.projectDir)}`..."
         if logger.levelThreshold == lvlAll:
           info processingMsg
         else:
@@ -112,8 +108,8 @@ when isMainModule:
 
   if appSettings.isCleaning:
     if not appSettings.isDryRun:
-      removeDir(appSettings.workingDir / appSettings.distDir)
-    fmt"Removing `{appSettings.workingDir / appSettings.distDir}`. Exiting.".quit(
+      removeDir(appSettings.projectDir / appSettings.distDir)
+    fmt"Removing `{appSettings.projectDir / appSettings.distDir}`. Exiting.".quit(
       QuitSuccess
     )
 

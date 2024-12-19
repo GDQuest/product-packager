@@ -34,7 +34,7 @@ var cache*: Cache
 proc `$`*(r: Report): string =
   fmt"Summary: {r.built} built, {r.errors} errors, {r.skipped} skipped."
 
-proc prepareCache*(appSettings: AppSettingsBuildGDSchool): Cache =
+proc prepareCache*(appSettings: BuildSettings): Cache =
   ## Returns a `Cache` object with:
   ##   - `return.files`: `seq[string]` stores all Markdown, GDScript and Shader
   ##                     paths.
@@ -51,7 +51,7 @@ proc prepareCache*(appSettings: AppSettingsBuildGDSchool): Cache =
   var
     codeFiles: seq[string]
     contentFiles: seq[string]
-  let subDirs = walkDir(appSettings.workingDir, relative = true)
+  let subDirs = walkDir(appSettings.projectDir, relative = true)
     .toSeq()
     .filterIt(
       it.kind == pcDir and not it.path.startsWith(".") and
@@ -71,7 +71,7 @@ proc prepareCache*(appSettings: AppSettingsBuildGDSchool): Cache =
         continue
       let ext = path.splitFile().ext
       if ext in CODE_FILE_EXTENSIONS:
-        let fullPath = relativePath(godotProjectDir / path, appSettings.workingDir)
+        let fullPath = relativePath(godotProjectDir / path, appSettings.projectDir)
         codeFiles.add(fullPath)
 
   const CONTENT_FILE_EXTENSIONS = @[MD_EXT, MDX_EXT]
@@ -80,7 +80,7 @@ proc prepareCache*(appSettings: AppSettingsBuildGDSchool): Cache =
       continue
     let ext = path.splitFile().ext
     if ext in CONTENT_FILE_EXTENSIONS:
-      let fullPath = relativePath(appSettings.contentDir / path, appSettings.workingDir)
+      let fullPath = relativePath(appSettings.contentDir / path, appSettings.projectDir)
       contentFiles.add(fullPath)
 
   let cacheTable = collect(

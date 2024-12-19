@@ -11,7 +11,7 @@ import ../gdschool_preprocessor
 import ../../settings
 import ../utils
 
-let appSettings = AppSettingsBuildGDSchool()
+let appSettings = BuildSettings()
 utils.cache = utils.prepareCache(appSettings)
 
 suite "MDX Preprocessor":

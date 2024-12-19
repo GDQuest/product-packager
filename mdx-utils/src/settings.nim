@@ -8,28 +8,38 @@ import std/os
 import std/sequtils
 import customlogger
 
-type AppSettingsBuildGDSchool* = ref object
+type BuildSettings* = ref object
   ## This object represents the running configuration of the build system.
   ## The fields are filled with either default values or values found in `CFG_FILE`
   inputDir*: string
-  workingDir*: string
+
+  projectDir*: string
+  ## The directory where the source course content is stored.
   contentDir*: string
+  ## Root directory for the output of the build system. By default, it's set to $projectDir/dist.
   distDir*: string
+
+  ## List of directory paths relative to $inputDir where Godot projects are stored.
+  ## Used to find code files to consider for the build.
   godotProjectDirs*: seq[string]
+  ## List of directory paths relative to $inputDir to ignore in the build process.
+  ## Note: Dot folders are automatically ignored. You only need to add other directories.
   ignoreDirs*: seq[string]
-  ## If `true`, the script will delete the `distDir` before building the project.
+  ## If `true`, the program will delete the `distDir` before building the project.
   isCleaning*: bool
+  ## If `true`, the program will reduce printed output to a minimum.
   isQuiet*: bool
+  ## If `true`, the program will not write any files to disk and only output messages to the console.
   isDryRun*: bool
-  ## If `true`, the script will print the list of media files included in the course.
+  ## If `true`, the program will print the list of media files included in the course.
   isShowingMedia*: bool
   ## Prefix to preprend to markdown image urls when making them absolute for GDSchool.
   imagePathPrefix*: string
 
-func `$`*(appSettings: AppSettingsBuildGDSchool): string =
+func `$`*(appSettings: BuildSettings): string =
   result = """AppSettings:
     inputDir: {appSettings.inputDir}
-    workingDir: {appSettings.workingDir}
+    projectDir: {appSettings.projectDir}
     contentDir: {appSettings.contentDir}
     distDir: {appSettings.distDir}
     ignoreDirs: {appSettings.ignoreDirs.join(", ")}
@@ -105,13 +115,11 @@ Shortcodes:
 
     For `.shader` files replace # with //."""
 
-proc resolveAppSettings(
-    appSettings: AppSettingsBuildGDSchool
-): AppSettingsBuildGDSchool =
-  ## Fills `AppSettingsBuildGDSchool` with either defaults or values found in `CFG_FILE`
+proc resolveAppSettings(appSettings: BuildSettings): BuildSettings =
+  ## Fills `BuildSettings` with either defaults or values found in `CFG_FILE`
   ## if it exists and there were no matching command line arguments given.
   ##
-  ## Returns the updated `AppSettingsBuildGDSchool` object.
+  ## Returns the updated `BuildSettings` object.
   ##
   ## *Note* that it also stops the execution if there was an error with
   ## the given values.
@@ -119,14 +127,14 @@ proc resolveAppSettings(
   # Tries to find the root directory of the course project by checking
   # either `CFG_FILE` or `appSettings.contentDir` exist.
   # If a valid course project was found it returns the updated
-  # `AppSettingsBuildGDSchool.workingDir`.
+  # `BuildSettings.projectDir`.
   for dir in result.inputDir.parentDirs:
     if (dir / CFG_FILE).fileExists or (dir / result.contentDir).dirExists:
-      result.workingDir = dir
+      result.projectDir = dir
       break
 
-  if (result.workingDir / CFG_FILE).fileExists:
-    let config = loadConfig(result.workingDir / CFG_FILE)
+  if (result.projectDir / CFG_FILE).fileExists:
+    let config = loadConfig(result.projectDir / CFG_FILE)
     if result.contentDir == "":
       result.contentDir = config.getSectionValue("", "contentDir", COURSE_DIR)
     if result.distDir == "":
@@ -149,21 +157,21 @@ proc resolveAppSettings(
     result.distDir = DIST_DIR
 
   if not result.isCleaning:
-    if not dirExists(result.workingDir / result.contentDir):
-      fmt"Can't find course directory `{result.workingDir / result.contentDir}`. Exiting.".quit
+    if not dirExists(result.projectDir / result.contentDir):
+      fmt"Can't find course directory `{result.projectDir / result.contentDir}`. Exiting.".quit
 
     let ignoreDirsErrors = result.ignoreDirs
-      .filterIt(not dirExists(result.workingDir / it))
-      .mapIt("\t{result.workingDir / it}".fmt)
+      .filterIt(not dirExists(result.projectDir / it))
+      .mapIt("\t{result.projectDir / it}".fmt)
 
     if ignoreDirsErrors.len != 0:
       echo(("Invalid ignore directories:" & ignoreDirsErrors).join("\n"))
 
     result.ignoreDirs.add result.distDir
 
-proc getAppSettings*(): AppSettingsBuildGDSchool =
+proc getAppSettings*(): BuildSettings =
   result.inputDir = getCurrentDir().absolutePath
-  result.workingDir = result.inputDir
+  result.projectDir = result.inputDir
 
   for kind, key, value in getopt(
     shortNoVal = {'h', 'v', 'q', 'd', 's'},

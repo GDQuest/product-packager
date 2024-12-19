@@ -25,7 +25,7 @@ type
   HandlerContext = ref object
     inputDirPath: string
     outputDirPath: string
-    appSettings: AppSettingsBuildGDSchool
+    appSettings: BuildSettings
 
   ParsedMDXComponent = ref object
     name: string
@@ -267,7 +267,7 @@ proc processContent*(
     content: string,
     inputDirPath: string = "",
     outputDirPath: string = "",
-    appSettings: AppSettingsBuildGDSchool,
+    appSettings: BuildSettings,
 ): string =
   ## Runs through the content character by character, looking for patterns to replace.
   ## Once the first character of a pattern is found, it tries to match it with the regex patterns in the patterns_table table.
