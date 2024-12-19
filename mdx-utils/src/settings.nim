@@ -21,6 +21,10 @@ type BuildSettings* = object
   ## Root directory for the output of the build system. By default, it's set to $projectDir/dist.
   distDir*: string
 
+  ## (Optional) Directory path to output the processed content, relative to $distDir. By default, it's not set and the program outputs to $distDir directly.
+  ## If you need to output to, for example, $distDir/app/courses/my-course, you can set this to "app/courses/my-course".
+  outContentDir*: string
+
   ## List of directory paths relative to $inputDir where Godot projects are stored.
   ## Used to find code files to consider for the build.
   godotProjectDirs*: seq[string]
@@ -39,14 +43,12 @@ type BuildSettings* = object
   imagePathPrefix*: string
 
 func `$`*(appSettings: BuildSettings): string =
-  result = """AppSettings:
-    inputDir: {appSettings.inputDir}
-    projectDir: {appSettings.projectDir}
-    contentDir: {appSettings.contentDir}
-    distDir: {appSettings.distDir}
-    ignoreDirs: {appSettings.ignoreDirs.join(", ")}
-    godotProjectDirs: {appSettings.godotProjectDirs.join(", ")}
-    isCleaning: {appSettings.isCleaning}""".fmt()
+  result = "AppSettings:\n"
+  for name, value in appSettings.fieldPairs:
+    when value is seq:
+      result.add("    " & name & ": " & value.join(", ") & "\n")
+    else:
+      result.add("    " & name & ": " & $value & "\n")
 
 const
   COURSE_DIR = "content"
@@ -139,17 +141,24 @@ proc resolveAppSettings(appSettings: BuildSettings): BuildSettings =
     let config = loadConfig(result.projectDir / CFG_FILE)
     if result.contentDir == "":
       result.contentDir = config.getSectionValue("", "contentDir", COURSE_DIR)
+
     if result.distDir == "":
       result.distDir = config.getSectionValue("", "distDir", DIST_DIR)
+
+    if result.outContentDir == "":
+      result.outContentDir = config.getSectionValue("", "outContentDir", "")
+
     if result.ignoreDirs.len() == 0:
       result.ignoreDirs =
         config.getSectionValue("", "ignoreDirs").split(",").mapIt(it.strip())
+
     if result.godotProjectDirs.len() == 0:
       let godotProjectDirs = config
         .getSectionValue("", "godotProjectDirs")
         .split(",")
         .mapIt(it.strip())
         .filterIt(not it.isEmptyOrWhitespace())
+
       if godotProjectDirs.len() > 0:
         result.godotProjectDirs = godotProjectDirs
 
