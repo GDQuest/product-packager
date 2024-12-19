@@ -13,7 +13,9 @@ proc process(appSettings: BuildSettings) =
     if not fileExists(pathDist):
       return true
 
-    # For mdx files, they get modified during the build process, so we can't compare the size.
+    # For mdx files, they get modified during the build process, so we can't
+    # compare the input and output file size or hash. So, we compare the last
+    # access and modification times.
     return
       pathSrc.getLastAccessTime() > pathDist.getLastModificationTime() or
       pathSrc.getLastModificationTime() > pathDist.getLastModificationTime()
@@ -32,7 +34,11 @@ proc process(appSettings: BuildSettings) =
     missingMediaFiles: seq[string] = @[]
 
   let pathPartContent = appSettings.contentDir & DirSep
-  let pathPartReplace = appSettings.distDir & DirSep & pathPartContent
+  let pathPartReplace =
+    if appSettings.outContentDir.len() != 0:
+      appSettings.distDir & DirSep & appSettings.outContentDir & DirSep & pathPartContent
+    else:
+      appSettings.distDir & DirSep & pathPartContent
   # Process all MDX and MD files and save them to the dist directory.
   for fileIn in cache.contentFiles:
     let fileOut = fileIn.replace(pathPartContent, pathPartReplace)
@@ -42,7 +48,7 @@ proc process(appSettings: BuildSettings) =
     let fileInContents = readFile(fileIn)
     let inputFileDir = fileIn.parentDir()
 
-    if hasFileChanged(fileIn, fileOut):
+    if appSettings.isForced or hasFileChanged(fileIn, fileOut):
       if not appSettings.isQuiet:
         let processingMsg =
           fmt"Processing `{fileIn.relativePath(appSettings.projectDir)}` -> `{fileOut.relativePath(appSettings.projectDir)}`..."
@@ -51,7 +57,7 @@ proc process(appSettings: BuildSettings) =
         else:
           echo processingMsg
 
-      let htmlAbsoluteMediaDir = "/media/courses" / inputFileDir
+      let htmlAbsoluteMediaDir = "/media/courses/" & inputFileDir
       let outputContent =
         processContent(fileInContents, inputFileDir, htmlAbsoluteMediaDir, appSettings)
 
@@ -60,7 +66,8 @@ proc process(appSettings: BuildSettings) =
       )
 
     # Collect media files found in the content.
-    let distDirMedia = appSettings.distDir / "public/media/courses" / inputFileDir
+    let distDirMedia =
+      appSettings.distDir / "public" / "media" / "courses" / inputFileDir
     var inputMediaFiles: seq[string] =
       fileInContents.findIter(regexMarkdownImage).toSeq().mapIt(it.captures["path"])
     inputMediaFiles.add(

@@ -33,6 +33,8 @@ type BuildSettings* = object
   ignoreDirs*: seq[string]
   ## If `true`, the program will delete the `distDir` before building the project.
   isCleaning*: bool
+  ## If `true`, the program ignores the existing contents of the distDir/ folder and processes all files.
+  isForced*: bool
   ## If `true`, the program will reduce printed output to a minimum.
   isQuiet*: bool
   ## If `true`, the program will not write any files to disk and only output messages to the console.
@@ -185,8 +187,8 @@ proc getAppSettings*(): BuildSettings =
   result.projectDir = result.inputDir
 
   for kind, key, value in getopt(
-    shortNoVal = {'h', 'v', 'q', 'd', 's'},
-    longNoVal = @["clean", "help", "verbose", "quiet", "dry-run", "show-media"],
+    shortNoVal = {'h', 'v', 'q', 'd', 's', 'f'},
+    longNoVal = @["clean", "help", "verbose", "quiet", "dry-run", "show-media", "force"],
   ):
     case kind
     of cmdEnd:
@@ -216,6 +218,8 @@ proc getAppSettings*(): BuildSettings =
         result.isDryRun = true
       of "show-media", "s":
         result.isShowingMedia = true
+      of "force", "f":
+        result.isForced = true
       else:
         quit fmt"Unrecognized command line option: `{key}`\n\nHelp:\n{HELP_MESSAGE.fmt}"
 
