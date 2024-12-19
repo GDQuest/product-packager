@@ -14,6 +14,8 @@ import assets
 import utils
 import ../types
 import ../image_size
+when compileOption("profiler"):
+  import std/nimprof
 
 type
   PatternHandler = ref object
@@ -45,6 +47,8 @@ let
   regexObjectPattern = re"\{.+?\}"
 # This regex needs to be initialized after the assets.CACHE_GODOT_BUILTIN_CLASSES constant is defined.
 var regexGodotIcon: Regex
+# This table relies on the procs below and is initialized after them.
+var patterns_table: Table[char, seq[PatternHandler]]
 
 proc parseMDXComponent(componentText: string): ParsedMDXComponent =
   ## Parses an MDX component string into a ParsedMDXComponent object.
@@ -218,6 +222,47 @@ proc preprocessMarkdownImage(match: RegexMatch, context: HandlerContext): string
   result =
     fmt"""<PublicImage src="{outputPath}" alt="{alt}" className="{className}" width="{dimensions.width}" height="{dimensions.height}"/>"""
 
+proc initializeRegexes(): Table[char, seq[PatternHandler]] =
+  ## The table that maps chars to pattern handlers uses a proc to work around
+  ## compile time expression evaluation, otherwise, the use of the regexGodotIcon
+  ## would cause a compilation error as it depends on the
+  ## CACHE_GODOT_BUILTIN_CLASSES constant.
+  result = {
+    '`':
+      @[
+        PatternHandler(
+          # Builtin class names in inline code formatting, like `Node2D`
+          pattern: regexGodotIcon,
+          handler: preprocessGodotIcon,
+        )
+      ],
+    '<':
+      @[
+        PatternHandler(
+          # Code include components
+          pattern: regexInclude,
+          handler: preprocessIncludeComponent,
+        ),
+        PatternHandler(
+          # Video file component
+          pattern: regexVideoFile,
+          handler: preprocessVideoFile,
+        ),
+      ],
+    '!':
+      @[
+        PatternHandler(
+          # Markdown images
+          pattern: regexMarkdownImage,
+          handler: preprocessMarkdownImage,
+        )
+      ],
+  }.toTable()
+
+regexGodotIcon =
+  re("(`(?P<class>" & assets.CACHE_GODOT_BUILTIN_CLASSES.join("|") & ")`)")
+patterns_table = initializeRegexes()
+
 proc processContent*(
     content: string,
     inputDirPath: string = "",
@@ -228,47 +273,6 @@ proc processContent*(
   ## Once the first character of a pattern is found, it tries to match it with the regex patterns in the patterns_table table.
   ## And if a regex is matched, it calls the handler function to replace the matched text with the new text.
 
-  regexGodotIcon =
-    re("(`(?P<class>" & assets.CACHE_GODOT_BUILTIN_CLASSES.join("|") & ")`)")
-
-  # The table that maps chars to pattern handlers uses a proc to work around
-  # compile time expression evaluation, otherwise, the use of the regexGodotIcon
-  # would cause a compilation error as it depends on the
-  # CACHE_GODOT_BUILTIN_CLASSES constant.
-  proc makePatterns(): Table[char, seq[PatternHandler]] =
-    result = {
-      '`':
-        @[
-          PatternHandler(
-            # Builtin class names in inline code formatting, like `Node2D`
-            pattern: regexGodotIcon,
-            handler: preprocessGodotIcon,
-          )
-        ],
-      '<':
-        @[
-          PatternHandler(
-            # Code include components
-            pattern: regexInclude,
-            handler: preprocessIncludeComponent,
-          ),
-          PatternHandler(
-            # Video file component
-            pattern: regexVideoFile,
-            handler: preprocessVideoFile,
-          ),
-        ],
-      '!':
-        @[
-          PatternHandler(
-            # Markdown images
-            pattern: regexMarkdownImage,
-            handler: preprocessMarkdownImage,
-          )
-        ],
-    }.toTable()
-
-  let patterns_table = makePatterns()
   var
     i = 0
     lastMatchEnd = 0
