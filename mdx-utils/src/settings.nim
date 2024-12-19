@@ -9,7 +9,7 @@ import std/sequtils
 import std/logging
 import customlogger
 
-type BuildSettings* = ref object
+type BuildSettings* = object
   ## This object represents the running configuration of the build system.
   ## The fields are filled with either default values or values found in `CFG_FILE`
   inputDir*: string
