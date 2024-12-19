@@ -8,7 +8,7 @@
 import unittest
 import strutils
 import ../gdschool_preprocessor
-import ../../types
+import ../../settings
 import ../utils
 
 let appSettings = AppSettingsBuildGDSchool()

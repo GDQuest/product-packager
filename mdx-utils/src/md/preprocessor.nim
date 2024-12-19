@@ -12,7 +12,7 @@
 import std/[nre, strformat, strutils, tables, options, os, terminal]
 import assets
 import utils
-import ../types
+import ../settings
 import ../image_size
 when compileOption("profiler"):
   import std/nimprof

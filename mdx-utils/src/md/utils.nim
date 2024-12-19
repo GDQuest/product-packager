@@ -2,7 +2,7 @@
 import std/[algorithm, os, sequtils, strformat, strutils, sugar, tables]
 import fuzzy
 import itertools
-import ../types
+import ../settings
 
 const
   SPACE* = " "
