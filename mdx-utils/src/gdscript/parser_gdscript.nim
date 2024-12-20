@@ -1,4 +1,22 @@
-## Minimal GDScript parser specialized for code include shortcodes. Tokenizes symbol definitions and their body and collects all their content.
+## Minimal GDScript parser specialized for code include shortcodes. Tokenizes
+## symbol definitions and their body and collects all their content.
+##
+## Preprocesses GDScript code to extract code between anchor comments, like
+## #ANCHOR:anchor_name
+## ... Code here
+## #END:anchor_name
+##
+## This works in 2 passes:
+##
+## 1. Preprocesses the code to extract the code between anchor comments and remove anchor comments.
+## 2. Parses the preprocessed code to tokenize symbols and their content.
+##
+## Users can then query and retrieve the code between anchors or the definition
+## and body of a symbol.
+##
+## This was originally written as a tool to only parse GDScript symbols, with
+## the anchor preprocessing added later, so the approach may not be the most
+## efficient.
 import std/[tables, unittest, strutils, times]
 when compileOption("profiler"):
   import std/nimprof
