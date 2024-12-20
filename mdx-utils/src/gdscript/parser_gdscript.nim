@@ -109,8 +109,9 @@ proc matchString(s: var Scanner, expected: string): bool {.inline.} =
     return true
   return false
 
-proc countIndentation(s: var Scanner): int {.inline.} =
+proc countIndentationAndAdvance(s: var Scanner): int {.inline.} =
   ## Counts the number of spaces and tabs starting from the current position
+  ## Advances the scanner as it counts the indentation
   ## Call this function at the start of a line to count the indentation
   result = 0
   while true:
@@ -198,24 +199,33 @@ proc isNewDefinition(s: var Scanner): bool {.inline.} =
   s.skipWhitespace()
   result =
     s.peekString("func") or s.peekString("var") or s.peekString("const") or
-    s.peekString("class") or s.peekString("signal") or s.peekString("enum")
+    s.peekString("class") or s.peekString("signal") or s.peekString("enum") or
+    # TODO: Consider how to handle regular comments vs anchors
+    s.peekString("#ANCHOR") or s.peekString("#END") or
+    s.peekString("# ANCHOR") or s.peekString("# END")
   s.current = savedPos
   return result
 
 proc scanBody(s: var Scanner, startIndent: int): tuple[bodyStart, bodyEnd: int] =
   let start = s.current
   while not s.isAtEnd():
-    let currentIndent = s.countIndentation()
+    let currentIndent = s.countIndentationAndAdvance()
     if currentIndent <= startIndent and not s.isAtEnd():
       if isNewDefinition(s):
         break
 
     discard scanToEndOfLine(s)
+  # s.current points to the first letter of the next token, after the
+  # indentation. We need to backtrack to find the actual end of the body.
+  var index = s.current - 1
+  while index > 0 and s.source[index] in [' ', '\r', '\t', '\n']:
+    index -= 1
+  s.current = index + 1
   result = (start, s.current)
 
 proc scanToken(s: var Scanner): Token =
   while not s.isAtEnd():
-    s.indentLevel = s.countIndentation()
+    s.indentLevel = s.countIndentationAndAdvance()
     s.skipWhitespace()
 
     let startPos = s.current
@@ -354,12 +364,10 @@ proc parseClass(s: var Scanner, classToken: var Token) =
   let classIndent = s.indentLevel
   s.current = classToken.range.bodyStart
   while not s.isAtEnd():
-    let currentIndent = s.countIndentation()
+    #Problem: s is on the first char of the token instead of the beginning of the line
+    let currentIndent = s.countIndentationAndAdvance()
     if currentIndent <= classIndent:
       if isNewDefinition(s):
-        echo "New definition found: ", s.getCurrentChar()
-        echo "Indent level is ", currentIndent
-        echo "Line of text is", s.source[s.current ..< s.current + 20]
         break
 
     let childToken = s.scanToken()
@@ -501,7 +509,6 @@ proc getCode*(symbolQuery: string, filePath: string): string =
     result = getSymbolBody(query.name, filePath)
   else:
     result = getSymbolText(query.name, filePath)
-  result = result.strip(trailing = true)
 
 proc runPerformanceTest() =
   let codeTest =
@@ -677,8 +684,10 @@ class StateDie extends State:
         let classToken = tokens[0]
         check:
           classToken.tokenType == TokenType.Class
-          classToken.getName(code) == "StateMachine"
+          classToken.getName(code) == "StateDie"
           classToken.children.len == 3
+          # Trailing anchor comments should not be included in the token
+          not classToken.getBody(code).contains("#END")
       else:
         echo "Found tokens: ", tokens.len
         printTokens(tokens, code)
