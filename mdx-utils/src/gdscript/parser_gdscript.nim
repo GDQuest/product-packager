@@ -288,9 +288,6 @@ proc scanToken(s: var Scanner): Token =
       elif s.peekString("enum"):
         tokenType = TokenType.Enum
         discard s.matchString("enum")
-      else:
-        s.current += 1
-        return Token(tokenType: TokenType.Invalid)
 
       var token = Token(tokenType: tokenType)
       token.range.start = startPos
@@ -341,11 +338,10 @@ proc scanToken(s: var Scanner): Token =
 
         token.range.end = s.current
         return token
-      else:
-        s.current += 1
-        return Token(tokenType: TokenType.Invalid)
     else:
-      s.current += 1
+      discard
+
+    s.current += 1
 
   return Token(tokenType: TokenType.Invalid)
 
