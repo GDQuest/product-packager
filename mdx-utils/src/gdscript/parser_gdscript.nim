@@ -221,6 +221,10 @@ proc scanToken(s: var Scanner): Token =
     let startPos = s.current
     let c = s.getCurrentChar()
     case c
+    # Comment, skip to end of line and continue
+    of '#':
+      discard s.scanToEndOfLine()
+      continue
     # Function definition
     of 'f':
       if s.matchString("func"):
@@ -353,6 +357,9 @@ proc parseClass(s: var Scanner, classToken: var Token) =
     let currentIndent = s.countIndentation()
     if currentIndent <= classIndent:
       if isNewDefinition(s):
+        echo "New definition found: ", s.getCurrentChar()
+        echo "Indent level is ", currentIndent
+        echo "Line of text is", s.source[s.current ..< s.current + 20]
         break
 
     let childToken = s.scanToken()
@@ -406,12 +413,6 @@ proc getTokenFromCache(symbolName: string, filePath: string): Token =
     )
 
   return file.symbols[symbolName]
-
-proc getGDScriptCodeFromCache(filePath: string): var string =
-  # Gets the code of a GDScript file from the cache given its path
-  if not gdscriptFiles.hasKey(filePath):
-    parseGDScriptFile(filePath)
-  return gdscriptFiles[filePath].source
 
 proc getSymbolText(symbolName: string, path: string): string =
   # Gets the text of a symbol given its name and the path to the file
@@ -646,6 +647,41 @@ class StateMachine extends Node:
           classToken.children[1].tokenType == TokenType.Variable
           classToken.children[2].tokenType == TokenType.Variable
           classToken.children[3].tokenType == TokenType.Function
+
+    test "Parse larger inner class with anchors":
+      let code = """
+#ANCHOR:class_StateDie
+class StateDie extends State:
+
+	const SmokeExplosionScene = preload("res://assets/vfx/smoke_vfx/smoke_explosion.tscn")
+
+	func _init(init_mob: Mob3D) -> void:
+		super("Die", init_mob)
+
+	func enter() -> void:
+		mob.skin.play("die")
+
+		var smoke_explosion := SmokeExplosionScene.instantiate()
+		mob.add_sibling(smoke_explosion)
+		smoke_explosion.global_position = mob.global_position
+
+		mob.skin.animation_finished.connect(func (_animation_name: String) -> void:
+			mob.queue_free()
+		)
+#END:class_StateDie
+"""
+      let tokens = parseGDScript(code)
+      check:
+        tokens.len == 1
+      if tokens.len == 1:
+        let classToken = tokens[0]
+        check:
+          classToken.tokenType == TokenType.Class
+          classToken.getName(code) == "StateMachine"
+          classToken.children.len == 3
+      else:
+        echo "Found tokens: ", tokens.len
+        printTokens(tokens, code)
 
 when isMainModule:
   runUnitTests()
