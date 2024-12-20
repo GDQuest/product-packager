@@ -99,7 +99,7 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
   let args = component.props
   let file = args.getOrDefault("file", "")
 
-  let includeFileName = utils.cache.findCodeFile(file)
+  let includeFilePath = utils.cache.findCodeFile(file)
 
   # TODO: Replace with gdscript parser, get symbols or anchors from the parser:
   # TODO: add support for symbol prop
@@ -108,8 +108,18 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
   # - warn about using anchor + symbol (one should take precedence)
   # - check that prefix is valid (- or +)
   try:
-    result = readFile(includeFileName)
-    if "anchor" in args:
+    result = readFile(includeFilePath)
+    if "symbol" in args:
+      let symbol = args["symbol"]
+      if symbol == "":
+        let errorMessage =
+          fmt"Symbol prop is empty in include component for file {includeFilePath}. Returning an empty string."
+        stderr.styledWriteLine(fgRed, errorMessage)
+        preprocessorErrorMessages.add(errorMessage)
+        return ""
+
+      return getCode(symbol, includeFilePath)
+    elif "anchor" in args:
       let
         anchor = args["anchor"]
         regexAnchor = re(
@@ -188,7 +198,7 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
               result.replace(searchAndReplace.source, searchAndReplace.replacement)
       else:
         let errorMessage =
-          fmt"Can't find matching contents for anchor {anchor} in file {includeFileName}. Nothing will be included."
+          fmt"Can't find matching contents for anchor {anchor} in file {includeFilePath}. Nothing will be included."
         stderr.styledWriteLine(fgRed, errorMessage)
         preprocessorErrorMessages.add(errorMessage)
         return ""
@@ -196,7 +206,7 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
     # Clean up anchor markers and extra newlines
     result = result.replace(regexAnchorLine, "").strip(chars = {'\n'})
   except IOError:
-    let errorMessage = fmt"Failed to read include file: {includeFileName}"
+    let errorMessage = fmt"Failed to read include file: {includeFilePath}"
     stderr.styledWriteLine(fgRed, errorMessage)
     preprocessorErrorMessages.add(errorMessage)
     result = match.match

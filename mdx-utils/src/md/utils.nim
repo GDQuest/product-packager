@@ -1,5 +1,5 @@
 # TODO: refactor to get rid of unnecessary imports
-import std/[algorithm, os, sequtils, strformat, strutils, sugar, tables, logging]
+import std/[algorithm, os, sequtils, strformat, strutils, sugar, tables]
 import fuzzy
 import itertools
 import ../settings

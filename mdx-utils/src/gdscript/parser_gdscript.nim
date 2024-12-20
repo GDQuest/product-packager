@@ -1,6 +1,5 @@
 ## Minimal GDScript parser specialized for code include shortcodes. Tokenizes symbol definitions and their body and collects all their content.
-import std/[strutils, tables, unittest]
-import std/times
+import std/[tables, unittest, strutils, times]
 when compileOption("profiler"):
   import std/nimprof
 
@@ -85,7 +84,7 @@ proc peekString(s: var Scanner, expected: string): bool {.inline.} =
   ## Peeks ahead to check if the expected string is present without advancing
   ## Returns true if the string is found, false otherwise
   let length = expected.len
-  for i in 0..<length:
+  for i in 0 ..< length:
     if peekAt(s, i) != expected[i]:
       return false
   s.peekIndex = s.current + length
@@ -134,7 +133,7 @@ proc skipWhitespace(s: var Scanner) {.inline.} =
   ## Peeks at the next characters and advances the scanner until a non-whitespace character is found
   while true:
     let c = s.getCurrentChar()
-    case c:
+    case c
     of ' ', '\r', '\t':
       discard s.advance()
     else:
@@ -197,12 +196,9 @@ proc isNewDefinition(s: var Scanner): bool {.inline.} =
   ## or type
   let savedPos = s.current
   s.skipWhitespace()
-  result = s.peekString("func") or
-           s.peekString("var") or
-           s.peekString("const") or
-           s.peekString("class") or
-           s.peekString("signal") or
-           s.peekString("enum")
+  result =
+    s.peekString("func") or s.peekString("var") or s.peekString("const") or
+    s.peekString("class") or s.peekString("signal") or s.peekString("enum")
   s.current = savedPos
   return result
 
@@ -218,55 +214,102 @@ proc scanBody(s: var Scanner, startIndent: int): tuple[bodyStart, bodyEnd: int] 
   result = (start, s.current)
 
 proc scanToken(s: var Scanner): Token =
-  if s.isAtEnd():
-    return Token(tokenType: TokenType.Invalid)
+  while not s.isAtEnd():
+    s.indentLevel = s.countIndentation()
+    s.skipWhitespace()
 
-  s.indentLevel = s.countIndentation()
-  s.skipWhitespace()
+    let startPos = s.current
+    let c = s.getCurrentChar()
+    case c
+    # Function definition
+    of 'f':
+      if s.matchString("func"):
+        var token = Token(tokenType: TokenType.Function)
+        token.range.start = startPos
+        token.range.definitionStart = startPos
 
-  let startPos = s.current
-  let c = s.getCurrentChar()
-  case c
-  # Function definition
-  of 'f':
-    if s.matchString("func"):
-      var token = Token(tokenType: TokenType.Function)
+        s.skipWhitespace()
+        let (nameStart, nameEnd) = s.scanIdentifier()
+        token.nameStart = nameStart
+        token.nameEnd = nameEnd
+
+        while s.getCurrentChar() != ':':
+          discard s.advance()
+        discard s.scanToEndOfLine()
+
+        token.range.definitionEnd = s.current
+        token.range.bodyStart = s.current
+
+        discard s.scanBody(s.indentLevel)
+        token.range.bodyEnd = s.current
+        token.range.end = s.current
+
+        return token
+    # Annotation
+    of '@':
+      var offset = 1
+      var c2 = s.peekAt(offset)
+      while c2 != '\n' and c2 != 'v':
+        offset += 1
+        c2 = s.peekAt(offset)
+      if c2 == '\n':
+        # This is an annotation on a single line, we skip this for now.
+        s.advanceToPeek()
+      if c2 == 'v':
+        # Check if this is a variable definition, if so, create a var token,
+        # and include the inline annotation in the definition
+        s.advanceToPeek()
+        if s.matchString("var"):
+          var token = Token(tokenType: TokenType.Variable)
+          token.range.start = startPos
+          token.range.definitionStart = startPos
+
+          s.skipWhitespace()
+
+          let (nameStart, nameEnd) = s.scanIdentifier()
+          token.nameStart = nameStart
+          token.nameEnd = nameEnd
+
+          discard s.scanToEndOfDefinition()
+          token.range.end = s.current
+          return token
+    # Variable, Constant, Class, Enum
+    of 'v', 'c', 'e':
+      var tokenType: TokenType
+      if s.peekString("var"):
+        tokenType = TokenType.Variable
+        discard s.matchString("var")
+      elif s.peekString("const"):
+        tokenType = TokenType.Constant
+        discard s.matchString("const")
+      elif s.peekString("class"):
+        tokenType = TokenType.Class
+        discard s.matchString("class")
+      elif s.peekString("enum"):
+        tokenType = TokenType.Enum
+        discard s.matchString("enum")
+      else:
+        s.current += 1
+        return Token(tokenType: TokenType.Invalid)
+
+      var token = Token(tokenType: tokenType)
       token.range.start = startPos
       token.range.definitionStart = startPos
 
       s.skipWhitespace()
+
       let (nameStart, nameEnd) = s.scanIdentifier()
       token.nameStart = nameStart
       token.nameEnd = nameEnd
 
-      while s.getCurrentChar() != ':':
-        discard s.advance()
-      discard s.scanToEndOfLine()
-
-      token.range.definitionEnd = s.current
-      token.range.bodyStart = s.current
-
-      discard s.scanBody(s.indentLevel)
-      token.range.bodyEnd = s.current
+      discard s.scanToEndOfDefinition()
       token.range.end = s.current
-
+      token.range.definitionEnd = s.current
       return token
-  # Annotation
-  of '@':
-    var offset = 1
-    var c2 = s.peekAt(offset)
-    while c2 != '\n' and c2 != 'v':
-      offset += 1
-      c2 = s.peekAt(offset)
-    if c2 == '\n':
-      # This is an annotation on a single line, we skip this for now.
-      s.advanceToPeek()
-    if c2 == 'v':
-      # Check if this is a variable definition, if so, create a var token,
-      # and include the inline annotation in the definition
-      s.advanceToPeek()
-      if s.matchString("var"):
-        var token = Token(tokenType: TokenType.Variable)
+    # Signal
+    of 's':
+      if s.matchString("signal"):
+        var token = Token(tokenType: TokenType.Signal)
         token.range.start = startPos
         token.range.definitionStart = startPos
 
@@ -276,81 +319,35 @@ proc scanToken(s: var Scanner): Token =
         token.nameStart = nameStart
         token.nameEnd = nameEnd
 
-        discard s.scanToEndOfDefinition()
+        # Handle signal arguments if present
+        s.skipWhitespace()
+        if s.getCurrentChar() == '(':
+          var bracketCount = 0
+          while not s.isAtEnd():
+            let c = s.getCurrentChar()
+            case c
+            of '(':
+              bracketCount += 1
+              discard s.advance()
+            of ')':
+              bracketCount -= 1
+              discard s.advance()
+              if bracketCount == 0:
+                break
+            else:
+              discard s.advance()
+        else:
+          discard s.scanToEndOfLine()
+
         token.range.end = s.current
         return token
-  # Variable, Constant, Class, Enum
-  of 'v', 'c', 'e':
-    var tokenType: TokenType
-    if s.peekString("var"):
-      tokenType = TokenType.Variable
-      discard s.matchString("var")
-    elif s.peekString("const"):
-      tokenType = TokenType.Constant
-      discard s.matchString("const")
-    elif s.peekString("class"):
-      tokenType = TokenType.Class
-      discard s.matchString("class")
-    elif s.peekString("enum"):
-      tokenType = TokenType.Enum
-      discard s.matchString("enum")
-    else:
-      discard s.advance()
-      return Token(tokenType: TokenType.Invalid)
-
-    var token = Token(tokenType: tokenType)
-    token.range.start = startPos
-    token.range.definitionStart = startPos
-
-    s.skipWhitespace()
-
-    let (nameStart, nameEnd) = s.scanIdentifier()
-    token.nameStart = nameStart
-    token.nameEnd = nameEnd
-
-    discard s.scanToEndOfDefinition()
-    token.range.end = s.current
-    token.range.definitionEnd = s.current
-    return token
-  # Signal
-  of 's':
-    if s.matchString("signal"):
-      var token = Token(tokenType: TokenType.Signal)
-      token.range.start = startPos
-      token.range.definitionStart = startPos
-
-      s.skipWhitespace()
-
-      let (nameStart, nameEnd) = s.scanIdentifier()
-      token.nameStart = nameStart
-      token.nameEnd = nameEnd
-
-      # Handle signal arguments if present
-      s.skipWhitespace()
-      if s.getCurrentChar() == '(':
-        var bracketCount = 0
-        while not s.isAtEnd():
-          let c = s.getCurrentChar()
-          case c
-          of '(':
-            bracketCount += 1
-            discard s.advance()
-          of ')':
-            bracketCount -= 1
-            discard s.advance()
-            if bracketCount == 0:
-              break
-          else:
-            discard s.advance()
       else:
-        discard s.scanToEndOfLine()
+        s.current += 1
+        return Token(tokenType: TokenType.Invalid)
+    else:
+      s.current += 1
 
-      token.range.end = s.current
-      return token
-  else:
-    discard s.advance()
-
-  Token(tokenType: TokenType.Invalid)
+  return Token(tokenType: TokenType.Invalid)
 
 proc parseClass(s: var Scanner, classToken: var Token) =
   ## Parses the body of a class, collecting child tokens
@@ -367,13 +364,8 @@ proc parseClass(s: var Scanner, classToken: var Token) =
       classToken.children.add(childToken)
 
 proc parseGDScript(source: string): seq[Token] =
-  var scanner =  Scanner(
-    source: source,
-    current: 0,
-    indentLevel: 0,
-    bracketDepth: 0,
-    peekIndex: 0
-  )
+  var scanner =
+    Scanner(source: source, current: 0, indentLevel: 0, bracketDepth: 0, peekIndex: 0)
   while not scanner.isAtEnd():
     var token = scanToken(scanner)
     if token.tokenType == TokenType.Invalid:
@@ -403,20 +395,19 @@ proc parseGDScriptFile(path: string) =
     let name = token.getName(source)
     symbols[name] = token
 
-  gdscriptFiles[path] = GDScriptFile(
-    filePath: path,
-    source: source,
-    symbols: symbols
-  )
+  gdscriptFiles[path] = GDScriptFile(filePath: path, source: source, symbols: symbols)
 
 proc getTokenFromCache(symbolName: string, filePath: string): Token =
   # Gets a token from the cache given a symbol name and the path to the GDScript file
   if not gdscriptFiles.hasKey(filePath):
+    echo "Token not found, " & filePath & " not in cache. Parsing file..."
     parseGDScriptFile(filePath)
 
   let file = gdscriptFiles[filePath]
   if not file.symbols.hasKey(symbolName):
-    raise newException(ValueError, "Symbol not found: '" & symbolName & "' in file: '" & filePath & "'")
+    raise newException(
+      ValueError, "Symbol not found: '" & symbolName & "' in file: '" & filePath & "'"
+    )
 
   return file.symbols[symbolName]
 
@@ -442,12 +433,82 @@ proc getSymbolBody(symbolName: string, path: string): string =
   # Gets the body of a symbol given its name and the path to the file: it excludes the definition
   let token = getTokenFromCache(symbolName, path)
   if token.tokenType notin [TokenType.Class, TokenType.Function]:
-    raise newException(ValueError, "Symbol '" & symbolName & "' is not a class or function in file: '" & path & "'. Cannot get body: only functions and classes have a body.")
+    raise newException(
+      ValueError,
+      "Symbol '" & symbolName & "' is not a class or function in file: '" & path &
+        "'. Cannot get body: only functions and classes have a body.",
+    )
   let file = gdscriptFiles[path]
   return token.getBody(file.source)
 
+type SymbolQuery = object
+  name: string
+  isDefinition: bool
+  isBody: bool
+  isClass: bool
+  childName: string
+
+proc parseSymbolQuery(query: string): SymbolQuery =
+  ## Turns a symbol query string like ClassName.body or ClassName.function.definition
+  ## into a SymbolQuery object for easier processing.
+  let parts = query.split('.')
+
+  result.name = parts[0]
+  if parts.len == 2:
+    if parts[1] in ["definition", "def"]:
+      result.isDefinition = true
+    elif parts[1] == "body":
+      result.isBody = true
+    else:
+      result.childName = parts[1]
+      result.isClass = true
+  elif parts.len == 3:
+    if parts[2] in ["definition", "def"]:
+      result.childName = parts[1]
+      result.isClass = true
+      result.isDefinition = true
+    elif parts[2] == "body":
+      result.childName = parts[1]
+      result.isClass = true
+      result.isBody = true
+    else:
+      raise newException(ValueError, "Invalid symbol query: '" & query & "'")
+
+proc getCode*(symbolQuery: string, filePath: string): string =
+  ## Gets the code of a symbol given a query and the path to the file
+  ## The query can be:
+  ## - A symbol name like a function or class name
+  ## - The path to a symbol, like ClassName.functionName
+  ## - The request of a definition, like functionName.definition
+  ## - The request of a body, like functionName.body
+  let query = parseSymbolQuery(symbolQuery)
+  if query.isClass:
+    let classToken = getTokenFromCache(query.name, filePath)
+    let file = gdscriptFiles[filePath]
+
+    for child in classToken.children:
+      if child.getName(file.source) == query.childName:
+        if query.isDefinition:
+          result = child.getDefinition(file.source)
+        elif query.isBody:
+          result = child.getBody(file.source)
+        else:
+          result = child.getCode(file.source)
+    raise newException(
+      ValueError,
+      "Symbol not found: '" & query.childName & "' in class '" & query.name & "'",
+    )
+  elif query.isDefinition:
+    result = getSymbolDefinition(query.name, filePath)
+  elif query.isBody:
+    result = getSymbolBody(query.name, filePath)
+  else:
+    result = getSymbolText(query.name, filePath)
+  result = result.strip(trailing = true)
+
 proc runPerformanceTest() =
-  let codeTest = """
+  let codeTest =
+    """
 class StateMachine extends Node:
     var transitions := {}: set = set_transitions
     var current_state: State
@@ -461,15 +522,16 @@ class StateMachine extends Node:
 
   echo "Running performance test..."
   var totalDuration = 0.0
-  for i in 0..<10:
+  for i in 0 ..< 10:
     let start = cpuTime()
-    for j in 0..<10000:
+    for j in 0 ..< 10000:
       discard parseGDScript(codeTest)
     let duration = (cpuTime() - start) * 1000
     totalDuration += duration
 
   let averageDuration = totalDuration / 10
-  echo "Average parse duration for 10 000 calls: ", averageDuration.formatFloat(ffDecimal, 3), "ms"
+  echo "Average parse duration for 10 000 calls: ",
+    averageDuration.formatFloat(ffDecimal, 3), "ms"
 
 proc runUnitTests() =
   suite "GDScript parser tests":
@@ -541,7 +603,8 @@ var health := max_health
           tokens[0].getName(code) == "MAX_HEALTH"
 
     test "Parse functions":
-      let code = """
+      let code =
+        """
 func _ready():
 	add_child(skin)
 
@@ -562,7 +625,8 @@ func deactivate() -> void:
           tokens[1].getName(code) == "deactivate"
 
     test "Parse inner class":
-      let code = """
+      let code =
+        """
 class StateMachine extends Node:
 	var transitions := {}: set = set_transitions
 	var current_state: State
