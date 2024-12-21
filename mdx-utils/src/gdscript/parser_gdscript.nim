@@ -277,11 +277,11 @@ proc scanBody(s: var Scanner, startIndent: int): tuple[bodyStart, bodyEnd: int] 
   s.current = index + 1
   result = (start, s.current)
 
-proc scanAnchorToken(s: var Scanner, startPos: int): CodeAnchor =
+proc scanAnchor(s: var Scanner): CodeAnchor =
   ## Scans from a #ANCHOR tag to the matching #END tag
   ## This is used in a preprocessing pass.
 
-  result.anchorTagStart = startPos
+  result.anchorTagStart = s.current
 
   # Skip the #ANCHOR: or # ANCHOR: part
   while s.getCurrentChar() != ':':
@@ -322,6 +322,31 @@ proc scanAnchorToken(s: var Scanner, startPos: int): CodeAnchor =
     raise newException(
       ValueError, "Anchor region " & anchorName & " is missing an #END tag."
     )
+
+proc preprocessAnchors(
+    source: string
+): tuple[anchors: seq[CodeAnchor], processed: string] =
+  ## Preprocesses the source code to extract the code between anchor comments
+  ## and remove the anchor comments.
+  var anchors: seq[CodeAnchor] = @[]
+  var newSource = newStringOfCap(source.len)
+  var s =
+    Scanner(source: source, current: 0, indentLevel: 0, bracketDepth: 0, peekIndex: 0)
+
+  var lastEnd = 0
+  while not s.isAtEnd():
+    let c = s.getCurrentChar()
+    if c == '#':
+      if s.peekString("#ANCHOR") or s.peekString("# ANCHOR"):
+        let anchor = scanAnchor(s)
+        anchors.add(anchor)
+        newSource.add(source[lastEnd ..< anchor.anchorTagStart])
+        newSource.add(source[anchor.codeStart ..< anchor.codeEnd])
+        lastEnd = anchor.endTagEnd
+    s.current += 1
+
+  newSource.add(source[lastEnd ..< source.len])
+  return (anchors, newSource)
 
 proc scanToken(s: var Scanner): Token =
   while not s.isAtEnd():
