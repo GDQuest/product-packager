@@ -308,6 +308,11 @@ proc scanBody(s: var Scanner, startIndent: int): tuple[bodyStart, bodyEnd: int] 
   result = (start, s.current)
 
 proc scanAnchor(s: var Scanner): seq[CodeAnchor] =
+  # TODO: FIXME: if anchors are intertwined, recursive parsing doesn' t cut it
+  # because we end up skipping over some end tags. Instead, in one scan, we
+  # could find all start and end tags, store ranges in a table using names as
+  # keys, and then build CodeAnchor objects from matching pairs
+  #
   ## Scans from a #ANCHOR tag to the matching #END tag, recursively collecting
   ## all nested anchors. Returns them in the order they were parsed.
   var currentAnchor = CodeAnchor()
@@ -329,20 +334,21 @@ proc scanAnchor(s: var Scanner): seq[CodeAnchor] =
 
   # Look for the matching END tag
   let anchorName = s.source[nameStart ..< nameEnd]
+  debugEcho "Parsing anchor: ", anchorName
   var foundEndTag = false
 
   let endTag = "#END:" & anchorName
   let endTagWithSpace = "# END:" & anchorName
+  debugEcho "End tag: ", endTag
 
   # Add the current anchor as the first result
   result = @[currentAnchor]
 
   while not s.isAtEnd():
     s.skipWhitespace()
+    # We found a nested anchor, we need to recursively parse it
     if s.peekString("#ANCHOR") or s.peekString("# ANCHOR"):
-      # Found a nested anchor, recursively parse it
       let nestedAnchors = scanAnchor(s)
-      # Add all nested anchors to our result
       result.add(nestedAnchors)
       continue
 
@@ -379,6 +385,7 @@ proc preprocessAnchors(
   while not s.isAtEnd():
     let c = s.getCurrentChar()
     if c == '#':
+      debugEcho "Before parsing anchor, current index: " & $s.current
       if s.peekString("#ANCHOR") or s.peekString("# ANCHOR"):
         let parsedAnchors = scanAnchor(s)
         # Anchors can be nested into a single anchor. They are returned in the
@@ -388,6 +395,19 @@ proc preprocessAnchors(
         newSource.add(source[lastEnd ..< outerAnchor.anchorTagStart])
         newSource.add(source[outerAnchor.codeStart ..< outerAnchor.codeEnd])
         lastEnd = outerAnchor.endTagEnd
+        # When parsing an anchor comment we have to go until the end of the line
+        # on the end tag. This skips after the newline character and if an
+        # anchor tag follows immediately, it'll get skipped. So we backtrack one
+        # character.
+        if not s.isAtEnd() and s.getCurrentChar() == '#':
+          s.current -= 1
+
+          debugEcho "After parsing anchor:"
+          debugEcho "  - anchor name is: " &
+            source[outerAnchor.nameStart ..< outerAnchor.nameEnd]
+          debugEcho "  - current index: " & $s.current
+          debugEcho "  - current char: " &
+            $s.getCurrentChar().charMakeWhitespaceVisible()
     s.current += 1
 
   newSource.add(source[lastEnd ..< source.len])
@@ -397,7 +417,6 @@ proc preprocessAnchors(
   var keys: seq[string] = @[]
   for k in anchorsTable.keys:
     keys.add(k)
-  echo "Anchors keys: " & $keys
   return (anchorsTable, newSource)
 
 proc scanToken(s: var Scanner): Token =
