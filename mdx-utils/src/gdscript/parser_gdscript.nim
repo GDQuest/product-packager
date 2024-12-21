@@ -20,6 +20,8 @@
 import std/[tables, unittest, strutils, times]
 when compileOption("profiler"):
   import std/nimprof
+when isMainModule:
+  import std/os
 
 const isDebugBuild* = defined(debug)
 
@@ -305,11 +307,11 @@ proc scanBody(s: var Scanner, startIndent: int): tuple[bodyStart, bodyEnd: int] 
   s.current = index + 1
   result = (start, s.current)
 
-proc scanAnchor(s: var Scanner): CodeAnchor =
-  ## Scans from a #ANCHOR tag to the matching #END tag
-  ## This is used in a preprocessing pass.
-
-  result.anchorTagStart = s.current
+proc scanAnchor(s: var Scanner): seq[CodeAnchor] =
+  ## Scans from a #ANCHOR tag to the matching #END tag, recursively collecting
+  ## all nested anchors. Returns them in the order they were parsed.
+  var currentAnchor = CodeAnchor()
+  currentAnchor.anchorTagStart = s.current
 
   # Skip the #ANCHOR: or # ANCHOR: part
   while s.getCurrentChar() != ':':
@@ -321,9 +323,9 @@ proc scanAnchor(s: var Scanner): CodeAnchor =
   let (nameStart, nameEnd) = s.scanIdentifier()
   discard s.scanToEndOfLine()
 
-  result.nameStart = nameStart
-  result.nameEnd = nameEnd
-  result.codeStart = s.current
+  currentAnchor.nameStart = nameStart
+  currentAnchor.nameEnd = nameEnd
+  currentAnchor.codeStart = s.current
 
   # Look for the matching END tag
   let anchorName = s.source[nameStart ..< nameEnd]
@@ -331,22 +333,31 @@ proc scanAnchor(s: var Scanner): CodeAnchor =
 
   let endTag = "#END:" & anchorName
   let endTagWithSpace = "# END:" & anchorName
+
+  # Add the current anchor as the first result
+  result = @[currentAnchor]
+
   while not s.isAtEnd():
     s.skipWhitespace()
+    if s.peekString("#ANCHOR") or s.peekString("# ANCHOR"):
+      # Found a nested anchor, recursively parse it
+      let nestedAnchors = scanAnchor(s)
+      # Add all nested anchors to our result
+      result.add(nestedAnchors)
+      continue
+
     if s.peekString(endTag) or s.peekString(endTagWithSpace):
       foundEndTag = true
-      result.codeEnd = s.current
+      result[0].codeEnd = s.current # Update the first anchor (our current one)
       discard s.scanToEndOfLine()
-      result.endTagEnd = s.current
+      result[0].endTagEnd = s.current
       break
 
     if not s.isAtEnd():
       discard s.advance()
 
   if not foundEndTag:
-    # The anchor is not closed, reset the scanner to after the anchor's opening
-    # tag, raise an error, and allow continuing with parsing.
-    s.current = result.codeStart
+    s.current = result[0].codeStart
     raise newException(
       ValueError, "Anchor region " & anchorName & " is missing an #END tag."
     )
@@ -369,17 +380,24 @@ proc preprocessAnchors(
     let c = s.getCurrentChar()
     if c == '#':
       if s.peekString("#ANCHOR") or s.peekString("# ANCHOR"):
-        let anchor = scanAnchor(s)
-        anchors.add(anchor)
-        newSource.add(source[lastEnd ..< anchor.anchorTagStart])
-        newSource.add(source[anchor.codeStart ..< anchor.codeEnd])
-        lastEnd = anchor.endTagEnd
+        let parsedAnchors = scanAnchor(s)
+        # Anchors can be nested into a single anchor. They are returned in the
+        # order they were parsed, so the first one is the outermost anchor.
+        let outerAnchor = parsedAnchors[0]
+        anchors.add(parsedAnchors)
+        newSource.add(source[lastEnd ..< outerAnchor.anchorTagStart])
+        newSource.add(source[outerAnchor.codeStart ..< outerAnchor.codeEnd])
+        lastEnd = outerAnchor.endTagEnd
     s.current += 1
 
   newSource.add(source[lastEnd ..< source.len])
   var anchorsTable = initTable[string, CodeAnchor](anchors.len)
   for anchor in anchors:
     anchorsTable[s.source[anchor.nameStart ..< anchor.nameEnd]] = anchor
+  var keys: seq[string] = @[]
+  for k in anchorsTable.keys:
+    keys.add(k)
+  echo "Anchors keys: " & $keys
   return (anchorsTable, newSource)
 
 proc scanToken(s: var Scanner): Token =
@@ -870,6 +888,26 @@ class StateDie extends State:
       else:
         echo "Found tokens: ", tokens.len
         printTokens(tokens, processedSource)
+
+    when isMainModule:
+      test "Parse anchor code":
+        let code =
+          """
+  #ANCHOR:row_node_references
+  @onready var row_bodies: HBoxContainer = %RowBodies
+  @onready var row_expressions: HBoxContainer = %RowExpressions
+  #END:row_node_references
+  """
+        let tempFile = getTempDir() / "test_gdscript.gd"
+        writeFile(tempFile, code)
+        let rowNodeReferences = getCodeForAnchor("row_node_references", tempFile)
+        removeFile(tempFile)
+
+        check:
+          rowNodeReferences.contains("var row_bodies: HBoxContainer = %RowBodies")
+          rowNodeReferences.contains(
+            "var row_expressions: HBoxContainer = %RowExpressions"
+          )
 
 when isMainModule:
   runUnitTests()
