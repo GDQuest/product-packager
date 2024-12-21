@@ -325,9 +325,12 @@ proc scanAnchor(s: var Scanner): CodeAnchor =
 
 proc preprocessAnchors(
     source: string
-): tuple[anchors: seq[CodeAnchor], processed: string] =
+): tuple[anchors: Table[string,CodeAnchor], processed: string] =
   ## Preprocesses the source code to extract the code between anchor comments
   ## and remove the anchor comments.
+  ##
+  ## Returns a table that maps anchor names to the CodeAnchor objects for easy
+  ## lookup and the processed source code, with the anchor comments removed.
   var anchors: seq[CodeAnchor] = @[]
   var newSource = newStringOfCap(source.len)
   var s =
@@ -346,7 +349,10 @@ proc preprocessAnchors(
     s.current += 1
 
   newSource.add(source[lastEnd ..< source.len])
-  return (anchors, newSource)
+  var anchorsTable = initTable[string, CodeAnchor](anchors.len)
+  for anchor in anchors:
+    anchorsTable[s.source[anchor.nameStart ..< anchor.nameEnd]] = anchor
+  return (anchorsTable, newSource)
 
 proc scanToken(s: var Scanner): Token =
   while not s.isAtEnd():
@@ -515,15 +521,27 @@ proc parseGDScript(source: string): seq[Token] =
     result.add(token)
 
 proc parseGDScriptFile(path: string) =
-  # Parses a GDScript file and caches it
+  ## Parses a GDScript file and caches it in the gdscriptFiles table.
+  ## The parsing happens in two passes:
+  ##
+  ## 1. We preprocess the source code to extract the code between anchor comments and remove these comment lines.
+  ## 2. We parse the preprocessed source code to tokenize symbols and their content.
+  ##
+  ## Preprocessing makes the symbol parsing easier afterwards, although it means we scan the file twice.
   let source = readFile(path)
-  let tokens = parseGDScript(source)
+  let (anchors, processedSource) = preprocessAnchors(source)
+  let tokens = parseGDScript(processedSource)
   var symbols = initTable[string, Token]()
   for token in tokens:
-    let name = token.getName(source)
+    let name = token.getName(processedSource)
     symbols[name] = token
 
-  gdscriptFiles[path] = GDScriptFile(filePath: path, source: source, symbols: symbols)
+  gdscriptFiles[path] = GDScriptFile(
+    filePath: path,
+    source: source,
+    symbols: symbols,
+    anchors: anchors
+  )
 
 proc getTokenFromCache(symbolName: string, filePath: string): Token =
   # Gets a token from the cache given a symbol name and the path to the GDScript file
@@ -788,21 +806,21 @@ class StateDie extends State:
 		)
 #END:class_StateDie
 """
-      let tokens = parseGDScript(code)
-      echo tokens[0].getCode(code)
+      let (anchors, processedSource) = preprocessAnchors(code)
+      let tokens = parseGDScript(processedSource)
       check:
         tokens.len == 1
       if tokens.len == 1:
         let classToken = tokens[0]
         check:
           classToken.tokenType == TokenType.Class
-          classToken.getName(code) == "StateDie"
+          classToken.getName(processedSource) == "StateDie"
           classToken.children.len == 3
           # Trailing anchor comments should not be included in the token
-          not classToken.getBody(code).contains("#END")
+          not classToken.getBody(processedSource).contains("#END")
       else:
         echo "Found tokens: ", tokens.len
-        printTokens(tokens, code)
+        printTokens(tokens, processedSource)
 
 when isMainModule:
   runUnitTests()
