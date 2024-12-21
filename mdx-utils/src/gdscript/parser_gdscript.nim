@@ -21,6 +21,20 @@ import std/[tables, unittest, strutils, times]
 when compileOption("profiler"):
   import std/nimprof
 
+const isDebugBuild* = defined(debug)
+
+template debugEcho*(message: string) =
+  ## Prints out a debug message to the console, only in debug builds, with the
+  ## --stacktrace:on flag (this feature is needed to print which function the
+  ## print is part of).
+  ##
+  ## In release builds, it generates no code to avoid performance overhead.
+  when isDebugBuild and compileOption("stacktrace"):
+    let frame = getFrame()
+    let stackDepth = min(frame.calldepth, 5)
+    let indent = "  ".repeat(stackDepth)
+    echo indent, "[", frame.procname, "]: ", message
+
 type
   TokenType = enum
     Invalid
@@ -115,6 +129,18 @@ proc printTokens(tokens: seq[Token], source: string) =
     printToken(token, source)
     echo ""
 
+proc charMakeWhitespaceVisible*(c: char): string =
+  ## Replaces whitespace characters with visible equivalents.
+  case c
+  of '\t':
+    result = "⇥"
+  of '\n':
+    result = "↲"
+  of ' ':
+    result = "·"
+  else:
+    result = $c
+
 proc getCurrentChar(s: Scanner): char {.inline.} =
   ## Returns the current character without advancing the scanner's current index
   return s.source[s.current]
@@ -123,6 +149,9 @@ proc advance(s: var Scanner): char {.inline.} =
   ## Reads and returns the current character, then advances the scanner by one
   result = s.source[s.current]
   s.current += 1
+
+proc isAtEnd(s: Scanner): bool {.inline.} =
+  s.current >= s.source.len
 
 proc peekAt(s: var Scanner, offset: int): char {.inline.} =
   ## Peeks at a specific offset and returns the character without advancing the scanner
@@ -165,14 +194,16 @@ proc countIndentationAndAdvance(s: var Scanner): int {.inline.} =
   ## Advances the scanner as it counts the indentation
   ## Call this function at the start of a line to count the indentation
   result = 0
-  while true:
+  while not s.isAtEnd():
+    debugEcho "Current index: " & $s.current
+    debugEcho "Current char is: " & s.getCurrentChar().charMakeWhitespaceVisible()
     case s.getCurrentChar()
     of '\t':
       result += 1
       s.current += 1
     of ' ':
       var spaces = 0
-      while s.getCurrentChar() == ' ':
+      while not s.isAtEnd() and s.getCurrentChar() == ' ':
         spaces += 1
         s.current += 1
       result += spaces div 4
@@ -183,16 +214,13 @@ proc countIndentationAndAdvance(s: var Scanner): int {.inline.} =
 
 proc skipWhitespace(s: var Scanner) {.inline.} =
   ## Peeks at the next characters and advances the scanner until a non-whitespace character is found
-  while true:
+  while not s.isAtEnd():
     let c = s.getCurrentChar()
     case c
     of ' ', '\r', '\t':
-      discard s.advance()
+      s.current += 1
     else:
       break
-
-proc isAtEnd(s: Scanner): bool {.inline.} =
-  s.current >= s.source.len
 
 proc isAlphanumericOrUnderscore(c: char): bool {.inline.} =
   ## Returns true if the character is a letter, digit, or underscore
@@ -325,7 +353,7 @@ proc scanAnchor(s: var Scanner): CodeAnchor =
 
 proc preprocessAnchors(
     source: string
-): tuple[anchors: Table[string,CodeAnchor], processed: string] =
+): tuple[anchors: Table[string, CodeAnchor], processed: string] =
   ## Preprocesses the source code to extract the code between anchor comments
   ## and remove the anchor comments.
   ##
@@ -356,11 +384,18 @@ proc preprocessAnchors(
 
 proc scanToken(s: var Scanner): Token =
   while not s.isAtEnd():
+    debugEcho "At top of loop. Current index: " & $s.current
     s.indentLevel = s.countIndentationAndAdvance()
+    debugEcho "Indent level: " & $s.indentLevel
     s.skipWhitespace()
+    debugEcho "After whitespace. Current index: " & $s.current
+
+    if s.isAtEnd():
+      break
 
     let startPos = s.current
     let c = s.getCurrentChar()
+    debugEcho "Current char: " & $c.charMakeWhitespaceVisible()
     case c
     # Comment, skip to end of line and continue
     of '#':
@@ -482,11 +517,13 @@ proc scanToken(s: var Scanner): Token =
           discard s.scanToEndOfLine()
 
         token.range.end = s.current
+        debugEcho "Parsed signal token: " & $token
         return token
     else:
       discard
 
     s.current += 1
+    debugEcho "Skipping character, current index: " & $s.current
 
   return Token(tokenType: TokenType.Invalid)
 
@@ -536,12 +573,8 @@ proc parseGDScriptFile(path: string) =
     let name = token.getName(processedSource)
     symbols[name] = token
 
-  gdscriptFiles[path] = GDScriptFile(
-    filePath: path,
-    source: source,
-    symbols: symbols,
-    anchors: anchors
-  )
+  gdscriptFiles[path] =
+    GDScriptFile(filePath: path, source: source, symbols: symbols, anchors: anchors)
 
 proc getTokenFromCache(symbolName: string, filePath: string): Token =
   # Gets a token from the cache given a symbol name and the path to the GDScript file
