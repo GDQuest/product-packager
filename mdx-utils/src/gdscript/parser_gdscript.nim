@@ -607,9 +607,10 @@ proc parseSymbolQuery(query: string): SymbolQuery =
     else:
       raise newException(ValueError, "Invalid symbol query: '" & query & "'")
 
-proc getCode*(symbolQuery: string, filePath: string): string =
+proc getCodeForSymbol*(symbolQuery: string, filePath: string): string =
   ## Gets the code of a symbol given a query and the path to the file
   ## The query can be:
+  ##
   ## - A symbol name like a function or class name
   ## - The path to a symbol, like ClassName.functionName
   ## - The request of a definition, like functionName.definition
@@ -637,6 +638,21 @@ proc getCode*(symbolQuery: string, filePath: string): string =
     result = getSymbolBody(query.name, filePath)
   else:
     result = getSymbolText(query.name, filePath)
+
+proc getCodeForAnchor*(anchorName: string, filePath: string): string =
+  ## Gets the code between anchor comments given the anchor name and the path to the file
+  if not gdscriptFiles.hasKey(filePath):
+    echo filePath & " not in cache. Parsing file..."
+    parseGDScriptFile(filePath)
+
+  let file = gdscriptFiles[filePath]
+  if not file.anchors.hasKey(anchorName):
+    raise newException(
+      ValueError, "Anchor '" & anchorName & "' not found in file: '" & filePath & "'"
+    )
+
+  let anchor = file.anchors[anchorName]
+  return file.source[anchor.codeStart ..< anchor.codeEnd]
 
 proc runPerformanceTest() =
   let codeTest =

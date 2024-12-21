@@ -94,23 +94,91 @@ proc preprocessGodotIcon(match: RegexMatch, context: HandlerContext): string =
     result = match.match
 
 proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): string =
-  ## Replaces the Include shortcode with the contents of the section of a file or full file it points to.
+  ## Processes the Include component, which includes code from a file. Uses the
+  ## GDScript parser module to extract code from the file.
+  ##
+  ## The Include component can take the following props:
+  ##
+  ## - file: the name or project-relative path to the file to include
+  ## - symbol: the symbol query to look for in the file, like a class name, a
+  ## function name, etc. It also supports forms like ClassName.definition or
+  ## ClassName.method_name.body
+  ## - anchor: the anchor to look for in the file. You must use one of symbol or
+  ## anchor, not both.
+  ## - prefix: a string to add at the beginning of each line of the included
+  ## code, typically + or - for diff code listings
+  ## - dedent: the number of tabs to remove from the beginning of each line of the
+  ## included code
+  ## - replace: a JSX expression with an array of objects, each containing a source
+  ## and replacement key. The source is the string to look for in the code, and the
+  ## replacement is the string to replace it with.
+
+  proc processSearchAndReplace(code: string, replaceJsxObject: string): string =
+    ## Processes an include with a replace prop.
+    ## It's a JSX expression with an array of objects, each containing a source and replacement key.
+    type SearchAndReplace = object
+      source: string
+      replacement: string
+
+    # Parse the replaceJsxObject prop. It's a JSX expression with either a single object or an array of objects.
+    # TODO: add error handling
+    # TODO: this currently cannot work because the MDX component parsing cannot capture JSX expressions as props
+    # TODO: later: replace with MDX component parser
+    var searchesAndReplaces: seq[SearchAndReplace] = @[]
+    # Remove the array mark if relevant, then parse objects - this should work
+    # for both array and single object formats
+    let replacesStr = replaceJsxObject.strip(chars = {'[', ']'})
+    let matches = replacesStr.findAll(regexObjectPattern)
+
+    for match in matches:
+      var keyValuePairs = match.strip(chars = {'{', '}'}).split(",")
+      var source, replacement: string
+
+      for part in keyValuePairs:
+        let kv = part.strip().split(":")
+        if kv.len == 2:
+          let key = kv[0].strip().strip(chars = {'"'})
+          let value = kv[1].strip().strip(chars = {'"'})
+          if key == "source":
+            source = value
+          elif key == "replacement":
+            replacement = value
+
+      searchesAndReplaces.add(
+        SearchAndReplace(source: source, replacement: replacement)
+      )
+
+    let replaces = searchesAndReplaces
+
+    # Apply all replacements
+    for searchAndReplace in replaces:
+      result =
+          result.replace(searchAndReplace.source, searchAndReplace.replacement)
+
+  proc processCodeLines(code: string, prefix: string, dedent: int): string =
+    ## Adds a prefix to each line of the code block and dedents it.
+    var prefixedLines: seq[string] = @[]
+
+    for line in code.splitLines():
+      var processedLine = line
+      if dedent > 0:
+        for i in 1 .. dedent:
+          if processedLine.startsWith("\t"):
+            processedLine = processedLine[1 ..^ 1]
+      prefixedLines.add(prefix & processedLine)
+    result = prefixedLines.join("\n")
+
   let component = parseMDXComponent(match.match)
   let args = component.props
   let file = args.getOrDefault("file", "")
-
   let includeFilePath = utils.cache.findCodeFile(file)
 
-  # TODO: Replace with gdscript parser, get symbols or anchors from the parser:
-  # TODO: add support for symbol prop
   # TODO: error handling:
   # - if there's a replace prop, ensure it's correctly formatted
   # - warn about using anchor + symbol (one should take precedence)
-  # - check that prefix is valid (- or +)
   try:
-    result = readFile(includeFilePath)
     if "symbol" in args:
-      let symbol = args["symbol"]
+      let symbol = args.getOrDefault("symbol", "")
       if symbol == "":
         let errorMessage =
           fmt"Symbol prop is empty in include component for file {includeFilePath}. Returning an empty string."
@@ -118,98 +186,36 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
         preprocessorErrorMessages.add(errorMessage)
         return ""
 
-      return getCode(symbol, includeFilePath)
+      result = getCodeForSymbol(symbol, includeFilePath)
     elif "anchor" in args:
-      let
-        anchor = args["anchor"]
-        regexAnchor = re(
-          fmt(
-            r"(?s)\h*(?:#|\/\/)\h*ANCHOR:\h*\b{anchor}\b\h*\v(?P<contents>.*?)\s*(?:#|\/\/)\h*END:\h*\b{anchor}\b"
-          )
-        )
-
-      let anchorMatch = result.find(regexAnchor)
-      if anchorMatch.isSome():
-        let
-          anchorCaptures = anchorMatch.get.captures.toTable()
-          output = anchorCaptures["contents"]
-          lines = output.splitLines()
-        var prefixedLines: seq[string] = @[]
-
-        # Add prefix and dedent the code block if applicable
-        let
-          prefix = args.getOrDefault("prefix", "")
-          dedent =
-            try:
-              parseInt(args.getOrDefault("dedent", "0"))
-            except:
-              0
-
-        for line in lines:
-          var processedLine = line
-          if dedent > 0:
-            for i in 1 .. dedent:
-              if processedLine.startsWith("\t"):
-                processedLine = processedLine[1 ..^ 1]
-          prefixedLines.add(prefix & processedLine)
-        result = prefixedLines.join("\n")
-
-        if "replace" in args:
-          type SearchAndReplace = object
-            source: string
-            replacement: string
-
-          # Parse the replace prop. It's a JSX expression with either a single object or an array of objects.
-          # TODO: add error handling
-          # TODO: this currently cannot work because the MDX component parsing cannot capture JSX expressions as props
-          let replaces =
-            try:
-              # Remove the array mark if relevant, then parse objects - this should work
-              # for both array and single object formats
-              let replacesStr = args["replace"].strip(chars = {'[', ']'})
-              let matches = replacesStr.findAll(regexObjectPattern)
-              var searchesAndReplaces: seq[SearchAndReplace] = @[]
-
-              for match in matches:
-                var keyValuePairs = match.strip(chars = {'{', '}'}).split(",")
-                var source, replacement: string
-
-                for part in keyValuePairs:
-                  let kv = part.strip().split(":")
-                  if kv.len == 2:
-                    let key = kv[0].strip().strip(chars = {'"'})
-                    let value = kv[1].strip().strip(chars = {'"'})
-                    if key == "source":
-                      source = value
-                    elif key == "replacement":
-                      replacement = value
-
-                searchesAndReplaces.add(
-                  SearchAndReplace(source: source, replacement: replacement)
-                )
-
-              searchesAndReplaces
-            except:
-              @[]
-
-          # Apply all replacements
-          for searchAndReplace in replaces:
-            result =
-              result.replace(searchAndReplace.source, searchAndReplace.replacement)
-      else:
+      let anchor = args.getOrDefault("anchor", "")
+      if anchor == "":
         let errorMessage =
-          fmt"Can't find matching contents for anchor {anchor} in file {includeFilePath}. Nothing will be included."
+          fmt"Anchor prop is empty in include component for file {includeFilePath}. Returning an empty string."
         stderr.styledWriteLine(fgRed, errorMessage)
         preprocessorErrorMessages.add(errorMessage)
         return ""
+      result = getCodeForAnchor(anchor, includeFilePath)
 
-    # Clean up anchor markers and extra newlines
-    result = result.replace(regexAnchorLine, "").strip(chars = {'\n'})
+    # Add prefix and dedent the code block if applicable
+    let
+      prefix = args.getOrDefault("prefix", "")
+      dedent =
+        try:
+          parseInt(args.getOrDefault("dedent", "0"))
+        except:
+          0
+
+    if prefix != "" or dedent > 0:
+      result = processCodeLines(result, prefix, dedent)
+    if "replace" in args:
+      result = processSearchAndReplace(result, args["replace"])
+
   except IOError:
-    let errorMessage = fmt"Failed to read include file: {includeFilePath}"
+    let errorMessage = fmt"Failed to read include file: {includeFilePath}. No code will be included."
     stderr.styledWriteLine(fgRed, errorMessage)
     preprocessorErrorMessages.add(errorMessage)
-    result = match.match
+    result = ""
 
 proc preprocessMarkdownImage(match: RegexMatch, context: HandlerContext): string =
   ## Replaces the relative input image path with an absolute path in the website's public directory.
