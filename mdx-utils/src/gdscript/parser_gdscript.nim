@@ -220,6 +220,7 @@ proc countIndentationAndAdvance(s: var Scanner): int {.inline.} =
       break
     else:
       break
+  debugEcho "Indentation: " & $result
   return result
 
 proc skipWhitespace(s: var Scanner) {.inline.} =
@@ -240,7 +241,7 @@ proc isAlphanumericOrUnderscore(c: char): bool {.inline.} =
 
 proc scanIdentifier(s: var Scanner): tuple[start: int, `end`: int] {.inline.} =
   let start = s.current
-  while isAlphanumericOrUnderscore(s.getCurrentChar()):
+  while not s.isAtEnd() and isAlphanumericOrUnderscore(s.getCurrentChar()):
     discard s.advance()
   result = (start, s.current)
 
@@ -248,6 +249,9 @@ proc scanToEndOfLine(s: var Scanner): tuple[start, `end`: int] {.inline.} =
   ## Scans to the end of the current line, returning the start (the current
   ## position when the function was called) and end positions (the \n character
   ## at the end of the line).
+  if s.isAtEnd():
+    return (s.current, s.current)
+
   let start = s.current
   let length = s.source.len
   var offset = 0
@@ -341,6 +345,7 @@ proc scanAnchorTags(s: var Scanner): seq[AnchorTag] =
         tag.endPosition = lineEnd
 
         result.add(tag)
+
         # If the current char isn't a line return, backtrack s.current to the line return
         while not s.isAtEnd() and s.getCurrentChar() != '\n':
           s.current = s.current - 1
@@ -364,6 +369,7 @@ proc preprocessAnchors(
   ## matching end tag.
   ## 2. A string with the source code with the anchor comment lines removed, to
   ## parse symbols more easily in a separate pass.
+
   var s =
     Scanner(source: source, current: 0, indentLevel: 0, bracketDepth: 0, peekIndex: 0)
 
@@ -574,8 +580,10 @@ proc parseClass(s: var Scanner, classToken: var Token) =
   let classIndent = s.indentLevel
   s.current = classToken.range.bodyStart
   while not s.isAtEnd():
+    debugEcho "Parsing class body. Current index: " & $s.current
     #Problem: s is on the first char of the token instead of the beginning of the line
     let currentIndent = s.countIndentationAndAdvance()
+    debugEcho "Current indent: " & $currentIndent
     if currentIndent <= classIndent:
       if isNewDefinition(s):
         break
