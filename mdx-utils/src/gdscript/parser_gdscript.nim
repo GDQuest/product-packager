@@ -17,7 +17,7 @@
 ## This was originally written as a tool to only parse GDScript symbols, with
 ## the anchor preprocessing added later, so the approach may not be the most
 ## efficient.
-import std/[tables, unittest, strutils, times]
+import std/[tables, unittest, strutils, times, terminal]
 when compileOption("profiler"):
   import std/nimprof
 when isMainModule:
@@ -332,6 +332,7 @@ proc scanAnchorTags(s: var Scanner): seq[AnchorTag] =
           s.current += 1
         s.skipWhitespace()
         s.current += 1
+        s.skipWhitespace()
 
         let (nameStart, nameEnd) = s.scanIdentifier()
         tag.name = s.source[nameStart ..< nameEnd]
@@ -340,6 +341,9 @@ proc scanAnchorTags(s: var Scanner): seq[AnchorTag] =
         tag.endPosition = lineEnd
 
         result.add(tag)
+        # If the current char isn't a line return, backtrack s.current to the line return
+        while not s.isAtEnd() and s.getCurrentChar() != '\n':
+          s.current = s.current - 1
 
     s.current += 1
 
@@ -365,21 +369,22 @@ proc preprocessAnchors(
 
   # Anchor regions can be nested or intertwined, so we first scan all tags, then match opening and closing tags by name to build CodeAnchor objects
   let tags = scanAnchorTags(s)
-  # TODO: issue, in generating_buttons.gd, finds 20 instead of 24 tags
-  echo "Found tags count: ", tags.len
 
   # Turn tags into tables to find matching pairs and check for duplicate names
   var startTags = initTable[string, AnchorTag](tags.len div 2)
   var endTags = initTable[string, AnchorTag](tags.len div 2)
 
+  # TODO: add processed filename/path in errors
   for tag in tags:
     if tag.isStart:
       if tag.name in startTags:
-        raise newException(ValueError, "Duplicate ANCHOR tag found for: " & tag.name)
+        stderr.writeLine "\e[31mDuplicate ANCHOR tag found for: " & tag.name & "\e[0m"
+        return
       startTags[tag.name] = tag
     else:
       if tag.name in endTags:
-        raise newException(ValueError, "Duplicate END tag found for: " & tag.name)
+        stderr.writeLine "\e[31mDuplicate END tag found for: " & tag.name & "\e[0m"
+        return
       endTags[tag.name] = tag
 
   # Validate tag pairs and create CodeAnchor objects
@@ -387,11 +392,13 @@ proc preprocessAnchors(
 
   for name, startTag in startTags:
     if name notin endTags:
-      raise newException(ValueError, "Missing #END tag for anchor: " & name)
-  # for name, endTag in endTags:
-  #   if name notin startTags:
-  #     raise
-  #       newException(ValueError, "Found #END tag without matching #ANCHOR for: " & name)
+      stderr.writeLine "\e[31mMissing #END tag for anchor: " & name & "\e[0m"
+      return
+  for name, endTag in endTags:
+    if name notin startTags:
+      stderr.writeLine "\e[31mFound #END tag without matching #ANCHOR for: " & name &
+        "\e[0m"
+      return
 
   for name, startTag in startTags:
     let endTag = endTags[name]
@@ -414,8 +421,6 @@ proc preprocessAnchors(
     newSource.add(source[lastEnd ..< tag.startPosition])
     lastEnd = tag.endPosition
   newSource.add(source[lastEnd ..< source.len])
-
-  echo newSource
 
   result = (anchors, newSource)
 
@@ -717,9 +722,8 @@ proc getCodeForAnchor*(anchorName: string, filePath: string): string =
 
   let file = gdscriptFiles[filePath]
   if not file.anchors.hasKey(anchorName):
-    raise newException(
-      ValueError, "Anchor '" & anchorName & "' not found in file: '" & filePath & "'"
-    )
+    styledEcho(fgRed, "Anchor '", anchorName, "' not found in file: '", filePath, "'")
+    return ""
 
   let anchor = file.anchors[anchorName]
   return file.source[anchor.codeStart ..< anchor.codeEnd]
