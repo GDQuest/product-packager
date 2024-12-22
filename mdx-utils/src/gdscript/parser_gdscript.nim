@@ -66,6 +66,14 @@ type
     bracketDepth: int
     peekIndex: int
 
+  AnchorTag = object
+    ## Represents a code anchor tag, either a start or end tag,
+    ## like #ANCHOR:anchor_name or #END:anchor_name
+    isStart: bool
+    name: string
+    startPosition: int
+    endPosition: int
+
   CodeAnchor = object
     ## A code anchor is how we call comments used to mark a region in the code, with the form
     ## #ANCHOR:anchor_name
@@ -307,117 +315,109 @@ proc scanBody(s: var Scanner, startIndent: int): tuple[bodyStart, bodyEnd: int] 
   s.current = index + 1
   result = (start, s.current)
 
-proc scanAnchor(s: var Scanner): seq[CodeAnchor] =
-  # TODO: FIXME: if anchors are intertwined, recursive parsing doesn' t cut it
-  # because we end up skipping over some end tags. Instead, in one scan, we
-  # could find all start and end tags, store ranges in a table using names as
-  # keys, and then build CodeAnchor objects from matching pairs
-  #
-  ## Scans from a #ANCHOR tag to the matching #END tag, recursively collecting
-  ## all nested anchors. Returns them in the order they were parsed.
-  var currentAnchor = CodeAnchor()
-  currentAnchor.anchorTagStart = s.current
-
-  # Skip the #ANCHOR: or # ANCHOR: part
-  while s.getCurrentChar() != ':':
-    s.current += 1
-  s.skipWhitespace()
-  # Skip the colon to parse the anchor name
-  s.current += 1
-
-  let (nameStart, nameEnd) = s.scanIdentifier()
-  discard s.scanToEndOfLine()
-
-  currentAnchor.nameStart = nameStart
-  currentAnchor.nameEnd = nameEnd
-  currentAnchor.codeStart = s.current
-
-  # Look for the matching END tag
-  let anchorName = s.source[nameStart ..< nameEnd]
-  debugEcho "Parsing anchor: ", anchorName
-  var foundEndTag = false
-
-  let endTag = "#END:" & anchorName
-  let endTagWithSpace = "# END:" & anchorName
-  debugEcho "End tag: ", endTag
-
-  # Add the current anchor as the first result
-  result = @[currentAnchor]
+proc scanAnchorTags(s: var Scanner): seq[AnchorTag] =
+  ## Scans the entire file and collects all anchor tags (both start and end)
+  ## Returns them in the order they appear in the source code
 
   while not s.isAtEnd():
-    s.skipWhitespace()
-    # We found a nested anchor, we need to recursively parse it
-    if s.peekString("#ANCHOR") or s.peekString("# ANCHOR"):
-      let nestedAnchors = scanAnchor(s)
-      result.add(nestedAnchors)
-      continue
+    if s.getCurrentChar() == '#':
+      if (s.peekString("#ANCHOR") or s.peekString("# ANCHOR")) or
+          (s.peekString("#END:") or s.peekString("# END:")):
+        var tag =
+          AnchorTag(isStart: not (s.peekString("#END:") or s.peekString("# END:")))
+        tag.startPosition = s.current
 
-    if s.peekString(endTag) or s.peekString(endTagWithSpace):
-      foundEndTag = true
-      result[0].codeEnd = s.current # Update the first anchor (our current one)
-      discard s.scanToEndOfLine()
-      result[0].endTagEnd = s.current
-      break
+        # Jump to after the colon (:) to find the tag's name
+        while s.getCurrentChar() != ':':
+          s.current += 1
+        s.skipWhitespace()
+        s.current += 1
 
-    if not s.isAtEnd():
-      discard s.advance()
+        let (nameStart, nameEnd) = s.scanIdentifier()
+        tag.name = s.source[nameStart ..< nameEnd]
 
-  if not foundEndTag:
-    s.current = result[0].codeStart
-    raise newException(
-      ValueError, "Anchor region " & anchorName & " is missing an #END tag."
-    )
+        let (_, lineEnd) = s.scanToEndOfLine()
+        tag.endPosition = lineEnd
+
+        result.add(tag)
+
+    s.current += 1
 
 proc preprocessAnchors(
     source: string
 ): tuple[anchors: Table[string, CodeAnchor], processed: string] =
-  ## Preprocesses the source code to extract the code between anchor comments
-  ## and remove the anchor comments.
+  ## This function scans the source code for anchor tags and looks for matching opening and closing tags.
+  ## Anchor tags are comments used to mark a region in the code, with the form:
   ##
-  ## Returns a table that maps anchor names to the CodeAnchor objects for easy
-  ## lookup and the processed source code, with the anchor comments removed.
-  var anchors: seq[CodeAnchor] = @[]
-  var newSource = newStringOfCap(source.len)
+  ## #ANCHOR:anchor_name
+  ## ...
+  ## #END:anchor_name
+  ##
+  ## The function returns:
+  ##
+  ## 1. a table of anchor region names mapped to CodeAnchor
+  ## objects, each representing a region of code between an anchor and its
+  ## matching end tag.
+  ## 2. A string with the source code with the anchor comment lines removed, to
+  ## parse symbols more easily in a separate pass.
   var s =
     Scanner(source: source, current: 0, indentLevel: 0, bracketDepth: 0, peekIndex: 0)
 
+  # Anchor regions can be nested or intertwined, so we first scan all tags, then match opening and closing tags by name to build CodeAnchor objects
+  let tags = scanAnchorTags(s)
+  # TODO: issue, in generating_buttons.gd, finds 20 instead of 24 tags
+  echo "Found tags count: ", tags.len
+
+  # Turn tags into tables to find matching pairs and check for duplicate names
+  var startTags = initTable[string, AnchorTag](tags.len div 2)
+  var endTags = initTable[string, AnchorTag](tags.len div 2)
+
+  for tag in tags:
+    if tag.isStart:
+      if tag.name in startTags:
+        raise newException(ValueError, "Duplicate ANCHOR tag found for: " & tag.name)
+      startTags[tag.name] = tag
+    else:
+      if tag.name in endTags:
+        raise newException(ValueError, "Duplicate END tag found for: " & tag.name)
+      endTags[tag.name] = tag
+
+  # Validate tag pairs and create CodeAnchor objects
+  var anchors = initTable[string, CodeAnchor](tags.len div 2)
+
+  for name, startTag in startTags:
+    if name notin endTags:
+      raise newException(ValueError, "Missing #END tag for anchor: " & name)
+  # for name, endTag in endTags:
+  #   if name notin startTags:
+  #     raise
+  #       newException(ValueError, "Found #END tag without matching #ANCHOR for: " & name)
+
+  for name, startTag in startTags:
+    let endTag = endTags[name]
+    var anchor = CodeAnchor()
+
+    anchor.nameStart = startTag.startPosition
+    anchor.nameEnd = startTag.startPosition + name.len
+    anchor.anchorTagStart = startTag.startPosition
+    anchor.codeStart = startTag.endPosition
+    anchor.codeEnd = endTag.startPosition
+    anchor.endTagEnd = endTag.endPosition
+
+    anchors[name] = anchor
+
+  # Preprocess source
+  var newSource = newStringOfCap(source.len)
   var lastEnd = 0
-  while not s.isAtEnd():
-    let c = s.getCurrentChar()
-    if c == '#':
-      debugEcho "Before parsing anchor, current index: " & $s.current
-      if s.peekString("#ANCHOR") or s.peekString("# ANCHOR"):
-        let parsedAnchors = scanAnchor(s)
-        # Anchors can be nested into a single anchor. They are returned in the
-        # order they were parsed, so the first one is the outermost anchor.
-        let outerAnchor = parsedAnchors[0]
-        anchors.add(parsedAnchors)
-        newSource.add(source[lastEnd ..< outerAnchor.anchorTagStart])
-        newSource.add(source[outerAnchor.codeStart ..< outerAnchor.codeEnd])
-        lastEnd = outerAnchor.endTagEnd
-        # When parsing an anchor comment we have to go until the end of the line
-        # on the end tag. This skips after the newline character and if an
-        # anchor tag follows immediately, it'll get skipped. So we backtrack one
-        # character.
-        if not s.isAtEnd() and s.getCurrentChar() == '#':
-          s.current -= 1
-
-          debugEcho "After parsing anchor:"
-          debugEcho "  - anchor name is: " &
-            source[outerAnchor.nameStart ..< outerAnchor.nameEnd]
-          debugEcho "  - current index: " & $s.current
-          debugEcho "  - current char: " &
-            $s.getCurrentChar().charMakeWhitespaceVisible()
-    s.current += 1
-
+  for tag in tags:
+    # Add content between last endpoint and current tag start
+    newSource.add(source[lastEnd ..< tag.startPosition])
+    lastEnd = tag.endPosition
   newSource.add(source[lastEnd ..< source.len])
-  var anchorsTable = initTable[string, CodeAnchor](anchors.len)
-  for anchor in anchors:
-    anchorsTable[s.source[anchor.nameStart ..< anchor.nameEnd]] = anchor
-  var keys: seq[string] = @[]
-  for k in anchorsTable.keys:
-    keys.add(k)
-  return (anchorsTable, newSource)
+
+  echo newSource
+
+  result = (anchors, newSource)
 
 proc scanToken(s: var Scanner): Token =
   while not s.isAtEnd():
@@ -616,7 +616,7 @@ proc parseGDScriptFile(path: string) =
 proc getTokenFromCache(symbolName: string, filePath: string): Token =
   # Gets a token from the cache given a symbol name and the path to the GDScript file
   if not gdscriptFiles.hasKey(filePath):
-    echo "Token not found, " & filePath & " not in cache. Parsing file..."
+    debugEcho "Token not found, " & filePath & " not in cache. Parsing file..."
     parseGDScriptFile(filePath)
 
   let file = gdscriptFiles[filePath]
@@ -712,7 +712,7 @@ proc getCodeForSymbol*(symbolQuery: string, filePath: string): string =
 proc getCodeForAnchor*(anchorName: string, filePath: string): string =
   ## Gets the code between anchor comments given the anchor name and the path to the file
   if not gdscriptFiles.hasKey(filePath):
-    echo filePath & " not in cache. Parsing file..."
+    debugEcho filePath & " not in cache. Parsing file..."
     parseGDScriptFile(filePath)
 
   let file = gdscriptFiles[filePath]
