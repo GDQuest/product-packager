@@ -429,15 +429,20 @@ proc preprocessAnchors(
     anchors[name] = anchor
 
   # Preprocess source
-  var newSource = newStringOfCap(source.len)
+  var processedSource = newStringOfCap(source.len)
   var lastEnd = 0
   for tag in tags:
+    # Tags can be indented, so we backtrack to the start of the line to strip
+    # the entire line of code containing the tag
+    var tagLineStart = tag.startPosition
+    while tagLineStart > 0 and source[tagLineStart - 1] != '\n':
+      tagLineStart -= 1
     # Add content between last endpoint and current tag start
-    newSource.add(source[lastEnd ..< tag.startPosition])
+    processedSource.add(source[lastEnd ..< tagLineStart])
     lastEnd = tag.endPosition
-  newSource.add(source[lastEnd ..< source.len])
+  processedSource.add(source[lastEnd ..< source.len])
 
-  result = (anchors, newSource)
+  result = (anchors, processedSource)
 
 proc scanToken(s: var Scanner): Token =
   while not s.isAtEnd():
@@ -898,11 +903,13 @@ class StateDie extends State:
 
 	const SmokeExplosionScene = preload("res://assets/vfx/smoke_vfx/smoke_explosion.tscn")
 
+	#ANCHOR:test
 	func _init(init_mob: Mob3D) -> void:
 		super("Die", init_mob)
 
 	func enter() -> void:
 		mob.skin.play("die")
+		#END:test
 
 		var smoke_explosion := SmokeExplosionScene.instantiate()
 		mob.add_sibling(smoke_explosion)
@@ -914,6 +921,8 @@ class StateDie extends State:
 #END:class_StateDie
 """
       let (anchors, processedSource) = preprocessAnchors(code)
+      echo processedSource
+      quit()
       let tokens = parseGDScript(processedSource)
       check:
         tokens.len == 1
@@ -946,6 +955,24 @@ class StateDie extends State:
         check:
           token.tokenType == TokenType.Variable
           token.getName(processedSource) == "counting_steps"
+
+    test "Another anchor":
+      let code =
+        """
+## The container for buttons
+#ANCHOR:010_the_container_box
+@onready var action_buttons_v_box_container: VBoxContainer = %ActionButtonsVBoxContainer
+#END:010_the_container_box
+"""
+      let (anchors, processedSource) = preprocessAnchors(code)
+      let tokens = parseGDScript(processedSource)
+      check:
+        tokens.len == 1
+      if tokens.len == 1:
+        let token = tokens[0]
+        check:
+          token.tokenType == TokenType.Variable
+          token.getName(processedSource) == "action_buttons_v_box_container"
 
     when isMainModule:
       test "Parse anchor code":
