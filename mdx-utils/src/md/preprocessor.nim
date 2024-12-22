@@ -90,7 +90,8 @@ proc preprocessGodotIcon(match: RegexMatch, context: HandlerContext): string =
   if className in CACHE_GODOT_ICONS:
     result = "<IconGodot name=\"" & className & "\"/> " & match.match
   else:
-    echo(fmt"Couldn't find icon for `{className}`. Skipping...")
+    # TODO: replace with warning log, and deduplicate warnings because the same class can be used multiple times
+    # echo(fmt"Couldn't find icon for `{className}`. Skipping...")
     result = match.match
 
 proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): string =
@@ -152,8 +153,7 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
 
     # Apply all replacements
     for searchAndReplace in replaces:
-      result =
-          result.replace(searchAndReplace.source, searchAndReplace.replacement)
+      result = result.replace(searchAndReplace.source, searchAndReplace.replacement)
 
   proc processCodeLines(code: string, prefix: string, dedent: int): string =
     ## Adds a prefix to each line of the code block and dedents it.
@@ -196,6 +196,8 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
         preprocessorErrorMessages.add(errorMessage)
         return ""
       result = getCodeForAnchor(anchor, includeFilePath)
+    else:
+      result = getCodeWithoutAnchors(includeFilePath)
 
     # Add prefix and dedent the code block if applicable
     let
@@ -210,9 +212,9 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
       result = processCodeLines(result, prefix, dedent)
     if "replace" in args:
       result = processSearchAndReplace(result, args["replace"])
-
   except IOError:
-    let errorMessage = fmt"Failed to read include file: {includeFilePath}. No code will be included."
+    let errorMessage =
+      fmt"Failed to read include file: {includeFilePath}. No code will be included."
     stderr.styledWriteLine(fgRed, errorMessage)
     preprocessorErrorMessages.add(errorMessage)
     result = ""

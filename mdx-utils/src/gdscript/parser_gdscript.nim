@@ -95,6 +95,7 @@ type
     symbols: Table[string, Token]
     ## Map of anchor names to their code anchors
     anchors: Table[string, CodeAnchor]
+    processedSource: string
 
   SymbolQuery = object
     ## Represents a query to get a symbol from a GDScript file, like
@@ -423,7 +424,11 @@ proc preprocessAnchors(
     anchor.nameEnd = startTag.startPosition + name.len
     anchor.anchorTagStart = startTag.startPosition
     anchor.codeStart = startTag.endPosition
-    anchor.codeEnd = endTag.startPosition
+    anchor.codeEnd = block:
+      var codeEndPos = endTag.startPosition
+      while source[codeEndPos] != '\n':
+        codeEndPos -= 1
+      codeEndPos
     anchor.endTagEnd = endTag.endPosition
 
     anchors[name] = anchor
@@ -441,7 +446,7 @@ proc preprocessAnchors(
     lastEnd = tag.endPosition
   processedSource.add(source[lastEnd ..< source.len])
 
-  result = (anchors, processedSource)
+  result = (anchors, processedSource.strip(leading = false, trailing = true))
 
 proc scanToken(s: var Scanner): Token =
   while not s.isAtEnd():
@@ -636,8 +641,13 @@ proc parseGDScriptFile(path: string) =
     let name = token.getName(processedSource)
     symbols[name] = token
 
-  gdscriptFiles[path] =
-    GDScriptFile(filePath: path, source: source, symbols: symbols, anchors: anchors)
+  gdscriptFiles[path] = GDScriptFile(
+    filePath: path,
+    source: source,
+    symbols: symbols,
+    anchors: anchors,
+    processedSource: processedSource,
+  )
 
 proc getTokenFromCache(symbolName: string, filePath: string): Token =
   # Gets a token from the cache given a symbol name and the path to the GDScript file
@@ -748,6 +758,16 @@ proc getCodeForAnchor*(anchorName: string, filePath: string): string =
 
   let anchor = file.anchors[anchorName]
   return file.source[anchor.codeStart ..< anchor.codeEnd]
+
+proc getCodeWithoutAnchors*(filePath: string): string =
+  ## Gets the preprocessed code of a GDScript file. It's the full script without
+  ## the anchor tag lines like #ANCHOR:anchor_name or #END:anchor_name
+  if not gdscriptFiles.hasKey(filePath):
+    debugEcho filePath & " not in cache. Parsing file..."
+    parseGDScriptFile(filePath)
+
+  let file = gdscriptFiles[filePath]
+  result = file.processedSource
 
 proc runPerformanceTest() =
   let codeTest =
