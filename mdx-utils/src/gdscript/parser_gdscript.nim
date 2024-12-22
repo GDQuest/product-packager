@@ -184,14 +184,6 @@ proc advanceToPeek(s: var Scanner) {.inline.} =
   ## Advances the scanner to the stored getCurrentChar index
   s.current = s.peekIndex
 
-proc match(s: var Scanner, expected: char): bool {.inline.} =
-  ## Returns true and advances the scanner if and only if the current character matches the expected character
-  ## Otherwise, returns false
-  if s.getCurrentChar() != expected:
-    return false
-  discard s.advance()
-  return true
-
 proc matchString(s: var Scanner, expected: string): bool {.inline.} =
   ## Returns true and advances the scanner if and only if the next characters match the expected string
   if s.peekString(expected):
