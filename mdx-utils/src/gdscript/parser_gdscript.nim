@@ -1,7 +1,41 @@
-## Minimal GDScript parser specialized for code include shortcodes. Tokenizes symbol definitions and their body and collects all their content.
-import std/[tables, unittest, strutils, times]
+## Minimal GDScript parser specialized for code include shortcodes. Tokenizes
+## symbol definitions and their body and collects all their content.
+##
+## Preprocesses GDScript code to extract code between anchor comments, like
+## #ANCHOR:anchor_name
+## ... Code here
+## #END:anchor_name
+##
+## This works in 2 passes:
+##
+## 1. Preprocesses the code to extract the code between anchor comments and remove anchor comments.
+## 2. Parses the preprocessed code to tokenize symbols and their content.
+##
+## Users can then query and retrieve the code between anchors or the definition
+## and body of a symbol.
+##
+## This was originally written as a tool to only parse GDScript symbols, with
+## the anchor preprocessing added later, so the approach may not be the most
+## efficient.
+import std/[tables, unittest, strutils, times, terminal]
 when compileOption("profiler"):
   import std/nimprof
+when isMainModule:
+  import std/os
+
+const isDebugBuild* = defined(debug)
+
+template debugEcho*(message: string) =
+  ## Prints out a debug message to the console, only in debug builds, with the
+  ## --stacktrace:on flag (this feature is needed to print which function the
+  ## print is part of).
+  ##
+  ## In release builds, it generates no code to avoid performance overhead.
+  when isDebugBuild and compileOption("stacktrace"):
+    let frame = getFrame()
+    let stackDepth = min(frame.calldepth, 5)
+    let indent = "  ".repeat(stackDepth)
+    echo indent, "[", frame.procname, "]: ", message
 
 type
   TokenType = enum
@@ -26,12 +60,54 @@ type
     children: seq[Token]
 
   Scanner = object
-    # TODO: Cache the source elsewhere for reading the content of tokens after parsing.
     source: string
     current: int
     indentLevel: int
     bracketDepth: int
     peekIndex: int
+
+  AnchorTag = object
+    ## Represents a code anchor tag, either a start or end tag,
+    ## like #ANCHOR:anchor_name or #END:anchor_name
+    isStart: bool
+    name: string
+    startPosition: int
+    endPosition: int
+
+  CodeAnchor = object
+    ## A code anchor is how we call comments used to mark a region in the code, with the form
+    ## #ANCHOR:anchor_name
+    ## ...
+    ## #END:anchor_name
+    ##
+    ## This object is used to extract the code between the anchor and the end tag.
+    nameStart, nameEnd: int
+    codeStart, codeEnd: int
+    # Used to remove the anchor tags from the final code
+    # codeStart marks the end of the anchor tag, codeEnd marks the start of the end tag
+    anchorTagStart, endTagEnd: int
+
+  GDScriptFile = object
+    ## Represents a parsed GDScript file with its symbols and source code
+    filePath: string
+    source: string
+    ## Map of symbol names to their tokens
+    symbols: Table[string, Token]
+    ## Map of anchor names to their code anchors
+    anchors: Table[string, CodeAnchor]
+    processedSource: string
+
+  SymbolQuery = object
+    ## Represents a query to get a symbol from a GDScript file, like
+    ## ClassName.definition or func_name.body or var_name.
+    name: string
+    isDefinition: bool
+    isBody: bool
+    isClass: bool
+    childName: string
+
+# Caches parsed GDScript files
+var gdscriptFiles = initTable[string, GDScriptFile]()
 
 proc getCode(token: Token, source: string): string {.inline.} =
   return source[token.range.start ..< token.range.end]
@@ -64,6 +140,18 @@ proc printTokens(tokens: seq[Token], source: string) =
     printToken(token, source)
     echo ""
 
+proc charMakeWhitespaceVisible*(c: char): string =
+  ## Replaces whitespace characters with visible equivalents.
+  case c
+  of '\t':
+    result = "⇥"
+  of '\n':
+    result = "↲"
+  of ' ':
+    result = "·"
+  else:
+    result = $c
+
 proc getCurrentChar(s: Scanner): char {.inline.} =
   ## Returns the current character without advancing the scanner's current index
   return s.source[s.current]
@@ -72,6 +160,9 @@ proc advance(s: var Scanner): char {.inline.} =
   ## Reads and returns the current character, then advances the scanner by one
   result = s.source[s.current]
   s.current += 1
+
+proc isAtEnd(s: Scanner): bool {.inline.} =
+  s.current >= s.source.len
 
 proc peekAt(s: var Scanner, offset: int): char {.inline.} =
   ## Peeks at a specific offset and returns the character without advancing the scanner
@@ -94,14 +185,6 @@ proc advanceToPeek(s: var Scanner) {.inline.} =
   ## Advances the scanner to the stored getCurrentChar index
   s.current = s.peekIndex
 
-proc match(s: var Scanner, expected: char): bool {.inline.} =
-  ## Returns true and advances the scanner if and only if the current character matches the expected character
-  ## Otherwise, returns false
-  if s.getCurrentChar() != expected:
-    return false
-  discard s.advance()
-  return true
-
 proc matchString(s: var Scanner, expected: string): bool {.inline.} =
   ## Returns true and advances the scanner if and only if the next characters match the expected string
   if s.peekString(expected):
@@ -109,38 +192,39 @@ proc matchString(s: var Scanner, expected: string): bool {.inline.} =
     return true
   return false
 
-proc countIndentation(s: var Scanner): int {.inline.} =
+proc countIndentationAndAdvance(s: var Scanner): int {.inline.} =
   ## Counts the number of spaces and tabs starting from the current position
+  ## Advances the scanner as it counts the indentation
   ## Call this function at the start of a line to count the indentation
   result = 0
-  while true:
+  while not s.isAtEnd():
+    debugEcho "Current index: " & $s.current
+    debugEcho "Current char is: " & s.getCurrentChar().charMakeWhitespaceVisible()
     case s.getCurrentChar()
     of '\t':
       result += 1
       s.current += 1
     of ' ':
       var spaces = 0
-      while s.getCurrentChar() == ' ':
+      while not s.isAtEnd() and s.getCurrentChar() == ' ':
         spaces += 1
         s.current += 1
       result += spaces div 4
       break
     else:
       break
+  debugEcho "Indentation: " & $result
   return result
 
 proc skipWhitespace(s: var Scanner) {.inline.} =
   ## Peeks at the next characters and advances the scanner until a non-whitespace character is found
-  while true:
+  while not s.isAtEnd():
     let c = s.getCurrentChar()
     case c
     of ' ', '\r', '\t':
-      discard s.advance()
+      s.current += 1
     else:
       break
-
-proc isAtEnd(s: Scanner): bool {.inline.} =
-  s.current >= s.source.len
 
 proc isAlphanumericOrUnderscore(c: char): bool {.inline.} =
   ## Returns true if the character is a letter, digit, or underscore
@@ -150,11 +234,20 @@ proc isAlphanumericOrUnderscore(c: char): bool {.inline.} =
 
 proc scanIdentifier(s: var Scanner): tuple[start: int, `end`: int] {.inline.} =
   let start = s.current
-  while isAlphanumericOrUnderscore(s.getCurrentChar()):
+  while not s.isAtEnd() and isAlphanumericOrUnderscore(s.getCurrentChar()):
     discard s.advance()
   result = (start, s.current)
 
-proc scanToEndOfLine(s: var Scanner): tuple[start, `end`: int] {.inline.} =
+proc scanToStartOfNextLine(s: var Scanner): tuple[start, `end`: int] {.inline.} =
+  ## Scans and advances to the first character of the next line.
+  ##
+  ## Returns a tuple of:
+  ##
+  ## - The current position at the start of the function call
+  ## - The position of the first character of the next line
+  if s.isAtEnd():
+    return (s.current, s.current)
+
   let start = s.current
   let length = s.source.len
   var offset = 0
@@ -198,29 +291,182 @@ proc isNewDefinition(s: var Scanner): bool {.inline.} =
   s.skipWhitespace()
   result =
     s.peekString("func") or s.peekString("var") or s.peekString("const") or
-    s.peekString("class") or s.peekString("signal") or s.peekString("enum")
+    s.peekString("class") or s.peekString("signal") or s.peekString("enum") or
+    # TODO: Consider how to handle regular comments vs anchors
+    s.peekString("#ANCHOR") or s.peekString("#END") or s.peekString("# ANCHOR") or
+    s.peekString("# END")
   s.current = savedPos
   return result
 
 proc scanBody(s: var Scanner, startIndent: int): tuple[bodyStart, bodyEnd: int] =
   let start = s.current
   while not s.isAtEnd():
-    let currentIndent = s.countIndentation()
+    let currentIndent = s.countIndentationAndAdvance()
     if currentIndent <= startIndent and not s.isAtEnd():
       if isNewDefinition(s):
         break
 
-    discard scanToEndOfLine(s)
+    discard scanToStartOfNextLine(s)
+  # s.current points to the first letter of the next token, after the
+  # indentation. We need to backtrack to find the actual end of the body.
+  var index = s.current - 1
+  while index > 0 and s.source[index] in [' ', '\r', '\t', '\n']:
+    index -= 1
+  s.current = index + 1
   result = (start, s.current)
+
+proc scanAnchorTags(s: var Scanner): seq[AnchorTag] =
+  ## Scans the entire file and collects all anchor tags (both start and end)
+  ## Returns them in the order they appear in the source code
+
+  while not s.isAtEnd():
+    if s.getCurrentChar() == '#':
+      let startPosition = s.current
+
+      # Look for an anchor, if not found skip to the next line. An anchor has
+      # to take a line on its own.
+      s.current += 1
+      s.skipWhitespace()
+
+      let isAnchor = s.peekString("ANCHOR")
+      let isEnd = s.peekString("END")
+
+      if not (isAnchor or isEnd):
+        discard s.scanToStartOfNextLine()
+        continue
+      else:
+        var tag = AnchorTag(isStart: isAnchor)
+        tag.startPosition = startPosition
+        s.advanceToPeek()
+        debugEcho "Found tag: " & s.source[startPosition ..< s.current]
+
+        # Jump to after the colon (:) to find the tag's name
+        while s.getCurrentChar() != ':':
+          s.current += 1
+        s.skipWhitespace()
+        s.current += 1
+        s.skipWhitespace()
+
+        let (nameStart, nameEnd) = s.scanIdentifier()
+        tag.name = s.source[nameStart ..< nameEnd]
+
+        let (_, lineEnd) = s.scanToStartOfNextLine()
+        tag.endPosition = lineEnd
+
+        result.add(tag)
+
+        # If the current char isn't a line return, backtrack s.current to the line return
+        while not s.isAtEnd() and s.getCurrentChar() != '\n':
+          s.current -= 1
+
+    s.current += 1
+  debugEcho "Found " & $result.len & " anchor tags"
+
+proc preprocessAnchors(
+    source: string
+): tuple[anchors: Table[string, CodeAnchor], processed: string] =
+  ## This function scans the source code for anchor tags and looks for matching opening and closing tags.
+  ## Anchor tags are comments used to mark a region in the code, with the form:
+  ##
+  ## #ANCHOR:anchor_name
+  ## ...
+  ## #END:anchor_name
+  ##
+  ## The function returns:
+  ##
+  ## 1. a table of anchor region names mapped to CodeAnchor
+  ## objects, each representing a region of code between an anchor and its
+  ## matching end tag.
+  ## 2. A string with the source code with the anchor comment lines removed, to
+  ## parse symbols more easily in a separate pass.
+
+  var s =
+    Scanner(source: source, current: 0, indentLevel: 0, bracketDepth: 0, peekIndex: 0)
+
+  # Anchor regions can be nested or intertwined, so we first scan all tags, then match opening and closing tags by name to build CodeAnchor objects
+  let tags = scanAnchorTags(s)
+
+  # Turn tags into tables to find matching pairs and check for duplicate names
+  var startTags = initTable[string, AnchorTag](tags.len div 2)
+  var endTags = initTable[string, AnchorTag](tags.len div 2)
+
+  # TODO: add processed filename/path in errors
+  for tag in tags:
+    if tag.isStart:
+      if tag.name in startTags:
+        stderr.writeLine "\e[31mDuplicate ANCHOR tag found for: " & tag.name & "\e[0m"
+        return
+      startTags[tag.name] = tag
+    else:
+      if tag.name in endTags:
+        stderr.writeLine "\e[31mDuplicate END tag found for: " & tag.name & "\e[0m"
+        return
+      endTags[tag.name] = tag
+
+  # Validate tag pairs and create CodeAnchor objects
+  var anchors = initTable[string, CodeAnchor](tags.len div 2)
+
+  for name, startTag in startTags:
+    if name notin endTags:
+      stderr.writeLine "\e[31mMissing #END tag for anchor: " & name & "\e[0m"
+      return
+  for name, endTag in endTags:
+    if name notin startTags:
+      stderr.writeLine "\e[31mFound #END tag without matching #ANCHOR for: " & name &
+        "\e[0m"
+      return
+
+  for name, startTag in startTags:
+    let endTag = endTags[name]
+    var anchor = CodeAnchor()
+
+    anchor.nameStart = startTag.startPosition
+    anchor.nameEnd = startTag.startPosition + name.len
+    anchor.anchorTagStart = startTag.startPosition
+    anchor.codeStart = startTag.endPosition
+    anchor.codeEnd = block:
+      var codeEndPos = endTag.startPosition
+      while source[codeEndPos] != '\n':
+        codeEndPos -= 1
+      codeEndPos
+    anchor.endTagEnd = endTag.endPosition
+
+    anchors[name] = anchor
+
+  # Preprocess source code by removing anchor tag lines
+  var processedSource = newStringOfCap(source.len)
+  var lastEnd = 0
+  for tag in tags:
+    # Tags can be indented, so we backtrack to the start of the line to strip
+    # the entire line of code containing the tag
+    var tagLineStart = tag.startPosition
+    while tagLineStart > 0 and source[tagLineStart - 1] != '\n':
+      tagLineStart -= 1
+    processedSource.add(source[lastEnd ..< tagLineStart])
+    lastEnd = tag.endPosition
+  processedSource.add(source[lastEnd ..< source.len])
+
+  result = (anchors, processedSource.strip(leading = false, trailing = true))
 
 proc scanToken(s: var Scanner): Token =
   while not s.isAtEnd():
-    s.indentLevel = s.countIndentation()
+    debugEcho "At top of loop. Current index: " & $s.current
+    s.indentLevel = s.countIndentationAndAdvance()
+    debugEcho "Indent level: " & $s.indentLevel
     s.skipWhitespace()
+    debugEcho "After whitespace. Current index: " & $s.current
+
+    if s.isAtEnd():
+      break
 
     let startPos = s.current
     let c = s.getCurrentChar()
+    debugEcho "Current char: " & $c.charMakeWhitespaceVisible()
     case c
+    # Comment, skip to end of line and continue
+    of '#':
+      discard s.scanToStartOfNextLine()
+      continue
     # Function definition
     of 'f':
       if s.matchString("func"):
@@ -235,7 +481,7 @@ proc scanToken(s: var Scanner): Token =
 
         while s.getCurrentChar() != ':':
           discard s.advance()
-        discard s.scanToEndOfLine()
+        discard s.scanToStartOfNextLine()
 
         token.range.definitionEnd = s.current
         token.range.bodyStart = s.current
@@ -334,14 +580,16 @@ proc scanToken(s: var Scanner): Token =
             else:
               discard s.advance()
         else:
-          discard s.scanToEndOfLine()
+          discard s.scanToStartOfNextLine()
 
         token.range.end = s.current
+        debugEcho "Parsed signal token: " & $token
         return token
     else:
       discard
 
     s.current += 1
+    debugEcho "Skipping character, current index: " & $s.current
 
   return Token(tokenType: TokenType.Invalid)
 
@@ -350,7 +598,10 @@ proc parseClass(s: var Scanner, classToken: var Token) =
   let classIndent = s.indentLevel
   s.current = classToken.range.bodyStart
   while not s.isAtEnd():
-    let currentIndent = s.countIndentation()
+    debugEcho "Parsing class body. Current index: " & $s.current
+    #Problem: s is on the first char of the token instead of the beginning of the line
+    let currentIndent = s.countIndentationAndAdvance()
+    debugEcho "Current indent: " & $currentIndent
     if currentIndent <= classIndent:
       if isNewDefinition(s):
         break
@@ -374,29 +625,34 @@ proc parseGDScript(source: string): seq[Token] =
       token.range.end = scanner.current
     result.add(token)
 
-type GDScriptFile = object
-  filePath: string
-  source: string
-  symbols: Table[string, Token]
-
-# Caches parsed GDScript files
-var gdscriptFiles = initTable[string, GDScriptFile]()
-
 proc parseGDScriptFile(path: string) =
-  # Parses a GDScript file and caches it
+  ## Parses a GDScript file and caches it in the gdscriptFiles table.
+  ## The parsing happens in two passes:
+  ##
+  ## 1. We preprocess the source code to extract the code between anchor comments and remove these comment lines.
+  ## 2. We parse the preprocessed source code to tokenize symbols and their content.
+  ##
+  ## Preprocessing makes the symbol parsing easier afterwards, although it means we scan the file twice.
   let source = readFile(path)
-  let tokens = parseGDScript(source)
+  let (anchors, processedSource) = preprocessAnchors(source)
+  let tokens = parseGDScript(processedSource)
   var symbols = initTable[string, Token]()
   for token in tokens:
-    let name = token.getName(source)
+    let name = token.getName(processedSource)
     symbols[name] = token
 
-  gdscriptFiles[path] = GDScriptFile(filePath: path, source: source, symbols: symbols)
+  gdscriptFiles[path] = GDScriptFile(
+    filePath: path,
+    source: source,
+    symbols: symbols,
+    anchors: anchors,
+    processedSource: processedSource,
+  )
 
 proc getTokenFromCache(symbolName: string, filePath: string): Token =
   # Gets a token from the cache given a symbol name and the path to the GDScript file
   if not gdscriptFiles.hasKey(filePath):
-    echo "Token not found, " & filePath & " not in cache. Parsing file..."
+    debugEcho "Token not found, " & filePath & " not in cache. Parsing file..."
     parseGDScriptFile(filePath)
 
   let file = gdscriptFiles[filePath]
@@ -406,12 +662,6 @@ proc getTokenFromCache(symbolName: string, filePath: string): Token =
     )
 
   return file.symbols[symbolName]
-
-proc getGDScriptCodeFromCache(filePath: string): var string =
-  # Gets the code of a GDScript file from the cache given its path
-  if not gdscriptFiles.hasKey(filePath):
-    parseGDScriptFile(filePath)
-  return gdscriptFiles[filePath].source
 
 proc getSymbolText(symbolName: string, path: string): string =
   # Gets the text of a symbol given its name and the path to the file
@@ -436,13 +686,6 @@ proc getSymbolBody(symbolName: string, path: string): string =
     )
   let file = gdscriptFiles[path]
   return token.getBody(file.source)
-
-type SymbolQuery = object
-  name: string
-  isDefinition: bool
-  isBody: bool
-  isClass: bool
-  childName: string
 
 proc parseSymbolQuery(query: string): SymbolQuery =
   ## Turns a symbol query string like ClassName.body or ClassName.function.definition
@@ -470,9 +713,10 @@ proc parseSymbolQuery(query: string): SymbolQuery =
     else:
       raise newException(ValueError, "Invalid symbol query: '" & query & "'")
 
-proc getCode*(symbolQuery: string, filePath: string): string =
+proc getCodeForSymbol*(symbolQuery: string, filePath: string): string =
   ## Gets the code of a symbol given a query and the path to the file
   ## The query can be:
+  ##
   ## - A symbol name like a function or class name
   ## - The path to a symbol, like ClassName.functionName
   ## - The request of a definition, like functionName.definition
@@ -500,7 +744,30 @@ proc getCode*(symbolQuery: string, filePath: string): string =
     result = getSymbolBody(query.name, filePath)
   else:
     result = getSymbolText(query.name, filePath)
-  result = result.strip(trailing = true)
+
+proc getCodeForAnchor*(anchorName: string, filePath: string): string =
+  ## Gets the code between anchor comments given the anchor name and the path to the file
+  if not gdscriptFiles.hasKey(filePath):
+    debugEcho filePath & " not in cache. Parsing file..."
+    parseGDScriptFile(filePath)
+
+  let file = gdscriptFiles[filePath]
+  if not file.anchors.hasKey(anchorName):
+    styledEcho(fgRed, "Anchor '", anchorName, "' not found in file: '", filePath, "'")
+    return ""
+
+  let anchor = file.anchors[anchorName]
+  return file.source[anchor.codeStart ..< anchor.codeEnd]
+
+proc getCodeWithoutAnchors*(filePath: string): string =
+  ## Gets the preprocessed code of a GDScript file. It's the full script without
+  ## the anchor tag lines like #ANCHOR:anchor_name or #END:anchor_name
+  if not gdscriptFiles.hasKey(filePath):
+    debugEcho filePath & " not in cache. Parsing file..."
+    parseGDScriptFile(filePath)
+
+  let file = gdscriptFiles[filePath]
+  result = file.processedSource
 
 proc runPerformanceTest() =
   let codeTest =
@@ -646,6 +913,105 @@ class StateMachine extends Node:
           classToken.children[1].tokenType == TokenType.Variable
           classToken.children[2].tokenType == TokenType.Variable
           classToken.children[3].tokenType == TokenType.Function
+
+    test "Parse larger inner class with anchors":
+      let code =
+        """
+#ANCHOR:class_StateDie
+class StateDie extends State:
+
+	const SmokeExplosionScene = preload("res://assets/vfx/smoke_vfx/smoke_explosion.tscn")
+
+	#ANCHOR:test
+	func _init(init_mob: Mob3D) -> void:
+		super("Die", init_mob)
+
+	func enter() -> void:
+		mob.skin.play("die")
+		#END:test
+
+		var smoke_explosion := SmokeExplosionScene.instantiate()
+		mob.add_sibling(smoke_explosion)
+		smoke_explosion.global_position = mob.global_position
+
+		mob.skin.animation_finished.connect(func (_animation_name: String) -> void:
+			mob.queue_free()
+		)
+#END:class_StateDie
+"""
+      let (anchors, processedSource) = preprocessAnchors(code)
+      echo processedSource
+      quit()
+      let tokens = parseGDScript(processedSource)
+      check:
+        tokens.len == 1
+      if tokens.len == 1:
+        let classToken = tokens[0]
+        check:
+          classToken.tokenType == TokenType.Class
+          classToken.getName(processedSource) == "StateDie"
+          classToken.children.len == 3
+          # Trailing anchor comments should not be included in the token
+          not classToken.getBody(processedSource).contains("#END")
+      else:
+        echo "Found tokens: ", tokens.len
+        printTokens(tokens, processedSource)
+
+    test "Anchor after docstring":
+      let code =
+        """
+## The words that appear on screen at each step.
+#ANCHOR:counting_steps
+@export var counting_steps: Array[String]= ["3", "2", "1", "GO!"]
+#END:counting_steps
+"""
+      let (anchors, processedSource) = preprocessAnchors(code)
+      let tokens = parseGDScript(processedSource)
+      check:
+        tokens.len == 1
+      if tokens.len == 1:
+        let token = tokens[0]
+        check:
+          token.tokenType == TokenType.Variable
+          token.getName(processedSource) == "counting_steps"
+
+    test "Another anchor":
+      let code =
+        """
+## The container for buttons
+#ANCHOR:010_the_container_box
+@onready var action_buttons_v_box_container: VBoxContainer = %ActionButtonsVBoxContainer
+#END:010_the_container_box
+"""
+      let (anchors, processedSource) = preprocessAnchors(code)
+      let tokens = parseGDScript(processedSource)
+      check:
+        tokens.len == 1
+      if tokens.len == 1:
+        let token = tokens[0]
+        check:
+          token.tokenType == TokenType.Variable
+          token.getName(processedSource) == "action_buttons_v_box_container"
+
+    when isMainModule:
+      test "Parse anchor code":
+        let code =
+          """
+  #ANCHOR:row_node_references
+  @onready var row_bodies: HBoxContainer = %RowBodies
+  @onready var row_expressions: HBoxContainer = %RowExpressions
+  #END:row_node_references
+  """
+        let tempFile = getTempDir() / "test_gdscript.gd"
+        writeFile(tempFile, code)
+        let rowNodeReferences = getCodeForAnchor("row_node_references", tempFile)
+        removeFile(tempFile)
+
+        check:
+          rowNodeReferences.contains("var row_bodies: HBoxContainer = %RowBodies")
+          rowNodeReferences.contains(
+            "var row_expressions: HBoxContainer = %RowExpressions"
+          )
 
 when isMainModule:
   runUnitTests()
