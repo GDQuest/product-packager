@@ -320,11 +320,22 @@ proc scanAnchorTags(s: var Scanner): seq[AnchorTag] =
 
   while not s.isAtEnd():
     if s.getCurrentChar() == '#':
-      if (s.peekString("#ANCHOR") or s.peekString("# ANCHOR")) or
-          (s.peekString("#END:") or s.peekString("# END:")):
-        var tag =
-          AnchorTag(isStart: not (s.peekString("#END:") or s.peekString("# END:")))
-        tag.startPosition = s.current
+      let startPosition = s.current
+
+      # Look for an anchor, if not found skip to the next line. An anchor has
+      # to take a line on its own.
+      s.current += 1
+      s.skipWhitespace()
+
+      let isAnchor = s.peekString("ANCHOR")
+      let isEnd = s.peekString("END")
+
+      if not (isAnchor or isEnd):
+        discard s.scanToStartOfNextLine()
+      else:
+        var tag = AnchorTag(isStart: isAnchor)
+        tag.startPosition = startPosition
+        s.advanceToPeek()
 
         # Jump to after the colon (:) to find the tag's name
         while s.getCurrentChar() != ':':
@@ -343,7 +354,7 @@ proc scanAnchorTags(s: var Scanner): seq[AnchorTag] =
 
         # If the current char isn't a line return, backtrack s.current to the line return
         while not s.isAtEnd() and s.getCurrentChar() != '\n':
-          s.current = s.current - 1
+          s.current -= 1
 
     s.current += 1
 
