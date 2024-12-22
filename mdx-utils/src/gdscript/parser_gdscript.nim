@@ -237,10 +237,13 @@ proc scanIdentifier(s: var Scanner): tuple[start: int, `end`: int] {.inline.} =
     discard s.advance()
   result = (start, s.current)
 
-proc scanToEndOfLine(s: var Scanner): tuple[start, `end`: int] {.inline.} =
-  ## Scans to the end of the current line, returning the start (the current
-  ## position when the function was called) and end positions (the \n character
-  ## at the end of the line).
+proc scanToStartOfNextLine(s: var Scanner): tuple[start, `end`: int] {.inline.} =
+  ## Scans and advances to the first character of the next line.
+  ##
+  ## Returns a tuple of:
+  ##
+  ## - The current position at the start of the function call
+  ## - The position of the first character of the next line
   if s.isAtEnd():
     return (s.current, s.current)
 
@@ -302,7 +305,7 @@ proc scanBody(s: var Scanner, startIndent: int): tuple[bodyStart, bodyEnd: int] 
       if isNewDefinition(s):
         break
 
-    discard scanToEndOfLine(s)
+    discard scanToStartOfNextLine(s)
   # s.current points to the first letter of the next token, after the
   # indentation. We need to backtrack to find the actual end of the body.
   var index = s.current - 1
@@ -333,7 +336,7 @@ proc scanAnchorTags(s: var Scanner): seq[AnchorTag] =
         let (nameStart, nameEnd) = s.scanIdentifier()
         tag.name = s.source[nameStart ..< nameEnd]
 
-        let (_, lineEnd) = s.scanToEndOfLine()
+        let (_, lineEnd) = s.scanToStartOfNextLine()
         tag.endPosition = lineEnd
 
         result.add(tag)
@@ -439,7 +442,7 @@ proc scanToken(s: var Scanner): Token =
     case c
     # Comment, skip to end of line and continue
     of '#':
-      discard s.scanToEndOfLine()
+      discard s.scanToStartOfNextLine()
       continue
     # Function definition
     of 'f':
@@ -455,7 +458,7 @@ proc scanToken(s: var Scanner): Token =
 
         while s.getCurrentChar() != ':':
           discard s.advance()
-        discard s.scanToEndOfLine()
+        discard s.scanToStartOfNextLine()
 
         token.range.definitionEnd = s.current
         token.range.bodyStart = s.current
@@ -554,7 +557,7 @@ proc scanToken(s: var Scanner): Token =
             else:
               discard s.advance()
         else:
-          discard s.scanToEndOfLine()
+          discard s.scanToStartOfNextLine()
 
         token.range.end = s.current
         debugEcho "Parsed signal token: " & $token
