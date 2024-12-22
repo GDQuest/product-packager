@@ -428,7 +428,7 @@ proc preprocessAnchors(
 
     anchors[name] = anchor
 
-  # Preprocess source
+  # Preprocess source code by removing anchor tag lines
   var processedSource = newStringOfCap(source.len)
   var lastEnd = 0
   for tag in tags:
@@ -437,7 +437,6 @@ proc preprocessAnchors(
     var tagLineStart = tag.startPosition
     while tagLineStart > 0 and source[tagLineStart - 1] != '\n':
       tagLineStart -= 1
-    # Add content between last endpoint and current tag start
     processedSource.add(source[lastEnd ..< tagLineStart])
     lastEnd = tag.endPosition
   processedSource.add(source[lastEnd ..< source.len])
