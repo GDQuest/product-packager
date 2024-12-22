@@ -332,10 +332,12 @@ proc scanAnchorTags(s: var Scanner): seq[AnchorTag] =
 
       if not (isAnchor or isEnd):
         discard s.scanToStartOfNextLine()
+        continue
       else:
         var tag = AnchorTag(isStart: isAnchor)
         tag.startPosition = startPosition
         s.advanceToPeek()
+        debugEcho "Found tag: " & s.source[startPosition ..< s.current]
 
         # Jump to after the colon (:) to find the tag's name
         while s.getCurrentChar() != ':':
@@ -357,6 +359,7 @@ proc scanAnchorTags(s: var Scanner): seq[AnchorTag] =
           s.current -= 1
 
     s.current += 1
+  debugEcho "Found " & $result.len & " anchor tags"
 
 proc preprocessAnchors(
     source: string
@@ -925,6 +928,24 @@ class StateDie extends State:
       else:
         echo "Found tokens: ", tokens.len
         printTokens(tokens, processedSource)
+
+    test "Anchor after docstring":
+      let code =
+        """
+## The words that appear on screen at each step.
+#ANCHOR:counting_steps
+@export var counting_steps: Array[String]= ["3", "2", "1", "GO!"]
+#END:counting_steps
+"""
+      let (anchors, processedSource) = preprocessAnchors(code)
+      let tokens = parseGDScript(processedSource)
+      check:
+        tokens.len == 1
+      if tokens.len == 1:
+        let token = tokens[0]
+        check:
+          token.tokenType == TokenType.Variable
+          token.getName(processedSource) == "counting_steps"
 
     when isMainModule:
       test "Parse anchor code":
