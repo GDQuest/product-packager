@@ -17,7 +17,7 @@
 ## This was originally written as a tool to only parse GDScript symbols, with
 ## the anchor preprocessing added later, so the approach may not be the most
 ## efficient.
-import std/[tables, unittest, strutils, times, terminal]
+import std/[tables, strutils, terminal]
 when compileOption("profiler"):
   import std/nimprof
 when isMainModule:
@@ -769,34 +769,41 @@ proc getCodeWithoutAnchors*(filePath: string): string =
   let file = gdscriptFiles[filePath]
   result = file.processedSource
 
-proc runPerformanceTest() =
-  let codeTest =
-    """
-class StateMachine extends Node:
-    var transitions := {}: set = set_transitions
-    var current_state: State
-    var is_debugging := false: set = set_is_debugging
+when isMainModule:
+  import std/[times, unittest]
 
-    func _init() -> void:
-        set_physics_process(false)
-        var blackboard := Blackboard.new()
-        Blackboard.player_died.connect(trigger_event.bind(Events.PLAYER_DIED))
-"""
+  proc runPerformanceTest() =
+    let codeTest =
+      """
+  class StateMachine extends Node:
+      var transitions := {}: set = set_transitions
+      var current_state: State
+      var is_debugging := false: set = set_is_debugging
 
-  echo "Running performance test..."
-  var totalDuration = 0.0
-  for i in 0 ..< 10:
-    let start = cpuTime()
-    for j in 0 ..< 10000:
-      discard parseGDScript(codeTest)
-    let duration = (cpuTime() - start) * 1000
-    totalDuration += duration
+      func _init() -> void:
+          set_physics_process(false)
+          var blackboard := Blackboard.new()
+          Blackboard.player_died.connect(trigger_event.bind(Events.PLAYER_DIED))
+  """
 
-  let averageDuration = totalDuration / 10
-  echo "Average parse duration for 10 000 calls: ",
-    averageDuration.formatFloat(ffDecimal, 3), "ms"
+    echo "Running performance test..."
+    var totalDuration = 0.0
+    for i in 0 ..< 10:
+      let start = cpuTime()
+      for j in 0 ..< 10_000:
+        discard parseGDScript(codeTest)
+      let duration = (cpuTime() - start) * 1000
+      totalDuration += duration
 
-proc runUnitTests() =
+    let averageDuration = totalDuration / 10
+    echo "Average parse duration for 10 000 calls: ",
+      averageDuration.formatFloat(ffDecimal, 3), "ms"
+    echo "For ",
+      10_000 * codeTest.len,
+      " characters and ",
+      codeTest.countLines() * 10_000,
+      " lines of code"
+
   suite "GDScript parser tests":
     test "Parse signals":
       let code =
@@ -939,9 +946,7 @@ class StateDie extends State:
 		)
 #END:class_StateDie
 """
-      let (anchors, processedSource) = preprocessAnchors(code)
-      echo processedSource
-      quit()
+      let (_, processedSource) = preprocessAnchors(code)
       let tokens = parseGDScript(processedSource)
       check:
         tokens.len == 1
@@ -965,7 +970,7 @@ class StateDie extends State:
 @export var counting_steps: Array[String]= ["3", "2", "1", "GO!"]
 #END:counting_steps
 """
-      let (anchors, processedSource) = preprocessAnchors(code)
+      let (_, processedSource) = preprocessAnchors(code)
       let tokens = parseGDScript(processedSource)
       check:
         tokens.len == 1
@@ -983,7 +988,7 @@ class StateDie extends State:
 @onready var action_buttons_v_box_container: VBoxContainer = %ActionButtonsVBoxContainer
 #END:010_the_container_box
 """
-      let (anchors, processedSource) = preprocessAnchors(code)
+      let (_, processedSource) = preprocessAnchors(code)
       let tokens = parseGDScript(processedSource)
       check:
         tokens.len == 1
@@ -1012,7 +1017,3 @@ class StateDie extends State:
           rowNodeReferences.contains(
             "var row_expressions: HBoxContainer = %RowExpressions"
           )
-
-when isMainModule:
-  runUnitTests()
-  #runPerformanceTest()
