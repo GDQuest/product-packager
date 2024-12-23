@@ -11,7 +11,7 @@
 ## See the proc processContent() for the list of patterns and their handlers.
 import std/[nre, strformat, strutils, tables, options, os, terminal, sets]
 import assets
-import utils
+import cache
 import ../settings
 import ../image_size
 import ../gdscript/parser_gdscript
@@ -199,7 +199,7 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
   let component = parseMDXComponent(match.match)
   let args = component.props
   let file = args.getOrDefault("file", "")
-  let includeFilePath = utils.cache.findCodeFile(file)
+  let includeFilePath = cache.fileCache.findCodeFile(file)
 
   # TODO: error handling:
   # - if there's a replace prop, ensure it's correctly formatted

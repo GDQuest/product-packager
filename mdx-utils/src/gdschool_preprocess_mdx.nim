@@ -3,7 +3,7 @@
 ## It also inserts components representing Godot icons in front of Godot class names.
 import
   std/[logging, os, sequtils, strformat, strutils, terminal, nre, tables, times, sets]
-import md/[preprocessor, utils]
+import md/[preprocessor, cache]
 import customlogger
 import settings
 
@@ -22,7 +22,7 @@ proc process(appSettings: BuildSettings) =
       pathSrc.getLastModificationTime() > pathDist.getLastModificationTime()
 
   # This cache lists code files (.gd, .gdshader) in the content directory and maps associated files.
-  cache = prepareCache(appSettings)
+  cache.fileCache = cache.prepareCache(appSettings)
   type ProcessedFile = object
     inputPath: string
     content: string
@@ -41,7 +41,7 @@ proc process(appSettings: BuildSettings) =
     else:
       appSettings.distDir & DirSep & pathPartContent
   # Process all MDX and MD files and save them to the dist directory.
-  for fileIn in cache.contentFiles:
+  for fileIn in cache.fileCache.contentFiles:
     let fileOut = fileIn.replace(pathPartContent, pathPartReplace)
 
     # Preprocessing and writing files only happens if the file has changed,
