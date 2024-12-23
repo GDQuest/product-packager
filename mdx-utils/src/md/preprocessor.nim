@@ -82,10 +82,9 @@ proc preprocessVideoFile(match: RegexMatch, context: HandlerContext): string =
     result.add(" " & after)
   result &= "/>"
 
-## Appends a react component for each Godot class name used in the markdown content, in inline code marks.
-## For example, it transforms `Node` to <IconGodot name="Node" colorGroup="node">Node</IconGodot>.
 proc preprocessGodotIcon(match: RegexMatch, context: HandlerContext): string =
-  ## Replaces a Godot class name in inline code formatting with an icon component followed by the class name.
+  ## Adds an IconGodot component for each Godot class name used in the markdown content, in inline code marks.
+  ## For example, it transforms `Node` to <IconGodot name="Node" colorGroup="node">Node</IconGodot>.
 
   proc getGodotIconGroup(className: string): string =
     ## Returns the group of the Godot icon for the given class name.
@@ -118,7 +117,7 @@ proc preprocessGodotIcon(match: RegexMatch, context: HandlerContext): string =
   if className in CACHE_GODOT_ICONS:
     let group = getGodotIconGroup(className)
     result =
-      fmt"""<IconGodot name="{className}" colorGroup="{group}">{match.match}</IconGodot>"""
+      fmt"""<IconGodot name="{className}" colorGroup="{group}">{className}</IconGodot>"""
   else:
     echo(fmt"Couldn't find icon for `{className}`. Skipping...")
     result = match.match
