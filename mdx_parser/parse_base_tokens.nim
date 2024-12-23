@@ -29,7 +29,7 @@ type
     Comma         # ,
     Semicolon     # ;
     Dash          # -
-    Text          # Any text or whitespace
+    Text          # Any text or whitespace but not \n
     Newline       # \n
     EOF           # End of file marker
 
@@ -116,6 +116,8 @@ proc tokenize*(source: string): seq[LexerToken] =
       continue
     current += 1
   return tokens
+
+
 proc getString*(range: Range, source: string): string {.inline.} =
   return source[range.start..<range.end]
 
@@ -127,6 +129,13 @@ proc peek*(s: TokenScanner, offset: int = 0): LexerToken {.inline.} =
   if s.peekIndex >= s.tokens.len:
     return s.tokens[^1]
   return s.tokens[s.peekIndex]
+
+proc isPeekSequence*(s: TokenScanner, sequence: seq[LexerTokenType]): bool {.inline.} =
+  ## Returns `true` if the next tokens in the scanner match the given sequence.
+  for i, tokenType in sequence:
+    if s.peek(i).kind != tokenType:
+      return false
+  return true
 
 proc matchToken*(s: TokenScanner, expected: LexerTokenType): bool {.inline.} =
   if s.getCurrentToken().kind != expected:
@@ -141,3 +150,19 @@ proc isAlphanumericOrUnderscore*(c: char): bool {.inline.} =
   let isLetter = (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_'
   let isDigit = c >= '0' and c <= '9'
   return isLetter or isDigit
+
+proc advanceToNewline*(s: TokenScanner) {.inline.} =
+  ## Advances until the next newline character or the end of the tokens.
+  ## Stops at a Newline token.
+  while not s.isAtEnd() and s.getCurrentToken().kind != Newline:
+    s.current += 1
+
+proc advanceToNextLineStart*(s: TokenScanner) {.inline.} =
+  ## Advances to the first token of the next line, or the end of the tokens.
+  s.advanceToNewline()
+  if not s.isAtEnd():
+    s.current += 1
+
+proc skipWhitespace*(s: TokenScanner) {.inline.} =
+  while not s.isAtEnd() and s.getCurrentToken().kind == Text and s.getCurrentToken().range.length == 1 and s.getCurrentToken().range.start == ' ':
+    s.current += 1

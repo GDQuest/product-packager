@@ -1,6 +1,6 @@
-# The purpose of this pass is to chop the document into blocks, like headings,
-# paragraphs, etc. This is done by looking at the first token of each line and
-# determining what kind of block it is.
+## The purpose of this pass is to chop the document into blocks, like headings,
+## paragraphs, etc. This is done by looking at the first token of each line and
+## determining what kind of block it is.
 #
 # TODO:
 # - Next goal: complete paragraph parsing, then move on to inline parsing of MDX components and code blocks, then preprocessing and "rendering" the document as MDX.
@@ -32,36 +32,43 @@ type
     of Paragraph, UnorderedList, OrderedList, Blockquote:
       discard
 
-proc advanceToNewline(s: TokenScanner) {.inline.} =
-  while not s.isAtEnd() and s.getCurrentToken().kind != Newline:
-    s.current += 1
+proc stripTokenText(token: LexerToken, source: string, characters: set[char]): Range =
+  var newStart = token.range.start
+  while newStart < token.range.end and source[newStart] in characters:
+    newStart += 1
+
+  var newEnd = token.range.end
+  while newEnd > newStart and source[newEnd - 1] in characters:
+    newEnd -= 1
+
+  result = Range(start: newStart, `end`: newEnd)
+
 
 proc parseCodeBlock(s: TokenScanner): BlockToken =
+  const THREE_BACKTICKS  = @[Backtick, Backtick, Backtick]
+
   let start = s.current
-  # Skip three backticks
-  for i in 0..2:
-    if s.peek(i).kind != Backtick:
-      return nil
+  if not s.isPeekSequence(THREE_BACKTICKS):
+    return nil
   s.current += 3
 
   # Language is in a text token following the backticks
   var languageRange = Range(start: 0, `end`: 0)
-  if s.getCurrentToken().kind == Text:
-    languageRange.start = s.getCurrentToken().range.start
-    s.advanceToNewline()
-    languageRange.end = s.getCurrentToken().range.end
+  let current = s.getCurrentToken()
 
-  if s.getCurrentToken().kind == Newline:
-    s.current += 1
+  # After the three backticks, there is text, we assume it's the language
+  if current.kind == Text:
+    languageRange = current.stripTokenText(s.source, {' ', '\t'})
+
+  s.advanceToNextLineStart()
 
   let codeStart = s.current
   var codeEnd = codeStart
-  # Find closing backticks
+  # Find closing backticks, everything in between is code
   while not s.isAtEnd():
-    if s.getCurrentToken().kind == Backtick and
-        s.peek(1).kind == Backtick and
-        s.peek(2).kind == Backtick:
-      codeEnd = s.current
+    if s.isPeekSequence(THREE_BACKTICKS):
+      # The code ends before the closing backticks
+      codeEnd = s.current - 1
       s.current += 3
       break
     s.current += 1
@@ -81,11 +88,14 @@ proc parseHeading(s: TokenScanner): BlockToken =
     level += 1
     s.current += 1
 
+  let textStart = s.current
   s.advanceToNewline()
+
   return BlockToken(
     kind: Heading,
     range: Range(start: start, `end`: s.current),
     level: level,
+    text: Range(start: textStart, `end`: s.current),
   )
 
 proc parseParagraph(s: TokenScanner): BlockToken =

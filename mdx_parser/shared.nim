@@ -2,7 +2,8 @@
 type
   Range* = object
     ## A range of character indices in a source string or in a sequence of tokens.
-    start*, `end`*: int
+    start*: int
+    `end`*: int
 
   Position* = object
     ## A position in a source document.
