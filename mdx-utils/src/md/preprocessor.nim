@@ -38,7 +38,6 @@ var preprocessorErrorMessages*: seq[string] = @[]
 
 # Precompile regex patterns to avoid recompiling them in different functions
 let
-  regexAnchorLine = re"(?m)(?s)\h*(#|\/\/)\h*(ANCHOR|END).*?(\v|$)"
   regexVideoFile* =
     re"""(?s)<VideoFile\s*(?P<before>.*?)?src=["'](?P<src>[^\"']+)["'](?P<after>.*?)?/>"""
   regexMarkdownImage* = re"!\[(?P<alt>.*?)\]\((?P<path>.+?)\)"
