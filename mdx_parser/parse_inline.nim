@@ -1,15 +1,36 @@
-#TODO: Move definitions and functions to a separate file imported by the parser's different parts?
+# TODO:
+# - Parse attributes, strings, bools (name only or name=true), and JSX expressions
+#
+
+# REFERENCES:
+  #
 import parse_base_tokens
 
 type
+  AttributeValueType = enum
+    StringLiteral
+    Boolean
+    JSXExpression
+
+  AttributeValue* = ref object
+    case kind*: AttributeValueType
+    of StringLiteral:
+      value*: Range
+    of Boolean:
+      value*: bool
+    else:
+      discard
+
   InlineType* = enum
     MdxComponent
+    MdxAttribute
+    MdxImportExport
     #Link
     #Image
     #Bold
     #Italic
 
-  InlineToken* = object of Token[InlineType]
+  InlineToken* = Token[InlineType]
     case kind*: InlineType
     of MdxComponent:
       name*: Range
@@ -17,16 +38,24 @@ type
       # This allows us to distinguish the opening tag and body for further parsing
       openingTagRange*: Range
       bodyRange*: Range
+      # Whether the component is a react fragment (<></>) or not
+      isFragment*: bool = false
+      attributes
+      children*: seq[InlineToken]
+    of MdxAttribute:
+      name*: Range
+      value*: AttributeValue
+    of MdxImportExport:
+
+proc scanImportExport*(s: TokenScanner): InlineToken =
+  # TODO:
+  # Reference: Import export syntax: https://github.com/micromark/micromark-extension-mdxjs-esm#syntax
+  result = InlineToken(kind: MdxComponent, name: s.getCurrentToken().range)
 
 proc inlineParseMdxComponent*(s: TokenScanner): InlineToken =
   # TODO:
   # - Add support for nested components (parse MDX and code inside code fences etc.)
   # - test <></> syntax
-  # - consider case of parsing mdx with line returns within a markdown paragraph. E.g.
-  # Bla bla <Component>
-  # ...
-  # </Component>
-  # This is not supported by the MDX package.
   let start = s.current
 
   # Get component name. It has to start with an uppercase letter.
@@ -48,7 +77,8 @@ proc inlineParseMdxComponent*(s: TokenScanner): InlineToken =
     else:
       return nil
   else:
-    return nil
+    if firstToken.kind == CloseAngle:
+      s.current += 1
 
   # Look for end of opening tag or self-closing mark
   var wasClosingMarkFound = false
