@@ -5,8 +5,7 @@ type
     start*: int
     `end`*: int
 
-  Position* = object
-    ## A position in a source document.
+  Position* = object ## A position in a source document.
     line*, column*: int
 
   ParseError* = ref object of ValueError
@@ -23,8 +22,7 @@ proc findLineStartIndices*(source: string): seq[int] =
       result.add(i + 1)
 
 proc getLineAndColumn*(lineStartIndices: seq[int], index: int): Position =
-  ## Finds the line and column number for the given index
-  ## Uses a binary search to limit performance impact
+  ## Finds the line and column number for the given character index
   var min = 0
   var max = lineStartIndices.len - 1
 
@@ -37,7 +35,4 @@ proc getLineAndColumn*(lineStartIndices: seq[int], index: int): Position =
     elif middle < lineStartIndices.len and index >= lineStartIndices[middle + 1]:
       min = middle + 1
     else:
-      return Position(
-        line: middle + 1,
-        column: index - lineStartIndex + 1
-      )
+      return Position(line: middle + 1, column: index - lineStartIndex + 1)

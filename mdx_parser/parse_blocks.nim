@@ -8,6 +8,8 @@
 import parse_base_tokens
 import shared
 
+const THREE_BACKTICKS = @[Backtick, Backtick, Backtick]
+
 type
   BlockType* = enum
     Heading
@@ -17,7 +19,7 @@ type
     OrderedList
     Blockquote
 
-  BlockToken* = ref object
+  BlockToken* = Token[BlockType]
     # Index range for the entire set of tokens corresponding to this block
     # Allows us to retrieve both the tokens and the source text from the first
     # and last token's ranges'
@@ -43,22 +45,18 @@ proc stripTokenText(token: LexerToken, source: string, characters: set[char]): R
 
   result = Range(start: newStart, `end`: newEnd)
 
-
 proc parseCodeBlock(s: TokenScanner): BlockToken =
-  const THREE_BACKTICKS  = @[Backtick, Backtick, Backtick]
-
   let start = s.current
-  if not s.isPeekSequence(THREE_BACKTICKS):
-    return nil
+  # Skip the three backticks
   s.current += 3
 
-  # Language is in a text token following the backticks
+  # After the three backticks, if there is a text token, we assume it's the
+  # language and try to extract it.
   var languageRange = Range(start: 0, `end`: 0)
-  let current = s.getCurrentToken()
-
-  # After the three backticks, there is text, we assume it's the language
-  if current.kind == Text:
-    languageRange = current.stripTokenText(s.source, {' ', '\t'})
+  if s.currentToken.kind == Text:
+    languageRange = s.currentToken.stripTokenText(s.source, {' ', '\t'})
+    if languageRange.start == languageRange.end:
+      stderr.writeLine("Error: No language found for code block at line ", s.current)
 
   s.advanceToNextLineStart()
 
@@ -77,14 +75,14 @@ proc parseCodeBlock(s: TokenScanner): BlockToken =
     kind: CodeBlock,
     range: Range(start: start, `end`: s.current),
     language: languageRange,
-    code: Range(start: codeStart, `end`: codeEnd)
+    code: Range(start: codeStart, `end`: codeEnd),
   )
 
 proc parseHeading(s: TokenScanner): BlockToken =
   let start = s.current
   var level = 0
 
-  while not s.isAtEnd() and s.getCurrentToken().kind == Hash:
+  while not s.isAtEnd() and s.currentToken.kind == Hash:
     level += 1
     s.current += 1
 
@@ -101,15 +99,12 @@ proc parseHeading(s: TokenScanner): BlockToken =
 proc parseParagraph(s: TokenScanner): BlockToken =
   let start = s.current
   while not s.isAtEnd():
-    if s.getCurrentToken().kind == Newline and s.peek(1).kind == Newline:
+    if s.currentToken.kind == Newline and s.peek(1).kind == Newline:
       s.current += 1
       break
     s.current += 1
 
-  return BlockToken(
-    kind: Paragraph,
-    range: Range(start: start, `end`: s.current),
-  )
+  return BlockToken(kind: Paragraph, range: Range(start: start, `end`: s.current))
 
 proc parseMdxDocumentBlocks*(s: TokenScanner): seq[BlockToken] =
   # Parses blocks by checking the token at the start of a line (or of the document)
@@ -120,26 +115,26 @@ proc parseMdxDocumentBlocks*(s: TokenScanner): seq[BlockToken] =
   #
   var blocks: seq[BlockToken]
   while not s.isAtEnd():
-    let token = s.getCurrentToken()
-    case token.kind:
-      of Backtick:
-        if s.peek(1).kind == Backtick and s.peek(2).kind == Backtick:
-          let codeListing = parseCodeBlock(s)
-          if codeListing != nil:
-            blocks.add(codeListing)
-            continue
-      of Hash:
-        let heading = parseHeading(s)
-        if heading != nil:
-          blocks.add(heading)
+    let token = s.currentToken
+    case token.kind
+    of Backtick:
+      if s.isPeekSequence(THREE_BACKTICKS):
+        let codeListing = parseCodeBlock(s)
+        if codeListing != nil:
+          blocks.add(codeListing)
           continue
-        else:
-          let paragraph = parseParagraph(s)
-          if paragraph != nil:
-            blocks.add(paragraph)
-            continue
+    of Hash:
+      let heading = parseHeading(s)
+      if heading != nil:
+        blocks.add(heading)
+        continue
       else:
-        discard
+        let paragraph = parseParagraph(s)
+        if paragraph != nil:
+          blocks.add(paragraph)
+          continue
+    else:
+      discard
     s.current += 1
   result = blocks
 
@@ -149,12 +144,12 @@ proc echoBlockToken*(token: BlockToken, source: string, indent: int = 0) =
   echo "  Start: ", token.range.start
   echo "  End: ", token.range.end
 
-  case token.kind:
-    of CodeBlock:
-      echo "Language: ", getString(token.language, source)
-      echo "Code: ", getString(token.code, source)
-    of Paragraph, UnorderedList, OrderedList, Blockquote, Heading:
-      echo "Text: ", getString(token.text, source)
+  case token.kind
+  of CodeBlock:
+    echo "Language: ", getString(token.language, source)
+    echo "Code: ", getString(token.code, source)
+  of Paragraph, UnorderedList, OrderedList, Blockquote, Heading:
+    echo "Text: ", getString(token.text, source)
     #of MdxComponent:
     #  echo "Name: ", getString(token.name, source)
     #  echo "Self closing: ", token.isSelfClosing

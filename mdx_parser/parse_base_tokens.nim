@@ -1,57 +1,63 @@
 ## Basic tokenizer for the MDX parser. Walks the document and separates text
 ## from special characters to make block-level and inline parsing more readable
 ## and avoid walking character by character in the following steps.
+##
+## TODO: question: should we tokenize things like </ or < / as "closing
+## component start" etc. directly in this pass?
 import shared
 
+## Set of characters that we want to tokenize separately.
 const SpecialChars = {
-  '`', '{', '}', '[', ']', '#', '<', '>', '/', '*', '_', '=', '!', '(', ')', '"', '\'', ',', ';', '\n', '-'
+  '`', '{', '}', '[', ']', '#', '<', '>', '/', '*', '_', '=', '!', '(', ')', '"', '\'',
+  ',', ';', '\n', '-',
 }
 
 type
   LexerTokenType* = enum
-    Backtick      # `
-    OpenBrace     # {
-    CloseBrace    # }
-    OpenBracket   # [
-    CloseBracket  # ]
-    Hash          # #
-    OpenAngle     # <
-    CloseAngle    # >
-    Slash         # /
-    Asterisk      # *
-    Underscore    # _
-    Equals        # =
-    Exclamation   # !
-    OpenParen     # (
-    CloseParen    # )
-    DoubleQuote   # "
-    SingleQuote   # '
-    Comma         # ,
-    Semicolon     # ;
-    Dash          # -
-    Text          # Any text or whitespace but not \n
-    Newline       # \n
-    EOF           # End of file marker
+    Backtick # `
+    OpenBrace # {
+    CloseBrace # }
+    OpenBracket # [
+    CloseBracket # ]
+    Hash # #
+    OpenAngle # <
+    CloseAngle # >
+    Slash # /
+    Asterisk # *
+    Underscore # _
+    Equals # =
+    Exclamation # !
+    OpenParen # (
+    CloseParen # )
+    DoubleQuote # "
+    SingleQuote # '
+    Comma # ,
+    Semicolon # ;
+    Dash # -
+    Text # Any text or whitespace but not \n
+    Newline # \n
+    EOF # End of file marker
 
-  LexerToken* = object
-    kind*: LexerTokenType
+  Token*[T] = object
+    kind*: T
     range*: Range
 
-  TokenScanner* = ref object
-    tokens*: seq[LexerToken]
+  LexerToken* = Token[LexerTokenType]
+
+  Scanner*[T] = ref object of RootObj
+    tokens*: seq[T]
     current*: int
     source*: string
     peekIndex*: int
+
+  TokenScanner* = ref object of Scanner[LexerToken]
 
 proc tokenize*(source: string): seq[LexerToken] =
   var tokens: seq[LexerToken] = @[]
   var current = 0
 
   proc addToken(tokenType: LexerTokenType, start, ende: int) =
-    tokens.add(LexerToken(
-      kind: tokenType,
-      range: Range(start: start, `end`: ende)
-    ))
+    tokens.add(LexerToken(kind: tokenType, range: Range(start: start, `end`: ende)))
 
   while current < source.len:
     let start = current
@@ -109,41 +115,41 @@ proc tokenize*(source: string): seq[LexerToken] =
 
       let textRange = Range(start: textStart, `end`: current)
       if textRange.start != textRange.end:
-        tokens.add(LexerToken(
-          kind: Text,
-          range: Range(start: textRange.start, `end`: textRange.end),
-        ))
+        tokens.add(
+          LexerToken(
+            kind: Text, range: Range(start: textRange.start, `end`: textRange.end)
+          )
+        )
       continue
     current += 1
   return tokens
 
-
 proc getString*(range: Range, source: string): string {.inline.} =
-  return source[range.start..<range.end]
+  return source[range.start ..< range.end]
 
-proc getCurrentToken*(s: TokenScanner): LexerToken {.inline.} =
+proc currentToken*(s: Scanner): LexerToken {.inline.} =
   return s.tokens[s.current]
 
-proc peek*(s: TokenScanner, offset: int = 0): LexerToken {.inline.} =
+proc peek*(s: Scanner, offset: int = 0): LexerToken {.inline.} =
   s.peekIndex = s.current + offset
   if s.peekIndex >= s.tokens.len:
     return s.tokens[^1]
   return s.tokens[s.peekIndex]
 
-proc isPeekSequence*(s: TokenScanner, sequence: seq[LexerTokenType]): bool {.inline.} =
+proc isPeekSequence*(s: Scanner, sequence: seq[LexerTokenType]): bool {.inline.} =
   ## Returns `true` if the next tokens in the scanner match the given sequence.
   for i, tokenType in sequence:
     if s.peek(i).kind != tokenType:
       return false
   return true
 
-proc matchToken*(s: TokenScanner, expected: LexerTokenType): bool {.inline.} =
-  if s.getCurrentToken().kind != expected:
+proc matchToken*(s: Scanner, expected: LexerTokenType): bool {.inline.} =
+  if s.currentToken.kind != expected:
     return false
   s.current += 1
   return true
 
-proc isAtEnd*(s: TokenScanner): bool {.inline.} =
+proc isAtEnd*(s: Scanner): bool {.inline.} =
   return s.current >= s.tokens.len
 
 proc isAlphanumericOrUnderscore*(c: char): bool {.inline.} =
@@ -151,18 +157,14 @@ proc isAlphanumericOrUnderscore*(c: char): bool {.inline.} =
   let isDigit = c >= '0' and c <= '9'
   return isLetter or isDigit
 
-proc advanceToNewline*(s: TokenScanner) {.inline.} =
+proc advanceToNewline*(s: Scanner) {.inline.} =
   ## Advances until the next newline character or the end of the tokens.
   ## Stops at a Newline token.
-  while not s.isAtEnd() and s.getCurrentToken().kind != Newline:
+  while not s.isAtEnd() and s.currentToken.kind != Newline:
     s.current += 1
 
-proc advanceToNextLineStart*(s: TokenScanner) {.inline.} =
+proc advanceToNextLineStart*(s: Scanner) {.inline.} =
   ## Advances to the first token of the next line, or the end of the tokens.
   s.advanceToNewline()
   if not s.isAtEnd():
-    s.current += 1
-
-proc skipWhitespace*(s: TokenScanner) {.inline.} =
-  while not s.isAtEnd() and s.getCurrentToken().kind == Text and s.getCurrentToken().range.length == 1 and s.getCurrentToken().range.start == ' ':
     s.current += 1

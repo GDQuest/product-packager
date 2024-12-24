@@ -9,8 +9,7 @@ type
     #Bold
     #Italic
 
-  InlineToken* = ref object
-    range*: Range
+  InlineToken* = object of Token[InlineType]
     case kind*: InlineType
     of MdxComponent:
       name*: Range
@@ -32,13 +31,14 @@ proc inlineParseMdxComponent*(s: TokenScanner): InlineToken =
 
   # Get component name. It has to start with an uppercase letter.
   var name: Range
-  let firstToken = s.getCurrentToken()
+  let firstToken = s.currentToken
   if firstToken.kind == Text:
-    let firstChar = s.source[firstToken.range.start]
+    let checkRange = firstToken.stripTokenText(s.source, {' '})
+    let firstChar = s.source[checkRange.start]
     if firstChar >= 'A' and firstChar <= 'Z':
       # Find end of component name (first non-alphanumeric/underscore character)
-      var nameEnd = firstToken.range.start + 1
-      while nameEnd < firstToken.range.end:
+      var nameEnd = checkRange.start + 1
+      while nameEnd < checkRange.end:
         let c = s.source[nameEnd]
         if not isAlphanumericOrUnderscore(c):
           break
@@ -54,46 +54,45 @@ proc inlineParseMdxComponent*(s: TokenScanner): InlineToken =
   var wasClosingMarkFound = false
   var isSelfClosing = false
   while not s.isAtEnd():
-    let token = s.getCurrentToken()
-    case token.kind:
-      of Slash:
-        let nextToken = s.peek(1)
-        if nextToken.kind == CloseAngle:
-          isSelfClosing = true
-          wasClosingMarkFound = true
-          s.current += 2
-          break
-        else:
-          s.current += 1
-      of CloseAngle:
+    case s.currentToken.kind
+    of Slash:
+      if s.peek(1).kind == CloseAngle:
+        isSelfClosing = true
         wasClosingMarkFound = true
-        s.current += 1
+        s.current += 2
         break
       else:
         s.current += 1
+    of CloseAngle:
+      wasClosingMarkFound = true
+      s.current += 1
+      break
+    else:
+      s.current += 1
 
   if not wasClosingMarkFound:
     raise ParseError(
       range: Range(start: start, `end`: s.current),
-      message: "Expected closing mark '>' or self-closing mark '/>'"
+      message: "Expected closing mark '>' or self-closing mark '/>'",
     )
 
   let openingTagEnd = s.current
   var bodyEnd = openingTagEnd
 
-  # Find matching closing tag
+  # If the component is not self-closing, then we have to look for a matching
+  # closing tag with the form </ComponentName>
   if not isSelfClosing:
-    let componentName = s.source[name.start..<name.end]
+    let componentName: string = s.source[name.start ..< name.end]
     while not s.isAtEnd():
-      if s.getCurrentToken().kind == OpenAngle and
-          s.peek().kind == Slash:
+      if s.currentToken.kind == OpenAngle and s.peek().kind == Slash:
         bodyEnd = s.current
         s.current += 2
-        let nameToken = s.getCurrentToken()
+        let nameToken = s.currentToken
         if nameToken.kind == Text and
-            s.source[nameToken.range.start..<nameToken.range.end] == componentName:
+          let nameRange = nameToken.stripTokenText(s.source, {' '}):
+          s.source[nameRange.start ..< nameRange.end] == componentName:
           s.current += 1
-          if s.getCurrentToken().kind == CloseAngle:
+          if s.currentToken.kind == CloseAngle:
             s.current += 1
             break
         break
@@ -104,7 +103,7 @@ proc inlineParseMdxComponent*(s: TokenScanner): InlineToken =
       kind: MdxComponent,
       isSelfClosing: true,
       range: Range(start: start, `end`: s.current),
-      name: name
+      name: name,
     )
   else:
     return InlineToken(
@@ -113,5 +112,5 @@ proc inlineParseMdxComponent*(s: TokenScanner): InlineToken =
       range: Range(start: start, `end`: s.current),
       name: name,
       openingTagRange: Range(start: start, `end`: openingTagEnd),
-      bodyRange: Range(start: openingTagEnd, `end`: bodyEnd)
+      bodyRange: Range(start: openingTagEnd, `end`: bodyEnd),
     )
