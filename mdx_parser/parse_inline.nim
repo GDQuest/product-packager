@@ -5,6 +5,7 @@
 # REFERENCES:
   #
 import parse_base_tokens
+import shared
 
 type
   AttributeValueType = enum
@@ -15,16 +16,16 @@ type
   AttributeValue* = ref object
     case kind*: AttributeValueType
     of StringLiteral:
-      value*: Range
+      stringValue*: Range
     of Boolean:
-      value*: bool
+      boolValue*: bool
+    of JSXExpression:
+      expressionRange*: Range
     else:
       discard
 
   InlineType* = enum
     MdxComponent
-    MdxAttribute
-    MdxImportExport
     #Link
     #Image
     #Bold
@@ -40,12 +41,10 @@ type
       bodyRange*: Range
       # Whether the component is a react fragment (<></>) or not
       isFragment*: bool = false
-      attributes
+      attributes*: seq[MdxAttribute]
       children*: seq[InlineToken]
-    of MdxAttribute:
-      name*: Range
-      value*: AttributeValue
-    of MdxImportExport:
+    else:
+      discard
 
 proc scanImportExport*(s: TokenScanner): InlineToken =
   # TODO:
@@ -53,6 +52,16 @@ proc scanImportExport*(s: TokenScanner): InlineToken =
   result = InlineToken(kind: MdxComponent, name: s.getCurrentToken().range)
 
 proc inlineParseMdxComponent*(s: TokenScanner): InlineToken =
+  ## Parses and returns an MDX component, its attributes, and children if applicable.
+  ## The function assumes the scanner is at the start of the component.
+  #
+  # Parsing rules:
+  #
+  # - Attributes can be a single word, in that case it's a boolean flag. To find
+  # these attributes we can look for a text token containing identifiers
+  # separated by one or more spaces. So we have to look for those in every text token.
+  # TODO: consider getting the mdx component opening tag range and scanning characters instead of tokens?
+  #
   # TODO:
   # - Add support for nested components (parse MDX and code inside code fences etc.)
   # - test <></> syntax
