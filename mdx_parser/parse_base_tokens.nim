@@ -38,19 +38,32 @@ type
     Newline # \n
     EOF # End of file marker
 
-  Token*[T] = object
-    kind*: T
+  LexerToken* = object
+    kind*: LexerTokenType
     range*: Range
 
-  LexerToken* = Token[LexerTokenType]
+type LexerScanner* = Scanner[LexerToken]
 
-  Scanner*[T] = ref object of RootObj
-    tokens*: seq[T]
-    current*: int
-    source*: string
-    peekIndex*: int
+proc isPeekSequence*(s: LexerScanner, sequence: seq[LexerTokenType]): bool {.inline.} =
+  for i, tokenType in sequence:
+    if s.peek(i).kind != tokenType:
+      return false
+  return true
 
-  TokenScanner* = ref object of Scanner[LexerToken]
+proc matchToken*(s: LexerScanner, expected: LexerTokenType): bool {.inline.} =
+  if s.currentToken.kind != expected:
+    return false
+  s.current += 1
+  return true
+
+proc advanceToNewline*(s: LexerScanner) {.inline.} =
+  while not s.isAtEnd() and s.currentToken.kind != Newline:
+    s.current += 1
+
+proc advanceToNextLineStart*(s: LexerScanner) {.inline.} =
+  s.advanceToNewline()
+  if not s.isAtEnd():
+    s.current += 1
 
 proc tokenize*(source: string): seq[LexerToken] =
   var tokens: seq[LexerToken] = @[]
@@ -123,48 +136,3 @@ proc tokenize*(source: string): seq[LexerToken] =
       continue
     current += 1
   return tokens
-
-proc getString*(range: Range, source: string): string {.inline.} =
-  return source[range.start ..< range.end]
-
-proc currentToken*(s: Scanner): LexerToken {.inline.} =
-  return s.tokens[s.current]
-
-proc peek*(s: Scanner, offset: int = 0): LexerToken {.inline.} =
-  s.peekIndex = s.current + offset
-  if s.peekIndex >= s.tokens.len:
-    return s.tokens[^1]
-  return s.tokens[s.peekIndex]
-
-proc isPeekSequence*(s: Scanner, sequence: seq[LexerTokenType]): bool {.inline.} =
-  ## Returns `true` if the next tokens in the scanner match the given sequence.
-  for i, tokenType in sequence:
-    if s.peek(i).kind != tokenType:
-      return false
-  return true
-
-proc matchToken*(s: Scanner, expected: LexerTokenType): bool {.inline.} =
-  if s.currentToken.kind != expected:
-    return false
-  s.current += 1
-  return true
-
-proc isAtEnd*(s: Scanner): bool {.inline.} =
-  return s.current >= s.tokens.len
-
-proc isAlphanumericOrUnderscore*(c: char): bool {.inline.} =
-  let isLetter = (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_'
-  let isDigit = c >= '0' and c <= '9'
-  return isLetter or isDigit
-
-proc advanceToNewline*(s: Scanner) {.inline.} =
-  ## Advances until the next newline character or the end of the tokens.
-  ## Stops at a Newline token.
-  while not s.isAtEnd() and s.currentToken.kind != Newline:
-    s.current += 1
-
-proc advanceToNextLineStart*(s: Scanner) {.inline.} =
-  ## Advances to the first token of the next line, or the end of the tokens.
-  s.advanceToNewline()
-  if not s.isAtEnd():
-    s.current += 1

@@ -19,12 +19,8 @@ type
     OrderedList
     Blockquote
 
-  BlockToken* = Token[BlockType]
-    # Index range for the entire set of tokens corresponding to this block
-    # Allows us to retrieve both the tokens and the source text from the first
-    # and last token's ranges'
-    range*: Range
-    case kind*: BlockType
+  BlockToken* = object of BaseToken[BlockType]
+    case kind: BlockType
     of CodeBlock:
       language*: Range
       code*: Range

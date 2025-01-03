@@ -31,7 +31,7 @@ type
     #Bold
     #Italic
 
-  InlineToken* = Token[InlineType]
+  InlineToken* = object
     case kind*: InlineType
     of MdxComponent:
       name*: Range
