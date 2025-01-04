@@ -46,12 +46,17 @@ type
     else:
       discard
 
-proc scanImportExport*(s: TokenScanner): InlineToken =
-  # TODO:
-  # Reference: Import export syntax: https://github.com/micromark/micromark-extension-mdxjs-esm#syntax
-  result = InlineToken(kind: MdxComponent, name: s.getCurrentToken().range)
+# proc scanImportExport*(s: TokenScanner): InlineToken =
+#   # TODO:
+#   # Reference: Import export syntax: https://github.com/micromark/micromark-extension-mdxjs-esm#syntax
+#   result = InlineToken(kind: MdxComponent, name: s.currentToken().range)
 
 proc inlineParseMdxComponent*(s: TokenScanner): InlineToken =
+  # TODO: Break down opening tag contents into Identifier, StringLiteral,
+  # number, and other relevant tokens for MDX
+  # So that e.g. <SomeComponent boolProp stringProp="bla" />
+  # Tokenizes as: TagOpen, Identifier, Identifier, Identifier, EqualSign, StringLiteral, TagClose
+
   ## Parses and returns an MDX component, its attributes, and children if applicable.
   ## The function assumes the scanner is at the start of the component.
   #
@@ -60,7 +65,6 @@ proc inlineParseMdxComponent*(s: TokenScanner): InlineToken =
   # - Attributes can be a single word, in that case it's a boolean flag. To find
   # these attributes we can look for a text token containing identifiers
   # separated by one or more spaces. So we have to look for those in every text token.
-  # TODO: consider getting the mdx component opening tag range and scanning characters instead of tokens?
   #
   # TODO:
   # - Add support for nested components (parse MDX and code inside code fences etc.)
