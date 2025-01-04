@@ -98,12 +98,20 @@ proc isAlphanumericOrUnderscore*(c: char): bool {.inline.} =
 # ---------------- #
 type
   TokenKindMdxComponent = enum
-    TagOpen
-    TagClose
-    Identifier
-    EqualSign
-    StringLiteral
-    JSXExpression
+    OpeningTagOpen # <
+    OpeningTagClose # >
+    OpeningTagSelfClosing # />
+    ClosingTagOpen # </
+    Identifier # Alphanumeric or underscore
+    EqualSign # =
+    StringLiteral # "..." or '...'
+    # TODO: implement tokens below:
+    # JSXExpression can contain nested literals and comma-separated values
+    JSXExpression # {...}
+    ArrayLiteral # []
+    NumberLiteral # 123
+    Comma # ,
+    Comment # {/* ... */}
 
   TokenMdxComponent = object
     range*: Range
@@ -133,9 +141,12 @@ proc scanIdentifier*(s: ScannerNode): Range =
     s.current += 1
   result = Range(start: start, `end`: s.current)
 
-proc tokenizeMdxExpression*(s: ScannerNode): seq[TokenMdxComponent] =
-  ## Tokenizes the content of an MDX component into TokenKindMdxComponent tokens.
-  ## It's to make it easier to parse the component afterwards: we break down the
+proc tokenizeMdxTag*(s: ScannerNode): tuple[range: Range, tokens: seq[TokenMdxComponent]] =
+  ## Scans and tokenizes the content of an MDX tag into TokenKindMdxComponent tokens.
+  ## This procedure assumes the scanner's current character is < and stops at
+  ## the first encountered closing tag.
+  ##
+  ## It makes it easier to parse the component afterwards: we break down the
   ## component into identifiers, string literals, JSX expressions, etc.
   while not s.isAtEnd():
     s.skipWhitespace()
@@ -143,17 +154,30 @@ proc tokenizeMdxExpression*(s: ScannerNode): seq[TokenMdxComponent] =
 
     case c
     of '<':
-      result.add(TokenMdxComponent(
-        kind: TagOpen,
-        range: Range(start: s.current, `end`: s.current + 1)
-      ))
-      s.current += 1
+      if s.peek(1) == '/':
+        result.tokens.add(TokenMdxComponent(
+          kind: ClosingTagOpen,
+          range: Range(start: s.current, `end`: s.current + 2)
+        ))
+        s.current += 2
+      else:
+        result.tokens.add(TokenMdxComponent(
+          kind: OpeningTagOpen,
+          range: Range(start: s.current, `end`: s.current + 1)
+        ))
+        s.current += 1
 
     of '>':
-      result.add(TokenMdxComponent(
-        kind: TagClose,
-        range: Range(start: s.current, `end`: s.current + 1)
-      ))
+      if s.peek(-1) == '/':
+        result.tokens.add(TokenMdxComponent(
+          kind: OpeningTagSelfClosing,
+          range: Range(start: s.current - 1, `end`: s.current + 1)
+        ))
+      else:
+        result.tokens.add(TokenMdxComponent(
+          kind: OpeningTagClose,
+          range: Range(start: s.current, `end`: s.current + 1)
+        ))
       s.current += 1
       return
 
@@ -174,7 +198,8 @@ proc tokenizeMdxExpression*(s: ScannerNode): seq[TokenMdxComponent] =
       if s.current >= s.source.len:
         raise ParseError(
           range: Range(start: start, `end`: s.current),
-          message: "Unterminated string literal"
+          message: "Found string literal opening character in an MDX tag but no closing character. "
+          "Expected " & quoteChar & " character to close the string literal."
         )
       s.current += 1
       result.add(TokenMdxComponent(
@@ -195,7 +220,8 @@ proc tokenizeMdxExpression*(s: ScannerNode): seq[TokenMdxComponent] =
       if depth != 0:
         raise ParseError(
           range: Range(start: start, `end`: s.current),
-          message: "Unterminated JSX expression"
+          message: "Found opening '{' character in an MDX tag but no matching closing character. "
+          "Expected a '}' character to close the JSX expression."
         )
 
       result.add(TokenMdxComponent(
@@ -217,80 +243,64 @@ proc parseMdxComponent*(s: ScannerNode): Node =
   var node = Node(kind: MdxComponent)
   let start = s.current
 
-  # Get component name. It has to start with an uppercase letter.
-  var nameRange: Range
-  let firstChar = s.source[start]
-  if firstChar >= 'A' and firstChar <= 'Z':
-    # Find end of component name (first non-alphanumeric/underscore character)
-    var nameEnd = start + 1
-    while nameEnd < s.source.len:
-      let c = s.source[nameEnd]
-      if not isAlphanumericOrUnderscore(c):
-        break
-      nameEnd += 1
-    nameRange = Range(start: start, `end`: nameEnd)
-    s.current += 1
-  else:
-    return node
+  let (tagRange, tokens) = s.tokenizeMdxTag()
 
-  # Look for end of opening tag or self-closing mark
-  var wasClosingMarkFound = false
-  var isSelfClosing = false
-  while not s.isAtEnd():
-    let c = s.source[s.current]
-    case c
-    of '/':
-      if s.source[s.current + 1] == '>':
-        isSelfClosing = true
-        wasClosingMarkFound = true
-        s.current += 2
-        break
-      else:
-        s.current += 1
-    of '>':
-      wasClosingMarkFound = true
-      s.current += 1
-      break
-    else:
-      s.current += 1
 
-  if not wasClosingMarkFound:
+  if tokens.len < 3:
     raise ParseError(
-      range: Range(start: start, `end`: s.current),
-      message: "Expected closing mark '>' or self-closing mark '/>'",
+      range: tagRange,
+      message: "Found a < character in the source document but no valid MDX component tag. "
+      "In MDX, a < marks the start of a component tag, which must contain an identifier and be closed with a > character or />.\n"
+      r"To write a literal < character in the document, escape it as '\<' or '&lt;'."
     )
 
-  let openingTagEnd = s.current
-  var bodyEnd = openingTagEnd
+  # First token must be opening < and second must be an identifier
+  if tokens[0].kind != OpeningTagOpen or tokens[1].kind != Identifier:
+    raise ParseError(
+      range: tagRange,
+      message: "Expected an opening < character followed by an identifier but found " &
+      getString(tokens[0].range, s.source) & " and " & getString(tokens[1].range, s.source) & " instead."
+    )
 
-  # If the component is not self-closing, then we have to look for a matching
-  # closing tag with the form </ComponentName>
+  # Component name must start with uppercase letter
+  let nameToken = tokens[1]
+  let firstChar = s.source[nameToken.range.start]
+  if firstChar < 'A' or firstChar > 'Z':
+    raise ParseError(
+      range: nameToken.range,
+      message: "Expected component name to start with an uppercase letter but found " & getString(nameToken.range, s.source) & " instead. A valid component name must start with an uppercase letter."
+    )
+
+  node.name = nameToken.range
+
+  # Collect attributes
+  var i = 2
+  while i < tokens.len:
+    if tokens[i].kind == OpeningTagClose:
+      break
+
+    # Add attribute ranges
+    if tokens[i].kind in {StringLiteral, JSXExpression}:
+      node.attributes.add(tokens[i].range)
+
+    i += 1
+
+  let tagEnd = tagRange.`end`
+  var isSelfClosing = false
+
+  # Check if tag is self-closing by looking at last two chars
+  if s.source[tagEnd-2 ..< tagEnd] == "/>":
+    isSelfClosing = true
+
+  # If not self-closing, look for matching closing tag
   if not isSelfClosing:
-    let componentName = s.source[nameRange.start ..< nameRange.end]
+    let componentName = s.source[node.name.start ..< node.name.`end`]
     while not s.isAtEnd():
-      let c = s.source[s.current]
-      if c == '<' and s.source[s.current + 1] == '/':
-        bodyEnd = s.current
-        s.current += 2
-
-        # Check for matching component name
-        let nameStart = s.current
-        var nameEnd = nameStart
-        while nameEnd < s.source.len:
-          let c = s.source[nameEnd]
-          if not isAlphanumericOrUnderscore(c):
-            break
-          nameEnd += 1
-
-        if s.source[nameStart ..< nameEnd] == componentName:
-          s.current = nameEnd
-          if s.source[s.current] == '>':
-            s.current += 1
-            break
+      if s.isPeekSequence("</" & componentName & ">"):
+        s.current = s.peekIndex + ("</" & componentName & ">").len
         break
       s.current += 1
 
-  node.name = nameRange
   node.range = Range(start: start, `end`: s.current)
   result = node
 
