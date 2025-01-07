@@ -9,13 +9,12 @@ const
   MDX_EXT* = ".mdx"
   SHADER_EXT* = ".gdshader"
 
-type
-  Cache* = ref object
-    codeFiles*: seq[string]
-    contentFiles*: seq[string]
-    codeFilenameToPath: Table[string, seq[string]]
+type Cache* = ref object
+  codeFiles*: seq[string]
+  contentFiles*: seq[string]
+  codeFilenameToPath: Table[string, seq[string]]
 
-var fileCache*: Cache = new Cache
+var fileCache*: Cache = nil
   ## |
   ## Global cache that has to be initialized with `prepareCache()`.
 
@@ -68,6 +67,7 @@ proc prepareCache*(appSettings: BuildSettings): Cache =
       let fullPath = relativePath(appSettings.contentDir / path, appSettings.projectDir)
       contentFiles.add(fullPath)
 
+  result = new Cache
   result.codeFiles = codeFiles
   result.contentFiles = contentFiles
   result.codeFilenameToPath = collect(
