@@ -757,7 +757,15 @@ proc getCodeForAnchor*(anchorName: string, filePath: string): string =
     return ""
 
   let anchor = file.anchors[anchorName]
-  return file.source[anchor.codeStart ..< anchor.codeEnd]
+  let code = file.source[anchor.codeStart ..< anchor.codeEnd]
+  result = (
+    block:
+      var output: seq[string] = @[]
+      for line in code.splitLines():
+        if not (line.contains("ANCHOR:") or line.contains("END:")):
+          output.add(line)
+      output.join("\n")
+  )
 
 proc getCodeWithoutAnchors*(filePath: string): string =
   ## Gets the preprocessed code of a GDScript file. It's the full script without
