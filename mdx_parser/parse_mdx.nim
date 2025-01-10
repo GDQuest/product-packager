@@ -28,17 +28,26 @@ type
         expressionRange*: Range
 
   MdxAttribute* = object
+    range*: Range
     name*: Range
     value*: AttributeValue
 
   NodeKind* = enum
     MdxComponent
+    # Temporary: we'll add more node types later
+    MarkdownContent
 
   Node* = object
     case kind*: NodeKind
     of MdxComponent:
       name*: Range
-      attributes*: seq[Range]
+      attributes*: seq[MdxAttribute]
+      isSelfClosing*: bool
+      rangeOpeningTag*: Range
+      rangeBody*: Range
+      rangeClosingTag*: Range
+    else:
+      discard
     range*: Range
       ## The start and end indices of the node in the source document.
       ## This can be used for error reporting.
@@ -110,6 +119,24 @@ proc scanIdentifier(s: ScannerNode): Range =
   while not s.isAtEnd() and isAlphanumericOrUnderscore(s.currentChar):
     s.currentIndex += 1
   result = Range(start: start, `end`: s.currentIndex)
+
+# ---------------- #
+#     Markdown     #
+# ---------------- #
+proc parseMarkdownContent(s: ScannerNode, reachedNonMarkdown: proc(): bool): Node =
+  ## Parses markdown content until a condition is met
+  # For now, just store the raw markdown content
+  let start = s.currentIndex
+  while not s.isAtEnd() and not reachedNonMarkdown():
+    s.currentIndex += 1
+  result = Node(
+    kind: MarkdownContent,
+    range: Range(start: start, `end`: s.currentIndex),
+    children: @[]
+  )
+
+
+
 
 # ---------------- #
 # MDX Components   #
@@ -238,6 +265,17 @@ proc tokenizeMdxTag(s: ScannerNode): tuple[range: Range, tokens: seq[TokenMdxCom
         s.currentIndex += 1
 
 proc parseMdxComponent(s: ScannerNode): Node =
+  ## Parses an MDX component from the scanner's current position. Assumes that the scanner is at the start of an MDX component ('<' character).
+  ##
+  ## Rules to parse an MDX component:
+  ##
+  ## - The component name must start with an uppercase letter.
+  ## - The component tag must be closed with a '>' character or '/>'. We scan until we find the closing tag.
+  ## - The component tag can contain attributes. An attribute can be just an
+  ## identifier (boolean value) or a key-value pair.
+  ##
+  ## This proc. parses the component and attributes but not JSX expressions ({...}).
+  ## JSX expressions are stored as-is and not evaluated or validated here.
   var node = Node(kind: MdxComponent)
   let start = s.currentIndex
 
@@ -273,13 +311,48 @@ proc parseMdxComponent(s: ScannerNode): Node =
   # Collect attributes
   var i = 2
   while i < tokens.len:
-    if tokens[i].kind == OpeningTagClose:
+    if tokens[i].kind in {OpeningTagClose, OpeningTagSelfClosing}:
       break
 
-    # Add attribute ranges
-    if tokens[i].kind in {TokenKindMdxComponent.StringLiteral, TokenKindMdxComponent.JSXExpression}:
-      node.attributes.add(tokens[i].range)
-
+    # Rules:
+    #
+    # - An attribute can be just an identifier (boolean value) or a key-value pair.
+    # - A key-value pair is an identifier followed by an equal sign and a value
+    # (JSX expression or string literal).
+    if tokens[i].kind == Identifier:
+      # If there are two identifiers in a row or a lone identifier at the end of the tag, it's a boolean attribute.
+      if tokens[i + 1].kind in {Identifier, OpeningTagClose, OpeningTagSelfClosing}:
+        node.attributes.add(MdxAttribute(
+          range: tokens[i].range,
+          name: tokens[i].range,
+          value: AttributeValue(kind: AttributeKind.Boolean, boolValue: true)
+        ))
+      # Otherwise we look for the form 'identifier = value'
+      # TODO: find a nicer way to express this like s.peekSequence([Identifier, EqualSign, Value])
+      elif (
+        i + 2 < tokens.len and tokens[i + 1].kind == EqualSign and
+        tokens[i + 2].kind in {TokenKindMdxComponent.StringLiteral, TokenKindMdxComponent.JSXExpression}
+      ):
+        node.attributes.add(MdxAttribute(
+          range: Range(start: tokens[i].range.start, `end`: tokens[i + 2].range.`end`),
+          name: tokens[i].range,
+          value: case tokens[i + 2].kind
+            of TokenKindMdxComponent.StringLiteral:
+              AttributeValue(kind: AttributeKind.StringLiteral, stringValue: tokens[i + 2].range)
+            of TokenKindMdxComponent.JSXExpression:
+              AttributeValue(kind: AttributeKind.JSXExpression, expressionRange: tokens[i + 2].range)
+            else:
+              raise ParseError(
+                range: tokens[i + 2].range,
+                message: "Expected string literal or JSX expression as attribute value"
+              )
+          ))
+        i += 2 # Skip over the = and value tokens
+      else:
+        raise ParseError(
+          range: tokens[i].range,
+          message: "Expected attribute name to be followed by = and a value"
+        )
     i += 1
 
   var isSelfClosing = false
@@ -294,7 +367,8 @@ proc parseMdxComponent(s: ScannerNode): Node =
   # - If no closing tag, raise an error.
   # - Parse body
   if not isSelfClosing:
-    let componentName = s.source[node.name.start ..< node.name.`end`]
+    let componentName = getString(node.name, s.source)
+    let bodyStart = s.currentIndex
     while not s.isAtEnd():
       if s.isPeekSequence("</" & componentName & ">"):
         s.currentIndex = s.peekIndex + ("</" & componentName & ">").len
@@ -338,7 +412,10 @@ proc parseMdxDocument*(s: ScannerNode): seq[Node] =
       let node = parseMdxComponent(s)
       result.add(node)
     else:
-      discard
+      # Handle as markdown
+      result.add(parseMarkdownContent(s, proc(): bool =
+        s.currentChar == '<'
+      ))
     s.currentIndex += 1
 
 # ---------------- #
