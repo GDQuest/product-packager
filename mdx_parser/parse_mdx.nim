@@ -44,19 +44,19 @@ type
       ## This can be used for error reporting.
     children*: seq[Node]
 
-  ScannerNode* = ref object
-    nodes*: seq[Node]
-    currentIndex*: int
-    source*: string
-    peekIndex*: int
+  ScannerNode = ref object
+    nodes: seq[Node]
+    currentIndex: int
+    source: string
+    peekIndex: int
 
 proc getString*(range: Range, source: string): string {.inline.} =
   return source[range.start ..< range.end]
 
-proc currentChar*(s: ScannerNode): char {.inline.} =
+proc currentChar(s: ScannerNode): char {.inline.} =
   s.source[s.currentIndex]
 
-proc peek*(s: ScannerNode, offset: int = 0): char {.inline.} =
+proc peek(s: ScannerNode, offset: int = 0): char {.inline.} =
   ## Returns the current character or a character at the desired offset in the
   ## source string, without advancing the scanner.
   ## Updates the peek index to the current position plus the offset. Call
@@ -67,22 +67,22 @@ proc peek*(s: ScannerNode, offset: int = 0): char {.inline.} =
   else:
     result = s.source[s.peekIndex]
 
-proc advanceToPeek*(s: ScannerNode) {.inline.} =
+proc advanceToPeek(s: ScannerNode) {.inline.} =
   ## Advances the scanner to the peek index.
   s.currentIndex = s.peekIndex
 
-proc isPeekSequence*(s: ScannerNode, sequence: string): bool {.inline.} =
+proc isPeekSequence(s: ScannerNode, sequence: string): bool {.inline.} =
   ## Returns `true` if the next chars in the scanner match the given sequence.
   for i, expectedChar in sequence:
     if s.peek(i) != expectedChar:
       return false
   return true
 
-proc isAtEnd*(s: ScannerNode): bool {.inline.} =
+proc isAtEnd(s: ScannerNode): bool {.inline.} =
   ## Returns `true` if the scanner has reached the end of the source string.
   s.currentIndex >= s.source.len
 
-proc match*(s: ScannerNode, expected: char): bool {.inline.} =
+proc match(s: ScannerNode, expected: char): bool {.inline.} =
   ## Advances the scanner and returns `true` if the current character matches
   ## the expected one.
   if s.currentIndex >= s.source.len or s.source[s.currentIndex] != expected:
@@ -90,12 +90,26 @@ proc match*(s: ScannerNode, expected: char): bool {.inline.} =
   s.currentIndex += 1
   return true
 
-proc isAlphanumericOrUnderscore*(c: char): bool {.inline.} =
+proc isAlphanumericOrUnderscore(c: char): bool {.inline.} =
   ## Returns `true` if the character is a letter (lower or uppercase), digit, or
   ## underscore.
   let isLetter = (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_'
   let isDigit = c >= '0' and c <= '9'
   return isLetter or isDigit
+
+proc skipWhitespace(s: ScannerNode) {.inline.} =
+  ## Advances the scanner until it finds a non-whitespace character.
+  ## Skips spaces, tabs, newlines, and carriage returns.
+  while not s.isAtEnd() and s.currentChar in {' ', '\t', '\n', '\r'}:
+    s.currentIndex += 1
+
+proc scanIdentifier(s: ScannerNode): Range =
+  ## Scans and returns the range of an identifier in the source string,
+  ## advancing the scanner to the end of the identifier.
+  let start = s.currentIndex
+  while not s.isAtEnd() and isAlphanumericOrUnderscore(s.currentChar):
+    s.currentIndex += 1
+  result = Range(start: start, `end`: s.currentIndex)
 
 # ---------------- #
 # MDX Components   #
@@ -118,28 +132,14 @@ type
     Comment # {/* ... */}
 
   TokenMdxComponent = object
-    range*: Range
-    case kind*: TokenKindMdxComponent
+    range: Range
+    case kind: TokenKindMdxComponent
     of JSXExpression:
-      children*: seq[TokenMdxComponent]
+      children: seq[TokenMdxComponent]
     else:
       discard
 
-proc skipWhitespace*(s: ScannerNode) {.inline.} =
-  ## Advances the scanner until it finds a non-whitespace character.
-  ## Skips spaces, tabs, newlines, and carriage returns.
-  while not s.isAtEnd() and s.currentChar in {' ', '\t', '\n', '\r'}:
-    s.currentIndex += 1
-
-proc scanIdentifier*(s: ScannerNode): Range =
-  ## Scans and returns the range of an identifier in the source string,
-  ## advancing the scanner to the end of the identifier.
-  let start = s.currentIndex
-  while not s.isAtEnd() and isAlphanumericOrUnderscore(s.currentChar):
-    s.currentIndex += 1
-  result = Range(start: start, `end`: s.currentIndex)
-
-proc tokenizeMdxTag*(s: ScannerNode): tuple[range: Range, tokens: seq[TokenMdxComponent]] =
+proc tokenizeMdxTag(s: ScannerNode): tuple[range: Range, tokens: seq[TokenMdxComponent]] =
   ## Scans and tokenizes the contents of a single MDX tag into TokenKindMdxComponent tokens.
   ## This procedure assumes the scanner's current character is < and stops at
   ## the first encountered closing tag.
@@ -237,7 +237,7 @@ proc tokenizeMdxTag*(s: ScannerNode): tuple[range: Range, tokens: seq[TokenMdxCo
       else:
         s.currentIndex += 1
 
-proc parseMdxComponent*(s: ScannerNode): Node =
+proc parseMdxComponent(s: ScannerNode): Node =
   var node = Node(kind: MdxComponent)
   let start = s.currentIndex
 
@@ -282,14 +282,17 @@ proc parseMdxComponent*(s: ScannerNode): Node =
 
     i += 1
 
-  let tagEnd = tagRange.`end`
   var isSelfClosing = false
 
-  # Check if tag is self-closing by looking at last two chars
-  if s.source[tagEnd-2 ..< tagEnd] == "/>":
+  # Check if tag is self-closing by checking last token
+  if tokens[^1].kind == OpeningTagSelfClosing:
     isSelfClosing = true
 
-  # If not self-closing, look for matching closing tag
+  # TODO: If not self-closing:
+  # - Mark beginning of body
+  # - Find closing tag.
+  # - If no closing tag, raise an error.
+  # - Parse body
   if not isSelfClosing:
     let componentName = s.source[node.name.start ..< node.name.`end`]
     while not s.isAtEnd():
@@ -307,19 +310,20 @@ type
     InCodeFence
     InMdxTag
 
-  State* = object
-    kind*: StateKind
-    startIndex*: int
+  State = object
+    kind: StateKind
+    startIndex: int
 
   Context = object
-    stateStack*: seq[State]
-    stateCurrent*: proc (): State
+    stateStack: seq[State]
+    stateCurrent: proc (): State
 
-proc stateCurrent*(c: Context): State {.inline.} =
+proc stateCurrent(c: Context): State {.inline.} =
   assert(c.stateStack.len > 0, "State stack is empty, it should always contain at least one state")
   result = c.stateStack[c.stateStack.len - 1]
 
 proc parseMdxDocument*(s: ScannerNode): seq[Node] =
+  # Entry point for parsing MDX documents.
   # We keep a stateStack of states to handle nested elements: MDX components could
   # contain markdown which could contain MDX components.
   # TODO: Question: Should we track more context like start indices of each element?
@@ -375,7 +379,7 @@ proc getLineAndColumn*(lineStartIndices: seq[int], index: int): Position =
 when isMainModule:
   import std/[strformat, unittest]
 
-  proc printTokens*(source: string, tokens: seq[TokenMdxComponent]) =
+  proc printTokens(source: string, tokens: seq[TokenMdxComponent]) =
     ## Prints tokens returned by tokenizeMdxTag in a readable format
     for token in tokens:
       let tokenText = source[token.range.start ..< token.range.`end`]
