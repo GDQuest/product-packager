@@ -6,6 +6,10 @@ type
     start*: int
     `end`*: int
 
+  ParseError* = ref object of ValueError
+    range*: Range
+    message*: string
+
   AttributeKind = enum
     StringLiteral
     Boolean
@@ -42,22 +46,22 @@ type
 
   ScannerNode* = ref object
     nodes*: seq[Node]
-    current*: int
+    currentIndex*: int
     source*: string
     peekIndex*: int
 
 proc getString*(range: Range, source: string): string {.inline.} =
   return source[range.start ..< range.end]
 
-proc current*(s: ScannerNode): char {.inline.} =
-  s.source[s.current]
+proc currentChar*(s: ScannerNode): char {.inline.} =
+  s.source[s.currentIndex]
 
 proc peek*(s: ScannerNode, offset: int = 0): char {.inline.} =
   ## Returns the current character or a character at the desired offset in the
   ## source string, without advancing the scanner.
   ## Updates the peek index to the current position plus the offset. Call
   ## advanceToPeek() to move the scanner to the peek index.
-  s.peekIndex = s.current + offset
+  s.peekIndex = s.currentIndex + offset
   if s.peekIndex >= s.source.len:
     result = '\0'
   else:
@@ -65,7 +69,7 @@ proc peek*(s: ScannerNode, offset: int = 0): char {.inline.} =
 
 proc advanceToPeek*(s: ScannerNode) {.inline.} =
   ## Advances the scanner to the peek index.
-  s.current = s.peekIndex
+  s.currentIndex = s.peekIndex
 
 proc isPeekSequence*(s: ScannerNode, sequence: string): bool {.inline.} =
   ## Returns `true` if the next chars in the scanner match the given sequence.
@@ -76,14 +80,14 @@ proc isPeekSequence*(s: ScannerNode, sequence: string): bool {.inline.} =
 
 proc isAtEnd*(s: ScannerNode): bool {.inline.} =
   ## Returns `true` if the scanner has reached the end of the source string.
-  s.current >= s.source.len
+  s.currentIndex >= s.source.len
 
 proc match*(s: ScannerNode, expected: char): bool {.inline.} =
   ## Advances the scanner and returns `true` if the current character matches
   ## the expected one.
-  if s.current >= s.source.len or s.source[s.current] != expected:
+  if s.currentIndex >= s.source.len or s.source[s.currentIndex] != expected:
     return false
-  s.current += 1
+  s.currentIndex += 1
   return true
 
 proc isAlphanumericOrUnderscore*(c: char): bool {.inline.} =
@@ -124,22 +128,17 @@ type
 proc skipWhitespace*(s: ScannerNode) {.inline.} =
   ## Advances the scanner until it finds a non-whitespace character.
   ## Skips spaces, tabs, newlines, and carriage returns.
-  while not s.isAtEnd():
-    let c = s.current
-    if c notin {' ', '\t', '\n', '\r'}:
-      break
-    s.current += 1
+  while not s.isAtEnd() and s.currentChar in {' ', '\t', '\n', '\r'}:
+    s.currentIndex += 1
+
 
 proc scanIdentifier*(s: ScannerNode): Range =
   ## Scans and returns the range of an identifier in the source string,
   ## advancing the scanner to the end of the identifier.
-  let start = s.current
-  while not s.isAtEnd():
-    let c = s.current
-    if not isAlphanumericOrUnderscore(c):
-      break
-    s.current += 1
-  result = Range(start: start, `end`: s.current)
+  let start = s.currentIndex
+  while not s.isAtEnd() and isAlphanumericOrUnderscore(s.currentChar):
+    s.currentIndex += 1
+  result = Range(start: start, `end`: s.currentIndex)
 
 proc tokenizeMdxTag*(s: ScannerNode): tuple[range: Range, tokens: seq[TokenMdxComponent]] =
   ## Scans and tokenizes the content of an MDX tag into TokenKindMdxComponent tokens.
@@ -150,85 +149,84 @@ proc tokenizeMdxTag*(s: ScannerNode): tuple[range: Range, tokens: seq[TokenMdxCo
   ## component into identifiers, string literals, JSX expressions, etc.
   while not s.isAtEnd():
     s.skipWhitespace()
-    let c = s.current
+    let c = s.currentChar
 
     case c
     of '<':
       if s.peek(1) == '/':
         result.tokens.add(TokenMdxComponent(
           kind: ClosingTagOpen,
-          range: Range(start: s.current, `end`: s.current + 2)
+          range: Range(start: s.currentIndex, `end`: s.currentIndex + 2)
         ))
-        s.current += 2
+        s.currentIndex += 2
       else:
         result.tokens.add(TokenMdxComponent(
           kind: OpeningTagOpen,
-          range: Range(start: s.current, `end`: s.current + 1)
+          range: Range(start: s.currentIndex, `end`: s.currentIndex + 1)
         ))
-        s.current += 1
+        s.currentIndex += 1
 
     of '>':
       if s.peek(-1) == '/':
         result.tokens.add(TokenMdxComponent(
           kind: OpeningTagSelfClosing,
-          range: Range(start: s.current - 1, `end`: s.current + 1)
+          range: Range(start: s.currentIndex - 1, `end`: s.currentIndex + 1)
         ))
       else:
         result.tokens.add(TokenMdxComponent(
           kind: OpeningTagClose,
-          range: Range(start: s.current, `end`: s.current + 1)
+          range: Range(start: s.currentIndex, `end`: s.currentIndex + 1)
         ))
-      s.current += 1
+      s.currentIndex += 1
       return
 
     of '=':
       result.add(TokenMdxComponent(
         kind: EqualSign,
-        range: Range(start: s.current, `end`: s.current + 1)
+        range: Range(start: s.currentIndex, `end`: s.currentIndex + 1)
       ))
-      s.current += 1
+      s.currentIndex += 1
 
     of '"', '\'':
       # String literal
       let quoteChar = c
-      let start = s.current
-      s.current += 1
-      while not s.isAtEnd() and s.current != quoteChar:
-        s.current += 1
-      if s.current >= s.source.len:
+      let start = s.currentIndex
+      s.currentIndex += 1
+      while not s.isAtEnd() and s.currentChar != quoteChar:
+        s.currentIndex += 1
+      if s.currentIndex >= s.source.len:
         raise ParseError(
-          range: Range(start: start, `end`: s.current),
-          message: "Found string literal opening character in an MDX tag but no closing character. "
+          range: Range(start: start, `end`: s.currentIndex),
+          message: "Found string literal opening character in an MDX tag but no closing character. " &
           "Expected " & quoteChar & " character to close the string literal."
         )
-      s.current += 1
+      s.currentIndex += 1
       result.add(TokenMdxComponent(
         kind: StringLiteral,
-        range: Range(start: start, `end`: s.current)
+        range: Range(start: start, `end`: s.currentIndex)
       ))
 
     of '{':
       # JSX expression
-      let start = s.current
+      let start = s.currentIndex
       var depth = 1
-      s.current += 1
+      s.currentIndex += 1
       while not s.isAtEnd() and depth > 0:
-        if s.current == '{': depth += 1
-        elif s.current == '}': depth -= 1
-        s.current += 1
+        if s.currentChar == '{': depth += 1
+        elif s.currentChar == '}': depth -= 1
+        s.currentIndex += 1
 
       if depth != 0:
         raise ParseError(
-          range: Range(start: start, `end`: s.current),
-          message: "Found opening '{' character in an MDX tag but no matching closing character. "
+          range: Range(start: start, `end`: s.currentIndex),
+          message: "Found opening '{' character in an MDX tag but no matching closing character. " &
           "Expected a '}' character to close the JSX expression."
         )
 
       result.add(TokenMdxComponent(
         kind: JSXExpression,
-        range: Range(start: start, `end`: s.current)
+        range: Range(start: start, `end`: s.currentIndex)
       ))
-
     else:
       # Identifier
       if isAlphanumericOrUnderscore(c):
@@ -237,11 +235,11 @@ proc tokenizeMdxTag*(s: ScannerNode): tuple[range: Range, tokens: seq[TokenMdxCo
           range: s.scanIdentifier()
         ))
       else:
-        s.current += 1
+        s.currentIndex += 1
 
 proc parseMdxComponent*(s: ScannerNode): Node =
   var node = Node(kind: MdxComponent)
-  let start = s.current
+  let start = s.currentIndex
 
   let (tagRange, tokens) = s.tokenizeMdxTag()
 
@@ -249,8 +247,8 @@ proc parseMdxComponent*(s: ScannerNode): Node =
   if tokens.len < 3:
     raise ParseError(
       range: tagRange,
-      message: "Found a < character in the source document but no valid MDX component tag. "
-      "In MDX, a < marks the start of a component tag, which must contain an identifier and be closed with a > character or />.\n"
+      message: "Found a < character in the source document but no valid MDX component tag. " &
+      "In MDX, a < marks the start of a component tag, which must contain an identifier and be closed with a > character or />.\n" &
       r"To write a literal < character in the document, escape it as '\<' or '&lt;'."
     )
 
@@ -297,11 +295,11 @@ proc parseMdxComponent*(s: ScannerNode): Node =
     let componentName = s.source[node.name.start ..< node.name.`end`]
     while not s.isAtEnd():
       if s.isPeekSequence("</" & componentName & ">"):
-        s.current = s.peekIndex + ("</" & componentName & ">").len
+        s.currentIndex = s.peekIndex + ("</" & componentName & ">").len
         break
-      s.current += 1
+      s.currentIndex += 1
 
-  node.range = Range(start: start, `end`: s.current)
+      node.range = Range(start: start, `end`: s.currentIndex)
   result = node
 
 type
@@ -330,7 +328,7 @@ proc parseMdxDocument*(s: ScannerNode): seq[Node] =
   var context = Context(stateStack: @[State(kind: StateKind.Normal, startIndex: 0)])
 
   while not s.isAtEnd():
-    let c = s.source[s.current]
+    let c = s.source[s.currentIndex]
     case c
     of '<':
       stateStack.add(State.InMdxTag)
@@ -338,7 +336,7 @@ proc parseMdxDocument*(s: ScannerNode): seq[Node] =
       result.add(node)
     else:
       discard
-    s.current += 1
+    s.currentIndex += 1
 
 # ---------------- #
 #  Error handling  #
