@@ -131,7 +131,6 @@ proc skipWhitespace*(s: ScannerNode) {.inline.} =
   while not s.isAtEnd() and s.currentChar in {' ', '\t', '\n', '\r'}:
     s.currentIndex += 1
 
-
 proc scanIdentifier*(s: ScannerNode): Range =
   ## Scans and returns the range of an identifier in the source string,
   ## advancing the scanner to the end of the identifier.
@@ -141,12 +140,13 @@ proc scanIdentifier*(s: ScannerNode): Range =
   result = Range(start: start, `end`: s.currentIndex)
 
 proc tokenizeMdxTag*(s: ScannerNode): tuple[range: Range, tokens: seq[TokenMdxComponent]] =
-  ## Scans and tokenizes the content of an MDX tag into TokenKindMdxComponent tokens.
+  ## Scans and tokenizes the contents of a single MDX tag into TokenKindMdxComponent tokens.
   ## This procedure assumes the scanner's current character is < and stops at
   ## the first encountered closing tag.
   ##
   ## It makes it easier to parse the component afterwards: we break down the
   ## component into identifiers, string literals, JSX expressions, etc.
+  assert s.currentChar == '<', "The scanner should be at the start of an MDX tag for this procedure to work. Found " & s.currentChar & " instead."
   while not s.isAtEnd():
     s.skipWhitespace()
     let c = s.currentChar
@@ -181,7 +181,7 @@ proc tokenizeMdxTag*(s: ScannerNode): tuple[range: Range, tokens: seq[TokenMdxCo
       return
 
     of '=':
-      result.add(TokenMdxComponent(
+      result.tokens.add(TokenMdxComponent(
         kind: EqualSign,
         range: Range(start: s.currentIndex, `end`: s.currentIndex + 1)
       ))
@@ -201,7 +201,7 @@ proc tokenizeMdxTag*(s: ScannerNode): tuple[range: Range, tokens: seq[TokenMdxCo
           "Expected " & quoteChar & " character to close the string literal."
         )
       s.currentIndex += 1
-      result.add(TokenMdxComponent(
+      result.tokens.add(TokenMdxComponent(
         kind: StringLiteral,
         range: Range(start: start, `end`: s.currentIndex)
       ))
@@ -223,14 +223,14 @@ proc tokenizeMdxTag*(s: ScannerNode): tuple[range: Range, tokens: seq[TokenMdxCo
           "Expected a '}' character to close the JSX expression."
         )
 
-      result.add(TokenMdxComponent(
+      result.tokens.add(TokenMdxComponent(
         kind: JSXExpression,
         range: Range(start: start, `end`: s.currentIndex)
       ))
     else:
       # Identifier
       if isAlphanumericOrUnderscore(c):
-        result.add(TokenMdxComponent(
+        result.tokens.add(TokenMdxComponent(
           kind: Identifier,
           range: s.scanIdentifier()
         ))
@@ -242,7 +242,6 @@ proc parseMdxComponent*(s: ScannerNode): Node =
   let start = s.currentIndex
 
   let (tagRange, tokens) = s.tokenizeMdxTag()
-
 
   if tokens.len < 3:
     raise ParseError(
@@ -278,7 +277,7 @@ proc parseMdxComponent*(s: ScannerNode): Node =
       break
 
     # Add attribute ranges
-    if tokens[i].kind in {StringLiteral, JSXExpression}:
+    if tokens[i].kind in {TokenKindMdxComponent.StringLiteral, TokenKindMdxComponent.JSXExpression}:
       node.attributes.add(tokens[i].range)
 
     i += 1
@@ -331,7 +330,7 @@ proc parseMdxDocument*(s: ScannerNode): seq[Node] =
     let c = s.source[s.currentIndex]
     case c
     of '<':
-      stateStack.add(State.InMdxTag)
+      context.stateStack.add(State(kind: StateKind.InMdxTag, startIndex: s.currentIndex))
       let node = parseMdxComponent(s)
       result.add(node)
     else:
@@ -346,9 +345,6 @@ type
     ## A position in a source document. Used for error reporting.
     line*, column*: int
 
-  ParseError* = ref object of ValueError
-    range*: Range
-      message*: string
 
 proc findLineStartIndices*(source: string): seq[int] =
   ## Finds the start indices of each line in the source string. Run this on a
@@ -374,3 +370,36 @@ proc getLineAndColumn*(lineStartIndices: seq[int], index: int): Position =
       min = middle + 1
     else:
       return Position(line: middle + 1, column: index - lineStartIndex + 1)
+
+
+when isMainModule:
+  import std/[strformat, unittest]
+
+  proc printTokens*(source: string, tokens: seq[TokenMdxComponent]) =
+    ## Prints tokens returned by tokenizeMdxTag in a readable format
+    for token in tokens:
+      let tokenText = source[token.range.start ..< token.range.`end`]
+      echo fmt"{token.kind:<20} | '{tokenText}'"
+
+  test "tokenize MDX component with string and JSX expression attributes":
+    let source = """<SomeComponent prop1="value1" prop2={value2}>
+    Some text
+</SomeComponent>"""
+
+    var scanner = ScannerNode(
+      source: source,
+      currentIndex: 0
+    )
+
+    let (range, tokens) = tokenizeMdxTag(scanner)
+    check:
+      tokens.len == 9
+      tokens[0].kind == OpeningTagOpen
+      tokens[1].kind == Identifier # SomeComponent
+      tokens[2].kind == Identifier # prop1
+      tokens[3].kind == EqualSign
+      tokens[4].kind == StringLiteral # "value1"
+      tokens[5].kind == Identifier # prop2
+      tokens[6].kind == EqualSign
+      tokens[7].kind == JSXExpression # {value2}
+      tokens[8].kind == OpeningTagClose
