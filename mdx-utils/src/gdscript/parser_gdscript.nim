@@ -522,18 +522,18 @@ proc scanToken(s: var Scanner): Token =
     # Variable, Constant, Class, Enum
     of 'v', 'c', 'e':
       var tokenType: TokenType
-      if s.peekString("var"):
+      if s.peekString("var "):
         tokenType = TokenType.Variable
-        discard s.matchString("var")
-      elif s.peekString("const"):
+        discard s.matchString("var ")
+      elif s.peekString("const "):
         tokenType = TokenType.Constant
-        discard s.matchString("const")
-      elif s.peekString("class"):
+        discard s.matchString("const ")
+      elif s.peekString("class "):
         tokenType = TokenType.Class
-        discard s.matchString("class")
-      elif s.peekString("enum"):
+        discard s.matchString("class ")
+      elif s.peekString("enum "):
         tokenType = TokenType.Enum
-        discard s.matchString("enum")
+        discard s.matchString("enum ")
 
       var token = Token(tokenType: tokenType)
       token.range.start = startPos
