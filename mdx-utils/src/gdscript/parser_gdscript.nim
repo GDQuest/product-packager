@@ -262,8 +262,11 @@ proc scanToStartOfNextLine(s: var Scanner): tuple[start, `end`: int] {.inline.} 
     discard s.advance()
   result = (start, s.current)
 
-proc scanToEndOfDefinition(s: var Scanner): tuple[defStart, defEnd: int] {.inline.} =
-  let start = s.current
+proc scanToEndOfDefinition(
+    s: var Scanner
+): tuple[scanStart, definitionEnd: int] {.inline.} =
+  ## Scans until the end of the line or until reaching the end of bracket pairs.
+  result.scanStart = s.current
   while not s.isAtEnd():
     let c = s.getCurrentChar()
     case c
@@ -282,7 +285,7 @@ proc scanToEndOfDefinition(s: var Scanner): tuple[defStart, defEnd: int] {.inlin
         break
     else:
       discard s.advance()
-  result = (start, s.current)
+  result.definitionEnd = s.current - 1
 
 proc isNewDefinition(s: var Scanner): bool {.inline.} =
   ## Returns true if there's a new definition ahead, regardless of its indent level
@@ -543,9 +546,9 @@ proc scanToken(s: var Scanner): Token =
       token.nameStart = nameStart
       token.nameEnd = nameEnd
 
-      discard s.scanToEndOfDefinition()
-      token.range.end = s.current
-      token.range.definitionEnd = s.current
+      let result = s.scanToEndOfDefinition()
+      token.range.end = result.definitionEnd
+      token.range.definitionEnd = result.definitionEnd
       return token
     # Signal
     of 's':
@@ -671,7 +674,8 @@ proc getSymbolDefinition(symbolName: string, path: string): string =
   # Gets the definition of a symbol given its name and the path to the file
   let token = getTokenFromCache(symbolName, path)
   let file = gdscriptFiles[path]
-  return token.getDefinition(file.processedSource)
+  return
+    token.getDefinition(file.processedSource).strip(leading = false, trailing = true)
 
 proc getSymbolBody(symbolName: string, path: string): string =
   # Gets the body of a symbol given its name and the path to the file: it excludes the definition
