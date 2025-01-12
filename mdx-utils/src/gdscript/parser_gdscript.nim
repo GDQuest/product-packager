@@ -524,16 +524,14 @@ proc scanToken(s: var Scanner): Token =
       var tokenType: TokenType
       if s.peekString("var "):
         tokenType = TokenType.Variable
-        discard s.matchString("var ")
       elif s.peekString("const "):
         tokenType = TokenType.Constant
-        discard s.matchString("const ")
       elif s.peekString("class "):
         tokenType = TokenType.Class
-        discard s.matchString("class ")
       elif s.peekString("enum "):
         tokenType = TokenType.Enum
-        discard s.matchString("enum ")
+
+      s.advanceToPeek()
 
       var token = Token(tokenType: tokenType)
       token.range.start = startPos
@@ -667,13 +665,13 @@ proc getSymbolText(symbolName: string, path: string): string =
   # Gets the text of a symbol given its name and the path to the file
   let token = getTokenFromCache(symbolName, path)
   let file = gdscriptFiles[path]
-  return token.getCode(file.source)
+  return token.getCode(file.processedSource)
 
 proc getSymbolDefinition(symbolName: string, path: string): string =
   # Gets the definition of a symbol given its name and the path to the file
   let token = getTokenFromCache(symbolName, path)
   let file = gdscriptFiles[path]
-  return token.getDefinition(file.source)
+  return token.getDefinition(file.processedSource)
 
 proc getSymbolBody(symbolName: string, path: string): string =
   # Gets the body of a symbol given its name and the path to the file: it excludes the definition
@@ -685,7 +683,7 @@ proc getSymbolBody(symbolName: string, path: string): string =
         "'. Cannot get body: only functions and classes have a body.",
     )
   let file = gdscriptFiles[path]
-  return token.getBody(file.source)
+  return token.getBody(file.processedSource)
 
 proc parseSymbolQuery(query: string): SymbolQuery =
   ## Turns a symbol query string like ClassName.body or ClassName.function.definition
@@ -729,11 +727,11 @@ proc getCodeForSymbol*(symbolQuery: string, filePath: string): string =
     for child in classToken.children:
       if child.getName(file.source) == query.childName:
         if query.isDefinition:
-          result = child.getDefinition(file.source)
+          result = child.getDefinition(file.processedSource)
         elif query.isBody:
-          result = child.getBody(file.source)
+          result = child.getBody(file.processedSource)
         else:
-          result = child.getCode(file.source)
+          result = child.getCode(file.processedSource)
     raise newException(
       ValueError,
       "Symbol not found: '" & query.childName & "' in class '" & query.name & "'",
