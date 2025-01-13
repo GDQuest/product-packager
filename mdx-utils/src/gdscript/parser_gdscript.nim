@@ -109,6 +109,10 @@ type
 # Caches parsed GDScript files
 var gdscriptFiles = initTable[string, GDScriptFile]()
 
+# TODO: I wrote the functions excluding the end of the range (..<) but I don't
+# remember why. It works, but it's an extra implementation detail to keep in
+# mind during parsing. Consider changing this to include the end of the range
+# (then the index ranges in all procs will need to be adjusted accordingly).
 proc getCode(token: Token, source: string): string {.inline.} =
   return source[token.range.start ..< token.range.end]
 
@@ -274,7 +278,7 @@ proc scanToStartOfNextLine(s: var Scanner): tuple[start, `end`: int] {.inline.} 
     c = s.source[s.current + offset]
   s.current += offset
   if s.current < length:
-    discard s.advance()
+    s.current += 1
   result = (start, s.current)
 
 proc scanToEndOfDefinition(
@@ -287,20 +291,15 @@ proc scanToEndOfDefinition(
     case c
     of '(', '[', '{':
       s.bracketDepth += 1
-      discard s.advance()
     of ')', ']', '}':
       s.bracketDepth -= 1
-      discard s.advance()
-      if s.bracketDepth == 0 and s.getCurrentChar() == '\n':
-        discard s.advance()
-        break
     of '\n':
-      discard s.advance()
       if s.bracketDepth == 0:
         break
     else:
-      discard s.advance()
-  result.definitionEnd = s.current - 1
+      discard
+    s.current += 1
+  result.definitionEnd = s.current
 
 proc isAtStartOfDefinition(s: var Scanner): bool {.inline.} =
   ## Returns true if there's a new definition ahead, regardless of its indent level
@@ -322,7 +321,6 @@ proc scanBody(s: var Scanner, startIndent: int): tuple[bodyStart, bodyEnd: int] 
   ##
   ## To detect the body, we store the end of the last line of code that belongs
   ## to the body and scan until the next definition.
-  echo "Scanning body, start indent: ", startIndent
   var bodyStart = s.current
   var bodyEnd = s.current
   while not s.isAtEnd():
@@ -505,7 +503,7 @@ proc scanToken(s: var Scanner): Token =
         token.nameEnd = nameEnd
 
         while s.getCurrentChar() != ':':
-          discard s.advance()
+          s.current += 1
         discard s.scanToStartOfNextLine()
 
         token.range.definitionEnd = s.current
@@ -537,12 +535,9 @@ proc scanToken(s: var Scanner): Token =
 
           s.skipWhitespace()
 
-          let (nameStart, nameEnd) = s.scanIdentifier()
-          token.nameStart = nameStart
-          token.nameEnd = nameEnd
-
-          discard s.scanToEndOfDefinition()
-          token.range.end = s.current
+          (token.nameStart, token.nameEnd) = s.scanIdentifier()
+          let (_, definitionEnd) = s.scanToEndOfDefinition()
+          token.range.end = definitionEnd
           return token
     # Variable, Constant, Class, Enum
     of 'v', 'c', 'e':
@@ -564,9 +559,7 @@ proc scanToken(s: var Scanner): Token =
 
       s.skipWhitespace()
 
-      let (nameStart, nameEnd) = s.scanIdentifier()
-      token.nameStart = nameStart
-      token.nameEnd = nameEnd
+      (token.nameStart, token.nameEnd) = s.scanIdentifier()
 
       let scanResult = s.scanToEndOfDefinition()
       token.range.end = scanResult.definitionEnd
@@ -594,14 +587,14 @@ proc scanToken(s: var Scanner): Token =
             case c
             of '(':
               bracketCount += 1
-              discard s.advance()
+              s.current += 1
             of ')':
               bracketCount -= 1
-              discard s.advance()
+              s.current += 1
               if bracketCount == 0:
                 break
             else:
-              discard s.advance()
+              s.current += 1
         else:
           discard s.scanToStartOfNextLine()
 
@@ -1067,3 +1060,52 @@ var health := 100
         tokens[0].getBody(code).contains("## The player's health.") == false
         tokens[1].tokenType == TokenType.Variable
         tokens[1].getName(code) == "health"
+
+    test "Parse and output variable by symbol name":
+      let code =
+        """
+const PHYSICS_LAYER_MOBS = 2
+
+@export var mob_detection_range := 400.0
+@export var attack_rate := 1.0
+@export var max_rotation_speed := 2.0 * PI
+"""
+      let (anchors, processedSource) = preprocessAnchors(code)
+      let tokens = parseGDScript(processedSource)
+      var mobDetectionRangeToken: Token
+      for token in tokens:
+        if token.getName(processedSource) == "mob_detection_range":
+          mobDetectionRangeToken = token
+          break
+      let mobDetectionRange = mobDetectionRangeToken.getCode(processedSource)
+      check:
+        mobDetectionRange == "@export var mob_detection_range := 400.0"
+
+    test "Parse multiple annotated variables by symbol name":
+      let code =
+        """
+@export var speed := 350.0
+
+var _traveled_distance := 0.0
+
+func test():
+  pass
+"""
+      let (anchors, processedSource) = preprocessAnchors(code)
+      let tokens = parseGDScript(processedSource)
+
+      var speedToken: Token
+      var traveledDistanceToken: Token
+
+      for token in tokens:
+        if token.getName(processedSource) == "speed":
+          speedToken = token
+        elif token.getName(processedSource) == "_traveled_distance":
+          traveledDistanceToken = token
+
+      let speedCode = speedToken.getCode(processedSource)
+      let traveledDistanceCode = traveledDistanceToken.getCode(processedSource)
+
+      check:
+        speedCode == "@export var speed := 350.0"
+        traveledDistanceCode == "var _traveled_distance := 0.0"
