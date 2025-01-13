@@ -156,6 +156,21 @@ proc getCurrentChar(s: Scanner): char {.inline.} =
   ## Returns the current character without advancing the scanner's current index
   return s.source[s.current]
 
+proc getCurrentLine(s: Scanner): string {.inline.} =
+  ## Helper function to get the current line from the scanner's source without moving the current index.
+  ## Use this for debugging error messages and to get context about the current position in the source code.
+  # Backtrack to start of line
+  var start = s.current
+  while start > 0 and s.source[start - 1] != '\n':
+    start -= 1
+
+  # Find end of line
+  var endPos = start
+  while endPos < s.source.len and s.source[endPos] != '\n':
+    endPos += 1
+
+  result = s.source[start ..< endPos]
+
 proc advance(s: var Scanner): char {.inline.} =
   ## Reads and returns the current character, then advances the scanner by one
   result = s.source[s.current]
@@ -287,7 +302,7 @@ proc scanToEndOfDefinition(
       discard s.advance()
   result.definitionEnd = s.current - 1
 
-proc isNewDefinition(s: var Scanner): bool {.inline.} =
+proc isAtStartOfDefinition(s: var Scanner): bool {.inline.} =
   ## Returns true if there's a new definition ahead, regardless of its indent level
   ## or type
   let savedPos = s.current
@@ -302,21 +317,28 @@ proc isNewDefinition(s: var Scanner): bool {.inline.} =
   return result
 
 proc scanBody(s: var Scanner, startIndent: int): tuple[bodyStart, bodyEnd: int] =
-  let start = s.current
+  ## Scans the body of a function or class, starting from the current position
+  ## (assumed to be the start of the body).
+  ##
+  ## To detect the body, we store the end of the last line of code that belongs
+  ## to the body and scan until the next definition.
+  echo "Scanning body, start indent: ", startIndent
+  var bodyStart = s.current
+  var bodyEnd = s.current
   while not s.isAtEnd():
     let currentIndent = s.countIndentationAndAdvance()
     if currentIndent <= startIndent and not s.isAtEnd():
-      if isNewDefinition(s):
+      if s.isAtStartOfDefinition():
         break
 
-    discard scanToStartOfNextLine(s)
-  # s.current points to the first letter of the next token, after the
-  # indentation. We need to backtrack to find the actual end of the body.
-  var index = s.current - 1
-  while index > 0 and s.source[index] in [' ', '\r', '\t', '\n']:
-    index -= 1
-  s.current = index + 1
-  result = (start, s.current)
+    if currentIndent > startIndent:
+      discard s.scanToStartOfNextLine()
+      bodyEnd = s.current
+      if not s.isAtEnd():
+        bodyEnd -= 1
+    else:
+      discard s.scanToStartOfNextLine()
+  result = (bodyStart, bodyEnd)
 
 proc scanAnchorTags(s: var Scanner): seq[AnchorTag] =
   ## Scans the entire file and collects all anchor tags (both start and end)
@@ -489,9 +511,9 @@ proc scanToken(s: var Scanner): Token =
         token.range.definitionEnd = s.current
         token.range.bodyStart = s.current
 
-        discard s.scanBody(s.indentLevel)
-        token.range.bodyEnd = s.current
-        token.range.end = s.current
+        let (bodyStart, bodyEnd) = s.scanBody(s.indentLevel)
+        token.range.bodyEnd = bodyEnd
+        token.range.end = bodyEnd
 
         return token
     # Annotation
@@ -546,9 +568,9 @@ proc scanToken(s: var Scanner): Token =
       token.nameStart = nameStart
       token.nameEnd = nameEnd
 
-      let result = s.scanToEndOfDefinition()
-      token.range.end = result.definitionEnd
-      token.range.definitionEnd = result.definitionEnd
+      let scanResult = s.scanToEndOfDefinition()
+      token.range.end = scanResult.definitionEnd
+      token.range.definitionEnd = scanResult.definitionEnd
       return token
     # Signal
     of 's':
@@ -604,7 +626,7 @@ proc parseClass(s: var Scanner, classToken: var Token) =
     let currentIndent = s.countIndentationAndAdvance()
     debugEcho "Current indent: " & $currentIndent
     if currentIndent <= classIndent:
-      if isNewDefinition(s):
+      if isAtStartOfDefinition(s):
         break
 
     let childToken = s.scanToken()
@@ -1008,22 +1030,40 @@ class StateDie extends State:
           token.tokenType == TokenType.Variable
           token.getName(processedSource) == "action_buttons_v_box_container"
 
-    when isMainModule:
-      test "Parse anchor code":
-        let code =
-          """
-  #ANCHOR:row_node_references
-  @onready var row_bodies: HBoxContainer = %RowBodies
-  @onready var row_expressions: HBoxContainer = %RowExpressions
-  #END:row_node_references
-  """
-        let tempFile = getTempDir() / "test_gdscript.gd"
-        writeFile(tempFile, code)
-        let rowNodeReferences = getCodeForAnchor("row_node_references", tempFile)
-        removeFile(tempFile)
+    test "Parse anchor code":
+      let code =
+        """
+#ANCHOR:row_node_references
+@onready var row_bodies: HBoxContainer = %RowBodies
+@onready var row_expressions: HBoxContainer = %RowExpressions
+#END:row_node_references
+"""
+      let tempFile = getTempDir() / "test_gdscript.gd"
+      writeFile(tempFile, code)
+      let rowNodeReferences = getCodeForAnchor("row_node_references", tempFile)
+      removeFile(tempFile)
 
-        check:
-          rowNodeReferences.contains("var row_bodies: HBoxContainer = %RowBodies")
-          rowNodeReferences.contains(
-            "var row_expressions: HBoxContainer = %RowExpressions"
-          )
+      check:
+        rowNodeReferences.contains("var row_bodies: HBoxContainer = %RowBodies")
+        rowNodeReferences.contains(
+          "var row_expressions: HBoxContainer = %RowExpressions"
+        )
+
+    test "Parse func followed by var with docstring":
+      let code =
+        """
+func _ready() -> void:
+	test()
+
+## The player's health.
+var health := 100
+"""
+      let tokens = parseGDScript(code)
+      echo tokens[0].getBody(code)
+      check:
+        tokens.len == 2
+        tokens[0].tokenType == TokenType.Function
+        tokens[0].getName(code) == "_ready"
+        tokens[0].getBody(code).contains("## The player's health.") == false
+        tokens[1].tokenType == TokenType.Variable
+        tokens[1].getName(code) == "health"
