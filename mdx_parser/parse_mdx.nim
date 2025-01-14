@@ -276,7 +276,6 @@ proc parseMdxComponent(s: ScannerNode): Node =
   ##
   ## This proc. parses the component and attributes but not JSX expressions ({...}).
   ## JSX expressions are stored as-is and not evaluated or validated here.
-  var node = Node(kind: MdxComponent)
   let start = s.currentIndex
 
   let (tagRange, tokens) = s.tokenizeMdxTag()
@@ -306,7 +305,7 @@ proc parseMdxComponent(s: ScannerNode): Node =
       message: "Expected component name to start with an uppercase letter but found " & getString(nameToken.range, s.source) & " instead. A valid component name must start with an uppercase letter."
     )
 
-  node.name = nameToken.range
+  result.name = nameToken.range
 
   # Collect attributes
   var i = 2
@@ -322,7 +321,7 @@ proc parseMdxComponent(s: ScannerNode): Node =
     if tokens[i].kind == Identifier:
       # If there are two identifiers in a row or a lone identifier at the end of the tag, it's a boolean attribute.
       if tokens[i + 1].kind in {Identifier, OpeningTagClose, OpeningTagSelfClosing}:
-        node.attributes.add(MdxAttribute(
+        result.attributes.add(MdxAttribute(
           range: tokens[i].range,
           name: tokens[i].range,
           value: AttributeValue(kind: AttributeKind.Boolean, boolValue: true)
@@ -333,7 +332,7 @@ proc parseMdxComponent(s: ScannerNode): Node =
         i + 2 < tokens.len and tokens[i + 1].kind == EqualSign and
         tokens[i + 2].kind in {TokenKindMdxComponent.StringLiteral, TokenKindMdxComponent.JSXExpression}
       ):
-        node.attributes.add(MdxAttribute(
+        result.attributes.add(MdxAttribute(
           range: Range(start: tokens[i].range.start, `end`: tokens[i + 2].range.`end`),
           name: tokens[i].range,
           value: case tokens[i + 2].kind
@@ -355,19 +354,17 @@ proc parseMdxComponent(s: ScannerNode): Node =
         )
     i += 1
 
-  var isSelfClosing = false
-
   # Check if tag is self-closing by checking last token
   if tokens[^1].kind == OpeningTagSelfClosing:
-    isSelfClosing = true
+    result.isSelfClosing = true
 
   # TODO: If not self-closing:
   # - Mark beginning of body
   # - Find closing tag.
   # - If no closing tag, raise an error.
   # - Parse body
-  if not isSelfClosing:
-    let componentName = getString(node.name, s.source)
+  if not result.isSelfClosing:
+    let componentName = getString(result.name, s.source)
     let bodyStart = s.currentIndex
     while not s.isAtEnd():
       if s.isPeekSequence("</" & componentName & ">"):
@@ -375,8 +372,7 @@ proc parseMdxComponent(s: ScannerNode): Node =
         break
       s.currentIndex += 1
 
-      node.range = Range(start: start, `end`: s.currentIndex)
-  result = node
+      result.range = Range(start: start, `end`: s.currentIndex)
 
 type
   StateKind = enum
@@ -456,11 +452,17 @@ proc getLineAndColumn*(lineStartIndices: seq[int], index: int): Position =
 when isMainModule:
   import std/[strformat, unittest]
 
-  proc printTokens(source: string, tokens: seq[TokenMdxComponent]) =
+  proc echoTokens(source: string, tokens: seq[TokenMdxComponent]) =
     ## Prints tokens returned by tokenizeMdxTag in a readable format
     for token in tokens:
       let tokenText = source[token.range.start ..< token.range.`end`]
       echo fmt"{token.kind:<20} | '{tokenText}'"
+
+  proc echoNodes(nodes: seq[Node], source: string) =
+    ## Prints nodes in a readable format
+    for node in nodes:
+      let nodeText = source[node.range.start ..< node.range.`end`]
+      echo fmt"{node.kind:<20} | '{nodeText}'"
 
   test "tokenize MDX component with string and JSX expression attributes":
     let source = """<SomeComponent prop1="value1" prop2={value2}>
@@ -484,3 +486,48 @@ when isMainModule:
       tokens[6].kind == EqualSign
       tokens[7].kind == JSXExpression # {value2}
       tokens[8].kind == OpeningTagClose
+
+  test "parse self-closing mdx node":
+    let source = "<SomeComponent prop1=\"value1\" prop2={value2} />"
+    var scanner = ScannerNode(source: source, currentIndex: 0)
+    let node = parseMdxComponent(scanner)
+
+    echoNodes(@[node], source)
+
+    check:
+      node.kind == MdxComponent
+      getString(node.name, source) == "SomeComponent"
+      node.isSelfClosing
+
+      node.attributes.len == 2
+      getString(node.attributes[0].name, source) == "prop1"
+      getString(node.attributes[0].value.stringValue, source) == "\"value1\""
+      getString(node.attributes[1].name, source) == "prop2"
+      getString(node.attributes[1].value.expressionRange, source) == "{value2}"
+
+
+  test "parse nested components and markdown":
+    let source = """
+<OuterComponent>
+  Some text with *markdown* formatting and an ![inline image](images/image.png).
+  <InnerComponent prop="value">
+    Nested **markdown** content.
+  </InnerComponent>
+  More text after the inner component.
+</OuterComponent>
+    """
+
+    var scanner = ScannerNode(source: source, currentIndex: 0)
+    let nodes = parseMdxDocument(scanner)
+
+    echoNodes(nodes, source)
+
+    check:
+      nodes.len == 1
+      nodes[0].kind == MdxComponent
+      nodes[0].children.len > 0
+      nodes[0].children[0].kind == MarkdownContent
+      nodes[0].children[1].kind == MdxComponent
+      nodes[0].children[1].children.len > 0
+      nodes[0].children[1].children[0].kind == MarkdownContent
+      nodes[0].children[2].kind == MarkdownContent
