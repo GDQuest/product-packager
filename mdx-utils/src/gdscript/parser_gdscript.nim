@@ -45,6 +45,7 @@ type
     Constant
     Signal
     Class
+    ClassName
     Enum
 
   TokenRange = object
@@ -471,7 +472,9 @@ proc preprocessAnchors(
 
   result = (anchors, processedSource.strip(leading = false, trailing = true))
 
-proc scanToken(s: var Scanner): Token =
+proc scanNextToken(s: var Scanner): Token =
+  ## Finds and scans the next token in the source code and returns a Token
+  ## object.
   while not s.isAtEnd():
     debugEcho "At top of loop. Current index: " & $s.current
     s.indentLevel = s.countIndentationAndAdvance()
@@ -550,6 +553,8 @@ proc scanToken(s: var Scanner): Token =
         tokenType = TokenType.Class
       elif s.peekString("enum "):
         tokenType = TokenType.Enum
+      elif s.peekString("class_name "):
+        tokenType = TokenType.ClassName
 
       s.advanceToPeek()
 
@@ -622,7 +627,7 @@ proc parseClass(s: var Scanner, classToken: var Token) =
       if isAtStartOfDefinition(s):
         break
 
-    let childToken = s.scanToken()
+    let childToken = s.scanNextToken()
     if childToken.tokenType != TokenType.Invalid:
       classToken.children.add(childToken)
 
@@ -630,7 +635,7 @@ proc parseGDScript(source: string): seq[Token] =
   var scanner =
     Scanner(source: source, current: 0, indentLevel: 0, bracketDepth: 0, peekIndex: 0)
   while not scanner.isAtEnd():
-    var token = scanToken(scanner)
+    var token = scanNextToken(scanner)
     if token.tokenType == TokenType.Invalid:
       continue
 
@@ -1109,3 +1114,21 @@ func test():
       check:
         speedCode == "@export var speed := 350.0"
         traveledDistanceCode == "var _traveled_distance := 0.0"
+
+    test "Parse class_name":
+      let code =
+        """
+class_name Mob3D extends Node3D
+
+var test = 5
+"""
+      let tokens = parseGDScript(code)
+      check:
+        tokens.len == 2
+      if tokens.len == 2:
+        check:
+          tokens[0].tokenType == TokenType.ClassName
+          tokens[0].getName(code) == "Mob3D"
+          tokens[0].getCode(code) == "class_name Mob3D extends Node3D"
+          tokens[1].tokenType == TokenType.Variable
+          tokens[1].getName(code) == "test"
