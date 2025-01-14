@@ -1,5 +1,4 @@
-## Parses MDX components contained in MDX files into a tree of nodes.
-
+## Parses MDX files and produces a tree of nodes.
 type
   Range* = object
     ## A range of character indices in a source string or in a sequence of
@@ -477,6 +476,9 @@ proc getLineAndColumn*(lineStartIndices: seq[int], index: int): Position =
       return Position(line: middle + 1, column: index - lineStartIndex + 1)
 
 
+# ----------------- #
+#  Automated tests  #
+# ----------------- #
 when isMainModule:
   import std/[strformat, unittest, strutils]
 
