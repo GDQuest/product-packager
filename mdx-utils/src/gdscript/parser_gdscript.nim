@@ -18,6 +18,10 @@
 ## Note: This could be made more efficient by combining both passes into one,
 ## but the implementation evolved towards this approach and refactoring would
 ## only take time and potentially introduce regressions at this point.
+##
+## To combine passes into one, I would tokenize keywords, identifiers, anchor comments,
+## brackets, and something generic like statement lines in one pass, then analyse
+## and group the result.
 import std/[tables, strutils, terminal]
 when compileOption("profiler"):
   import std/nimprof
