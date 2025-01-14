@@ -8,15 +8,16 @@
 ##
 ## This works in 2 passes:
 ##
-## 1. Preprocesses the code to extract the code between anchor comments and remove anchor comments.
+## 1. Preprocesses the code to extract the code between anchor comments and
+## remove anchor comments. This produces a preprocessed source without anchors.
 ## 2. Parses the preprocessed code to tokenize symbols and their content.
 ##
 ## Users can then query and retrieve the code between anchors or the definition
 ## and body of a symbol.
 ##
-## This was originally written as a tool to only parse GDScript symbols, with
-## the anchor preprocessing added later, so the approach may not be the most
-## efficient.
+## Note: This could be made more efficient by combining both passes into one,
+## but the implementation evolved towards this approach and refactoring would
+## only take time and potentially introduce regressions at this point.
 import std/[tables, strutils, terminal]
 when compileOption("profiler"):
   import std/nimprof
@@ -89,14 +90,18 @@ type
     anchorTagStart, endTagEnd: int
 
   GDScriptFile = object
-    ## Represents a parsed GDScript file with its symbols and source code
+    ## Represents a parsed GDScript file with its symbols and source code.
     filePath: string
+    ## Full path to the GDScript file. Used to look up the parsed file in a
+    ## cache to avoid parsing multiple times.
     source: string
-    ## Map of symbol names to their tokens
+    ## Original source code, with anchor comments included.
     symbols: Table[string, Token]
-    ## Map of anchor names to their code anchors
+    ## Map of symbol names to their tokens.
     anchors: Table[string, CodeAnchor]
+    ## Map of anchor names to their code anchors.
     processedSource: string
+    ## The source code with anchor tags removed.
 
   SymbolQuery = object
     ## Represents a query to get a symbol from a GDScript file, like
@@ -114,17 +119,21 @@ var gdscriptFiles = initTable[string, GDScriptFile]()
 # remember why. It works, but it's an extra implementation detail to keep in
 # mind during parsing. Consider changing this to include the end of the range
 # (then the index ranges in all procs will need to be adjusted accordingly).
-proc getCode(token: Token, source: string): string {.inline.} =
-  return source[token.range.start ..< token.range.end]
+proc getCode(token: Token, preprocessedSource: string): string {.inline.} =
+  ## Returns the code of a token given the source code.
+  return preprocessedSource[token.range.start ..< token.range.end]
 
-proc getName(token: Token, source: string): string {.inline.} =
-  return source[token.nameStart ..< token.nameEnd]
+proc getName(token: Token, preprocessedSource: string): string {.inline.} =
+  ## Returns the name of a token as a string given the source code.
+  return preprocessedSource[token.nameStart ..< token.nameEnd]
 
-proc getDefinition(token: Token, source: string): string {.inline.} =
-  return source[token.range.definitionStart ..< token.range.definitionEnd]
+proc getDefinition(token: Token, preprocessedSource: string): string {.inline.} =
+  ## Returns the definition of a token as a string given the source code.
+  return preprocessedSource[token.range.definitionStart ..< token.range.definitionEnd]
 
-proc getBody(token: Token, source: string): string {.inline.} =
-  return source[token.range.bodyStart ..< token.range.bodyEnd]
+proc getBody(token: Token, preprocessedSource: string): string {.inline.} =
+  ## Returns the body of a token as a string given the source code.
+  return preprocessedSource[token.range.bodyStart ..< token.range.bodyEnd]
 
 proc printToken(token: Token, source: string, indent: int = 0) =
   let indentStr = "  ".repeat(indent)
