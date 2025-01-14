@@ -1,4 +1,5 @@
 ## Parses MDX components contained in MDX files into a tree of nodes.
+
 type
   Range* = object
     ## A range of character indices in a source string or in a sequence of
@@ -58,6 +59,24 @@ type
     currentIndex: int
     source: string
     peekIndex: int
+
+
+# Forward declaractions to avoid errors with cyclical calls
+proc parseNodes(s: ScannerNode): seq[Node]
+proc parseMdxComponent(s: ScannerNode): Node
+proc parseMarkdownContent(s: ScannerNode): Node
+
+proc charMakeWhitespaceVisible*(c: char): string =
+  ## Replaces whitespace characters with visible equivalents.
+  case c
+  of '\t':
+    result = "⇥"
+  of '\n':
+    result = "↲"
+  of ' ':
+    result = "·"
+  else:
+    result = $c
 
 proc getString*(range: Range, source: string): string {.inline.} =
   return source[range.start ..< range.end]
@@ -120,23 +139,61 @@ proc scanIdentifier(s: ScannerNode): Range =
     s.currentIndex += 1
   result = Range(start: start, `end`: s.currentIndex)
 
+proc getCurrentLine(s: ScannerNode): string =
+  ## Returns the current line of the scanner without advancing the scanner's current index.
+  ## Use this for debugging purposes.
+  let initialIndex = s.currentIndex
+  # Back up to start of line
+  var start = s.currentIndex
+  while start > 0 and s.source[start - 1] != '\n':
+    start -= 1
+
+  while s.currentChar != '\n' and not s.isAtEnd():
+    s.currentIndex += 1
+
+  result = s.source[start ..< s.currentIndex]
+  s.currentIndex = initialIndex
+
+proc isUppercaseAscii(c: char): bool {.inline.} =
+  return c >= 'A' and c <= 'Z'
+
+proc isMdxComponentStart(s: ScannerNode): bool {.inline.} =
+  ## Returns `true` if the scanner is at the start of an MDX component.
+  return s.currentChar == '<' and s.peek(1).isUppercaseAscii()
+
+proc isMdxClosingTagStart(s: ScannerNode): bool {.inline.} =
+  ## Returns `true` if the scanner is at the start of an MDX component closing tag.
+  return s.currentChar == '<' and s.peek(1) == '/'
+
+proc isMdxTagStart(s: ScannerNode): bool {.inline.} =
+  ## Returns `true` if the scanner is at the start of an MDX component closing tag.
+  return s.currentChar == '<' and (s.peek(1).isUppercaseAscii() or s.peek(1) == '/')
+
 # ---------------- #
 #     Markdown     #
 # ---------------- #
-proc parseMarkdownContent(s: ScannerNode, reachedNonMarkdown: proc(): bool): Node =
+proc isWhitespace(c: char): bool {.inline.} =
+  ## Returns `true` if the character is a space, tab, newline, or carriage return.
+  return c in {' ', '\t', '\n', '\r'}
+
+proc parseMarkdownContent(s: ScannerNode): Node =
   ## Parses markdown content until a condition is met
   # For now, just store the raw markdown content
-  let start = s.currentIndex
-  while not s.isAtEnd() and not reachedNonMarkdown():
+  var start = s.currentIndex
+  while not s.isAtEnd() and not s.isMdxTagStart():
     s.currentIndex += 1
+
+  # Trim whitespace at the start and end
+  var endIndex = s.currentIndex
+  while start < s.currentIndex and s.source[start].isWhitespace():
+    start += 1
+  while endIndex > start and s.source[endIndex - 1].isWhitespace():
+    endIndex -= 1
   result = Node(
     kind: MarkdownContent,
-    range: Range(start: start, `end`: s.currentIndex),
+    range: Range(start: start, `end`: endIndex),
     children: @[]
   )
-
-
-
 
 # ---------------- #
 # MDX Components   #
@@ -358,61 +415,34 @@ proc parseMdxComponent(s: ScannerNode): Node =
   if tokens[^1].kind == OpeningTagSelfClosing:
     result.isSelfClosing = true
 
-  # TODO: If not self-closing:
-  # - Mark beginning of body
-  # - Find closing tag.
-  # - If no closing tag, raise an error.
-  # - Parse body
   if not result.isSelfClosing:
-    let componentName = getString(result.name, s.source)
     let bodyStart = s.currentIndex
+    echo "Parsing children. Current line: " & s.getCurrentLine()
+    echo "Current char: " & s.currentChar.charMakeWhitespaceVisible()
+    result.children = s.parseNodes()
+    result.rangeBody = Range(start: bodyStart, `end`: s.currentIndex)
+
+    let componentName = getString(result.name, s.source)
     while not s.isAtEnd():
-      if s.isPeekSequence("</" & componentName & ">"):
-        s.currentIndex = s.peekIndex + ("</" & componentName & ">").len
+      let closingTag = "</" & componentName & ">"
+      if s.isPeekSequence(closingTag):
+        s.currentIndex = s.peekIndex
+        if not s.isAtEnd():
+          s.currentIndex += 1
         break
       s.currentIndex += 1
 
-      result.range = Range(start: start, `end`: s.currentIndex)
+  result.range = Range(start: start, `end`: s.currentIndex)
 
-type
-  StateKind = enum
-    Normal
-    InCodeFence
-    InMdxTag
-
-  State = object
-    kind: StateKind
-    startIndex: int
-
-  Context = object
-    stateStack: seq[State]
-    stateCurrent: proc (): State
-
-proc stateCurrent(c: Context): State {.inline.} =
-  assert(c.stateStack.len > 0, "State stack is empty, it should always contain at least one state")
-  result = c.stateStack[c.stateStack.len - 1]
-
-proc parseMdxDocument*(s: ScannerNode): seq[Node] =
-  # Entry point for parsing MDX documents.
-  # We keep a stateStack of states to handle nested elements: MDX components could
-  # contain markdown which could contain MDX components.
-  # TODO: Question: Should we track more context like start indices of each element?
-  #
-  var context = Context(stateStack: @[State(kind: StateKind.Normal, startIndex: 0)])
-
+proc parseNodes(s: ScannerNode): seq[Node] =
+  ## Parses a sequence of nodes from the scanner's current position.
   while not s.isAtEnd():
-    let c = s.source[s.currentIndex]
-    case c
-    of '<':
-      context.stateStack.add(State(kind: StateKind.InMdxTag, startIndex: s.currentIndex))
-      let node = parseMdxComponent(s)
-      result.add(node)
+    if s.isMdxComponentStart():
+      result.add(s.parseMdxComponent())
+    elif s.isMdxClosingTagStart():
+      break
     else:
-      # Handle as markdown
-      result.add(parseMarkdownContent(s, proc(): bool =
-        s.currentChar == '<'
-      ))
-    s.currentIndex += 1
+      result.add(s.parseMarkdownContent())
 
 # ---------------- #
 #  Error handling  #
@@ -450,7 +480,7 @@ proc getLineAndColumn*(lineStartIndices: seq[int], index: int): Position =
 
 
 when isMainModule:
-  import std/[strformat, unittest]
+  import std/[strformat, unittest, strutils]
 
   proc echoTokens(source: string, tokens: seq[TokenMdxComponent]) =
     ## Prints tokens returned by tokenizeMdxTag in a readable format
@@ -458,11 +488,17 @@ when isMainModule:
       let tokenText = source[token.range.start ..< token.range.`end`]
       echo fmt"{token.kind:<20} | '{tokenText}'"
 
-  proc echoNodes(nodes: seq[Node], source: string) =
+  proc echoNodes(nodes: seq[Node], source: string, indent: int = 0) =
     ## Prints nodes in a readable format
     for node in nodes:
-      let nodeText = source[node.range.start ..< node.range.`end`]
-      echo fmt"{node.kind:<20} | '{nodeText}'"
+      case node.kind:
+      of MdxComponent:
+        let openingTag = source[node.range.start ..< node.rangeBody.start]
+        echo ' '.repeat(indent) & fmt"{node.kind:<20} | {openingTag}"
+        echoNodes(node.children, source, indent + 2)
+      else:
+        let nodeText = source[node.range.start ..< node.range.`end`]
+        echo ' '.repeat(indent) & fmt"{node.kind:<20} | '{nodeText}'"
 
   test "tokenize MDX component with string and JSX expression attributes":
     let source = """<SomeComponent prop1="value1" prop2={value2}>
@@ -514,11 +550,10 @@ when isMainModule:
     Nested **markdown** content.
   </InnerComponent>
   More text after the inner component.
-</OuterComponent>
-    """
+</OuterComponent>"""
 
     var scanner = ScannerNode(source: source, currentIndex: 0)
-    let nodes = parseMdxDocument(scanner)
+    let nodes = parseNodes(scanner)
 
     echoNodes(nodes, source)
 
@@ -531,3 +566,4 @@ when isMainModule:
       nodes[0].children[1].children.len > 0
       nodes[0].children[1].children[0].kind == MarkdownContent
       nodes[0].children[2].kind == MarkdownContent
+      nodes[0].children[2].range.getString(source) == "More text after the inner component."
