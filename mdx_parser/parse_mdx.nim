@@ -417,8 +417,6 @@ proc parseMdxComponent(s: ScannerNode): Node =
 
   if not result.isSelfClosing:
     let bodyStart = s.currentIndex
-    echo "Parsing children. Current line: " & s.getCurrentLine()
-    echo "Current char: " & s.currentChar.charMakeWhitespaceVisible()
     result.children = s.parseNodes()
     result.rangeBody = Range(start: bodyStart, `end`: s.currentIndex)
 
@@ -555,14 +553,22 @@ when isMainModule:
     var scanner = ScannerNode(source: source, currentIndex: 0)
     let nodes = parseNodes(scanner)
 
+    echo "\nTest: parse nested components and markdown\n"
     echoNodes(nodes, source)
 
     check:
       nodes.len == 1
       nodes[0].kind == MdxComponent
+      getString(nodes[0].name, source) == "OuterComponent"
+      nodes[0].attributes.len == 0
       nodes[0].children.len > 0
       nodes[0].children[0].kind == MarkdownContent
       nodes[0].children[1].kind == MdxComponent
+      getString(nodes[0].children[1].name, source) == "InnerComponent"
+      nodes[0].children[1].attributes.len == 1
+      getString(nodes[0].children[1].attributes[0].name, source) == "prop"
+      nodes[0].children[1].attributes[0].value.kind == StringLiteral
+      getString(nodes[0].children[1].attributes[0].value.stringValue, source) == "\"value\""
       nodes[0].children[1].children.len > 0
       nodes[0].children[1].children[0].kind == MarkdownContent
       nodes[0].children[2].kind == MarkdownContent
