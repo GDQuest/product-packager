@@ -10,7 +10,7 @@
 ##
 ## See the proc processContent() for the list of patterns and their handlers.
 import std/[nre, strformat, strutils, tables, options, os, terminal, sets]
-import assets
+import godot_cached_data
 import cache
 import ../settings
 import ../image_size
@@ -305,8 +305,14 @@ proc initializeRegexes(): Table[char, seq[PatternHandler]] =
       ],
   }.toTable()
 
-regexGodotIcon =
-  re("(`(?P<class>" & assets.CACHE_GODOT_BUILTIN_CLASSES.join("|") & ")`)")
+regexGodotIcon = (
+  proc(): Regex =
+    var pattern = "(`(?P<class>"
+    for className in CACHE_GODOT_BUILTIN_CLASSES:
+      pattern &= className & "|"
+    pattern = pattern.strip(chars = {'|'}) & ")`)"
+    return re(pattern)
+)()
 patterns_table = initializeRegexes()
 
 proc processContent*(

@@ -1,10 +1,5 @@
 __pycache__
 
-results/
-
-archive.zip
-
 .vscode/
-.env
-.cache
-mdx-utils/bin
+bin/
+/godot/
