@@ -3,7 +3,8 @@
 ## It also inserts components representing Godot icons in front of Godot class names.
 import
   std/[logging, os, sequtils, strformat, strutils, terminal, nre, tables, times, sets]
-import md/[preprocessor, cache]
+import preprocessor/preprocessor
+import preprocessor/cache
 import customlogger
 import settings
 

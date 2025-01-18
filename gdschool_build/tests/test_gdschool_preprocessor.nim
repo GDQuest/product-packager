@@ -1,18 +1,12 @@
-# TODO: move to tests/ director
-# TODO: instead of doing setup and teardown, prepare a sample project with all the files needed for a true integration test:
-# - a Godot project with a script file
-# - a content folder with markdown files
-# - images and videos
-# - a folder with the expected output
-# - a configuration file
+# TODO: after moving to our own MDX parser, we should test the system with real data from GDSchool.
 import unittest
 import strutils
-import ../gdschool_preprocessor
-import ../../settings
-import ../utils
+import ../preprocessor/preprocessor
+import ../settings
+import ../preprocessor/cache
 
 let appSettings = BuildSettings()
-utils.cache = utils.prepareCache(appSettings)
+fileCache = prepareCache(appSettings)
 
 suite "MDX Preprocessor":
   test "Process Godot icon replacement":

@@ -1,13 +1,13 @@
 ## This program bundles the SVG icons and classes from the Godot source code into a single
 ## executable file. It then outputs a css file and a folder filled with SVG files to use
 ## on websites.
-## 
+##
 ## Creates the following files in the current directory:
-## 
+##
 ## - godot_icons.css
 ## - icons/godot/*.svg
 
-import md/assets
+import preprocessor/assets
 import std/tables
 import std/strformat
 import std/os

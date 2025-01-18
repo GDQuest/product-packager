@@ -1,5 +1,5 @@
 import std/[unittest, tables, os]
-import image_size
+import ../image_size
 
 let DIR_THIS = currentSourcePath.parentDir()
 let testImages = {
@@ -11,7 +11,7 @@ let testImages = {
 suite "Image Dimension Tests":
   test "Get image dimensions":
     for imagePath, expectedDimensions in testImages.pairs:
-      let path = DIR_THIS / "test/images" / imagePath
+      let path = DIR_THIS / "images" / imagePath
       echo "Checking image dimensions for: ", path
       let dimensions = getImageDimensions(path)
       check dimensions == expectedDimensions
