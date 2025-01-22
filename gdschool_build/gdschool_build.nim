@@ -1,27 +1,26 @@
 ## Program to preprocess mdx files for GDQuest courses on GDSchool.
 ## Replaces include shortcodes with the contents of the included source code files.
 ## It also inserts components representing Godot icons in front of Godot class names.
-import
-  std/[logging, os, sequtils, strformat, strutils, terminal, nre, tables, times, sets]
+import std/[os, sequtils, strformat, strutils, terminal, nre, tables, times, sets]
 import preprocessor/preprocessor
 import preprocessor/cache
-import customlogger
 import settings
+import errors
+
+proc hasFileChanged(pathSrc, pathDist: string): bool =
+  ## Returns `true` if the source file has been accessed or modified since the destination file was last modified.
+  ## For non-existent destination files, it returns `true`.
+  if not fileExists(pathDist):
+    return true
+
+  # For mdx files, they get modified during the build process, so we can't
+  # compare the input and output file size or hash. So, we compare the last
+  # access and modification times.
+  return
+    pathSrc.getLastAccessTime() > pathDist.getLastModificationTime() or
+    pathSrc.getLastModificationTime() > pathDist.getLastModificationTime()
 
 proc process(appSettings: BuildSettings) =
-  proc hasFileChanged(pathSrc, pathDist: string): bool =
-    ## Returns `true` if the source file has been accessed or modified since the destination file was last modified.
-    ## For non-existent destination files, it returns `true`.
-    if not fileExists(pathDist):
-      return true
-
-    # For mdx files, they get modified during the build process, so we can't
-    # compare the input and output file size or hash. So, we compare the last
-    # access and modification times.
-    return
-      pathSrc.getLastAccessTime() > pathDist.getLastModificationTime() or
-      pathSrc.getLastModificationTime() > pathDist.getLastModificationTime()
-
   # This cache lists code files (.gd, .gdshader) in the content directory and maps associated files.
   cache.fileCache = cache.prepareCache(appSettings)
   type ProcessedFile = object
@@ -50,24 +49,25 @@ proc process(appSettings: BuildSettings) =
     let fileInContents = readFile(fileIn)
     let inputFileDir = fileIn.parentDir()
 
+    let filePathRelative = fileIn.relativePath(appSettings.projectDir)
     if appSettings.isForced or hasFileChanged(fileIn, fileOut):
       if not appSettings.isQuiet:
         let processingMsg =
-          fmt"Processing `{fileIn.relativePath(appSettings.projectDir)}` -> `{fileOut.relativePath(appSettings.projectDir)}`..."
-        if logger.levelThreshold == lvlAll:
-          info processingMsg
-        else:
-          echo processingMsg
+          fmt"Processing `{filePathRelative}` -> `{fileOut.relativePath(appSettings.projectDir)}`..."
+        echo processingMsg
 
       let htmlAbsoluteMediaDir = "/media/courses/" & inputFileDir
-      let outputContent =
-        processContent(fileInContents, inputFileDir, htmlAbsoluteMediaDir, appSettings)
+      let outputContent = preprocessor.processContent(
+        fileInContents, inputFileDir, htmlAbsoluteMediaDir, appSettings,
+        filePathRelative,
+      )
 
       processedFiles.add(
         ProcessedFile(inputPath: fileIn, content: outputContent, outputPath: fileOut)
       )
 
     # Collect media files found in the content.
+    # TODO: eventually this should be collected after parsing the MDX files
     let distDirMedia =
       appSettings.distDir / "public" / "media" / "courses" / inputFileDir
     var inputMediaFiles: seq[string] =
@@ -81,26 +81,21 @@ proc process(appSettings: BuildSettings) =
         let outputPath = distDirMedia / mediaFile
         if hasFileChanged(inputPath, outputPath):
           mediaFiles[inputPath] = outputPath
-      else:
+      elif not missingMediaFiles.contains(inputPath):
         missingMediaFiles.incl(inputPath)
+        errors.addError(
+          message = "Missing media file: " & inputPath,
+          filepath = fileIn,
+          kind = ErrorKind.MissingMedia,
+        )
 
   # Show all media files processed and output collected errors
   if appSettings.isShowingMedia:
     for inputMediaFile, outputMediaFile in mediaFiles:
       echo fmt"{inputMediaFile} -> {outputMediaFile}"
 
-  if preprocessorErrorMessages.len() != 0:
-    stderr.styledWriteLine(
-      fgRed,
-      fmt"Found {preprocessorErrorMessages.len()} preprocessor error messages:" & "\n\n" &
-        preprocessorErrorMessages.join("\n") & "\n",
-    )
-  if missingMediaFiles.len() != 0:
-    stderr.styledWriteLine(
-      fgRed,
-      fmt"Found {missingMediaFiles.len()} missing media files:" & "\n\n" &
-        missingMediaFiles.toSeq().join("\n") & "\n",
-    )
+  if hasErors():
+    errors.printReport()
 
   # Create directories and write files to output directory
   if not appSettings.isDryRun and not appSettings.isShowingMedia:

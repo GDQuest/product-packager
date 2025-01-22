@@ -6,8 +6,6 @@ import std/parseopt
 import std/parsecfg
 import std/os
 import std/sequtils
-import std/logging
-import customlogger
 
 type BuildSettings* = object
   ## This object represents the running configuration of the build system.
@@ -210,8 +208,6 @@ proc getAppSettings*(): BuildSettings =
         result.distDir = value
       of "ignore-dir", "i":
         result.ignoreDirs.add value
-      of "verbose", "v":
-        logger.levelThreshold = logging.lvlAll
       of "quiet", "q":
         result.isQuiet = true
       of "dry-run":

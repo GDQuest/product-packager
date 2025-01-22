@@ -23,6 +23,7 @@
 ## brackets, and something generic like statement lines in one pass, then analyse
 ## and group the result.
 import std/[tables, strutils, terminal]
+import ../errors
 when compileOption("profiler"):
   import std/nimprof
 when isMainModule:
@@ -104,8 +105,7 @@ type
     ## Map of symbol names to their tokens.
     anchors: Table[string, CodeAnchor]
     ## Map of anchor names to their code anchors.
-    processedSource: string
-    ## The source code with anchor tags removed.
+    processedSource: string ## The source code with anchor tags removed.
 
   SymbolQuery = object
     ## Represents a query to get a symbol from a GDScript file, like
@@ -691,8 +691,8 @@ proc getTokenFromCache(symbolName: string, filePath: string): Token =
 
   let file = gdscriptFiles[filePath]
   if not file.symbols.hasKey(symbolName):
-    raise newException(
-      ValueError, "Symbol not found: '" & symbolName & "' in file: '" & filePath & "'"
+    addError(
+      "Symbol not found: '" & symbolName & "' in file: '" & filePath & "'", filePath
     )
 
   return file.symbols[symbolName]
@@ -714,15 +714,15 @@ proc getSymbolBody(symbolName: string, path: string): string =
   # Gets the body of a symbol given its name and the path to the file: it excludes the definition
   let token = getTokenFromCache(symbolName, path)
   if token.tokenType notin [TokenType.Class, TokenType.Function]:
-    raise newException(
-      ValueError,
+    addError(
       "Symbol '" & symbolName & "' is not a class or function in file: '" & path &
         "'. Cannot get body: only functions and classes have a body.",
+      path,
     )
   let file = gdscriptFiles[path]
   return token.getBody(file.processedSource)
 
-proc parseSymbolQuery(query: string): SymbolQuery =
+proc parseSymbolQuery(query: string, filePath: string): SymbolQuery {.inline.} =
   ## Turns a symbol query string like ClassName.body or ClassName.function.definition
   ## into a SymbolQuery object for easier processing.
   let parts = query.split('.')
@@ -746,7 +746,7 @@ proc parseSymbolQuery(query: string): SymbolQuery =
       result.isClass = true
       result.isBody = true
     else:
-      raise newException(ValueError, "Invalid symbol query: '" & query & "'")
+      addError("Invalid symbol query: '" & query & "'", filePath)
 
 proc getCodeForSymbol*(symbolQuery: string, filePath: string): string =
   ## Gets the code of a symbol given a query and the path to the file
@@ -756,7 +756,7 @@ proc getCodeForSymbol*(symbolQuery: string, filePath: string): string =
   ## - The path to a symbol, like ClassName.functionName
   ## - The request of a definition, like functionName.definition
   ## - The request of a body, like functionName.body
-  let query = parseSymbolQuery(symbolQuery)
+  let query = parseSymbolQuery(symbolQuery, filePath)
   if query.isClass:
     let classToken = getTokenFromCache(query.name, filePath)
     let file = gdscriptFiles[filePath]
@@ -769,10 +769,10 @@ proc getCodeForSymbol*(symbolQuery: string, filePath: string): string =
           result = child.getBody(file.processedSource)
         else:
           result = child.getCode(file.processedSource)
-    raise newException(
-      ValueError,
-      "Symbol not found: '" & query.childName & "' in class '" & query.name & "'",
-    )
+          addError(
+            "Symbol not found: '" & query.childName & "' in class '" & query.name & "'",
+            filePath,
+          )
   elif query.isDefinition:
     result = getSymbolDefinition(query.name, filePath)
   elif query.isBody:

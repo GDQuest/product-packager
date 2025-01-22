@@ -9,32 +9,30 @@
 ## 3. If a regex is matched, it calls the corresponding preprocessing to replace the matched text with preprocessed text.
 ##
 ## See the proc processContent() for the list of patterns and their handlers.
-import std/[nre, strformat, strutils, tables, options, os, terminal, sets]
+import std/[nre, strformat, strutils, tables, options, os, sets]
 import godot_cached_data
 import cache
 import ../settings
 import ../image_size
 import ../gdscript/parser_gdscript
+import ../errors
 when compileOption("profiler"):
   import std/nimprof
 
 type
   PatternHandler = ref object
     pattern: Regex
-    handler: proc(match: RegexMatch, context: HandlerContext): string
+    handler: proc(match: RegexMatch, context: PreprocessorContext): string
 
-  HandlerContext = ref object
+  PreprocessorContext = ref object
     inputDirPath: string
     outputDirPath: string
     appSettings: BuildSettings
+    filePath: string ## The path to the file being processed.
 
   ParsedMDXComponent = ref object
     name: string
     props: Table[string, string]
-
-## Collects all error messages generated during the preprocessing of
-## all files to group them at the end of the program's execution.
-var preprocessorErrorMessages*: seq[string] = @[]
 
 # Precompile regex patterns to avoid recompiling them in different functions
 let
@@ -49,6 +47,7 @@ let
 var regexGodotIcon: Regex
 # This table relies on the procs below and is initialized after them.
 var patterns_table: Table[char, seq[PatternHandler]]
+var warnedIcons: HashSet[string] = initHashSet[string]()
 
 proc parseMDXComponent(componentText: string): ParsedMDXComponent =
   ## Parses an MDX component string into a ParsedMDXComponent object.
@@ -66,7 +65,7 @@ proc parseMDXComponent(componentText: string): ParsedMDXComponent =
     let value = match.captures[1]
     result.props[name] = value
 
-proc preprocessVideoFile(match: RegexMatch, context: HandlerContext): string =
+proc preprocessVideoFile(match: RegexMatch, context: PreprocessorContext): string =
   ## Replaces the relative input video path with an absolute path in the website's public directory.
   let
     captures = match.captures.toTable()
@@ -82,7 +81,7 @@ proc preprocessVideoFile(match: RegexMatch, context: HandlerContext): string =
     result.add(" " & after)
   result &= "/>"
 
-proc preprocessGodotIcon(match: RegexMatch, context: HandlerContext): string =
+proc preprocessGodotIcon(match: RegexMatch, context: PreprocessorContext): string =
   ## Adds an IconGodot component for each Godot class name used in the markdown content, in inline code marks.
   ## For example, it transforms `Node` to <IconGodot name="Node" colorGroup="node">Node</IconGodot>.
 
@@ -118,11 +117,16 @@ proc preprocessGodotIcon(match: RegexMatch, context: HandlerContext): string =
     let group = getGodotIconGroup(className)
     result =
       fmt"""<IconGodot name="{className}" colorGroup="{group}">{className}</IconGodot>"""
-  else:
-    echo(fmt"Couldn't find icon for `{className}`. Skipping...")
+  elif not warnedIcons.contains(className):
+    warnedIcons.incl(className)
+    errors.addWarning(
+      fmt"Couldn't find icon for `{className}`. Skipping...", "mdx_preprocessor.nim"
+    )
     result = match.match
 
-proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): string =
+proc preprocessIncludeComponent(
+    match: RegexMatch, context: PreprocessorContext
+): string =
   ## Processes the Include component, which includes code from a file. Uses the
   ## GDScript parser module to extract code from the file.
   ##
@@ -208,20 +212,21 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
     if "symbol" in args:
       let symbol = args.getOrDefault("symbol", "")
       if symbol == "":
-        let errorMessage =
-          fmt"Symbol prop is empty in include component for file {includeFilePath}. Returning an empty string."
-        stderr.styledWriteLine(fgRed, errorMessage)
-        preprocessorErrorMessages.add(errorMessage)
+        errors.addError(
+          fmt"Symbol prop is empty in include component for file {includeFilePath}. Returning an empty string.",
+          context.filePath,
+        )
         return ""
 
       result = getCodeForSymbol(symbol, includeFilePath)
     elif "anchor" in args:
       let anchor = args.getOrDefault("anchor", "")
       if anchor == "":
-        let errorMessage =
-          fmt"Anchor prop is empty in include component for file {includeFilePath}. Returning an empty string."
-        stderr.styledWriteLine(fgRed, errorMessage)
-        preprocessorErrorMessages.add(errorMessage)
+        errors.addError(
+          "Anchor prop is empty in include component for file " & includeFilePath &
+            ". Returning an empty string.",
+          context.filePath,
+        )
         return ""
       result = getCodeForAnchor(anchor, includeFilePath)
     else:
@@ -241,13 +246,13 @@ proc preprocessIncludeComponent(match: RegexMatch, context: HandlerContext): str
     if "replace" in args:
       result = processSearchAndReplace(result, args["replace"])
   except IOError:
-    let errorMessage =
-      fmt"Failed to read include file: {includeFilePath}. No code will be included."
-    stderr.styledWriteLine(fgRed, errorMessage)
-    preprocessorErrorMessages.add(errorMessage)
+    addError(
+      "Failed to read include file: " & includeFilePath & ". No code will be included.",
+      context.filePath,
+    )
     result = ""
 
-proc preprocessMarkdownImage(match: RegexMatch, context: HandlerContext): string =
+proc preprocessMarkdownImage(match: RegexMatch, context: PreprocessorContext): string =
   ## Replaces the relative input image path with an absolute path in the website's public directory.
   ## Also gives the image a class depending on its aspect ratio.
   let
@@ -320,6 +325,7 @@ proc processContent*(
     inputDirPath: string = "",
     outputDirPath: string = "",
     appSettings: BuildSettings,
+    filePath: string,
 ): string =
   ## Runs through the content character by character, looking for patterns to replace.
   ## Once the first character of a pattern is found, it tries to match it with the regex patterns in the patterns_table table.
@@ -328,8 +334,11 @@ proc processContent*(
   var
     i = 0
     lastMatchEnd = 0
-    context = HandlerContext(
-      inputDirPath: inputDirPath, outputDirPath: outputDirPath, appSettings: appSettings
+    context = PreprocessorContext(
+      inputDirPath: inputDirPath,
+      outputDirPath: outputDirPath,
+      appSettings: appSettings,
+      filePath: filePath,
     )
 
   while i < content.len:
