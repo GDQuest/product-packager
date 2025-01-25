@@ -67,7 +67,8 @@ proc process(appSettings: BuildSettings) =
       )
 
     # Collect media files found in the content.
-    # TODO: eventually this should be collected after parsing the MDX files
+    # TODO: eventually this should be collected after parsing the MDX files, to
+    # have access to line numbers in case of errors.
     let distDirMedia =
       appSettings.distDir / "public" / "media" / "courses" / inputFileDir
     var inputMediaFiles: seq[string] =
