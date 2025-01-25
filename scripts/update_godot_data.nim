@@ -115,6 +115,12 @@ import std/[tables, sets]
     output.add "  \"" & name & "\": \"" & escapedContent & "\",\n"
   output.add "}.toTable()\n\n"
 
+  output.add "const CACHE_GODOT_CLASSES_WITH_ICONS* = [\n"
+  for class in builtinClasses:
+    if class in icons: # Only include classes that also have icons
+      output.add "  \"" & class & "\",\n"
+  output.add "].toHashSet()\n\n"
+
   # Write editor icons set
   output.add "const CACHE_EDITOR_ICONS* = [\n"
   for icon in editorIcons:

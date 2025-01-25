@@ -112,17 +112,11 @@ proc preprocessGodotIcon(match: RegexMatch, context: PreprocessorContext): strin
       else:
         "general"
 
-  let className = match.captures.toTable()["class"].strip(chars = {'`'})
-  if className in CACHE_GODOT_ICONS:
-    let group = getGodotIconGroup(className)
-    result =
-      fmt"""<IconGodot name="{className}" colorGroup="{group}">{className}</IconGodot>"""
-  elif not warnedIcons.contains(className):
-    warnedIcons.incl(className)
-    errors.addWarning(
-      fmt"Couldn't find icon for `{className}`. Skipping...", "mdx_preprocessor.nim"
-    )
-    result = match.match
+  let classMatch = match.captures.toTable()["class"]
+  let className = classMatch.strip(chars = {'`'})
+  let group = getGodotIconGroup(className)
+  result =
+    fmt"""<IconGodot name="{className}" colorGroup="{group}">{className}</IconGodot>"""
 
 proc preprocessIncludeComponent(
     match: RegexMatch, context: PreprocessorContext
@@ -313,7 +307,7 @@ proc initializeRegexes(): Table[char, seq[PatternHandler]] =
 regexGodotIcon = (
   proc(): Regex =
     var pattern = "(`(?P<class>"
-    for className in CACHE_GODOT_BUILTIN_CLASSES:
+    for className in CACHE_GODOT_CLASSES_WITH_ICONS:
       pattern &= className & "|"
     pattern = pattern.strip(chars = {'|'}) & ")`)"
     return re(pattern)
