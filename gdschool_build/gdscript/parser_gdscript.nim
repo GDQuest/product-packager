@@ -502,7 +502,7 @@ proc scanNextToken(s: var Scanner): Token =
     let c = s.getCurrentChar()
     debugEcho "Current char: " & $c.charMakeWhitespaceVisible()
     case c
-    # Comment, skip to end of line and continue
+    # Comment, skip to the next line
     of '#':
       discard s.scanToStartOfNextLine()
       continue
@@ -534,27 +534,28 @@ proc scanNextToken(s: var Scanner): Token =
     of '@':
       var offset = 1
       var c2 = s.peekAt(offset)
-      while c2 != '\n' and c2 != 'v':
+      while c2 != '\n':
         offset += 1
         c2 = s.peekAt(offset)
-      if c2 == '\n':
-        # This is an annotation on a single line, we skip this for now.
-        s.advanceToPeek()
-      if c2 == 'v':
-        # Check if this is a variable definition, if so, create a var token,
-        # and include the inline annotation in the definition
-        s.advanceToPeek()
-        if s.matchString("var"):
-          var token = Token(tokenType: TokenType.Variable)
-          token.range.start = startPos
-          token.range.definitionStart = startPos
+        if c2 == '\n':
+          # This is an annotation on a single line, we skip this for now.
+          s.advanceToPeek()
+          echo s.getCurrentLine()
+        elif c2 == 'v':
+          # Check if this is a variable definition, if so, create a var token,
+          # and include the inline annotation in the definition
+          s.advanceToPeek()
+          if s.matchString("var"):
+            var token = Token(tokenType: TokenType.Variable)
+            token.range.start = startPos
+            token.range.definitionStart = startPos
 
-          s.skipWhitespace()
+            s.skipWhitespace()
 
-          (token.nameStart, token.nameEnd) = s.scanIdentifier()
-          let (_, definitionEnd) = s.scanToEndOfDefinition()
-          token.range.end = definitionEnd
-          return token
+            (token.nameStart, token.nameEnd) = s.scanIdentifier()
+            let (_, definitionEnd) = s.scanToEndOfDefinition()
+            token.range.end = definitionEnd
+            return token
     # Variable, Constant, Class, Enum
     of 'v', 'c', 'e':
       var tokenType: TokenType
@@ -692,7 +693,9 @@ proc getTokenFromCache(symbolName: string, filePath: string): Token =
   let file = gdscriptFiles[filePath]
   if not file.symbols.hasKey(symbolName):
     addError(
-      "Symbol not found: '" & symbolName & "' in file: '" & filePath & "'", filePath
+      "Symbol not found: '" & symbolName & "' in file: '" & filePath &
+        "'\nFilling code with empty string.",
+      filePath,
     )
 
   return file.symbols[symbolName]
