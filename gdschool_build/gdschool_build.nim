@@ -34,6 +34,20 @@ proc process(appSettings: BuildSettings) =
     mediaFiles: Table[string, string] = initTable[string, string]()
     missingMediaFiles: HashSet[string] = initHashSet[string]()
 
+  var filesToProcess =
+    if appSettings.specificFiles.len > 0:
+      var filteredFiles: seq[string] = @[]
+      for file in appSettings.specificFiles:
+        if not file.fileExists():
+          addError(
+            "Selected file to build through command line option does not exist.", file
+          )
+        else:
+          filteredFiles.add(file)
+      filteredFiles
+    else:
+      cache.fileCache.contentFiles
+
   let pathPartContent = appSettings.contentDir & DirSep
   let pathPartReplace =
     if appSettings.outContentDir.len() != 0:
@@ -41,7 +55,7 @@ proc process(appSettings: BuildSettings) =
     else:
       appSettings.distDir & DirSep & pathPartContent
   # Process all MDX and MD files and save them to the dist directory.
-  for fileIn in cache.fileCache.contentFiles:
+  for fileIn in filesToProcess:
     let fileOut = fileIn.replace(pathPartContent, pathPartReplace)
 
     # Preprocessing and writing files only happens if the file has changed,

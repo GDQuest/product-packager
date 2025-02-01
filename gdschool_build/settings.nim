@@ -42,6 +42,9 @@ type BuildSettings* = object
   ## Prefix to preprend to markdown image urls when making them absolute for GDSchool.
   imagePathPrefix*: string
 
+  ## List of specific files to process. If empty, process all files.
+  specificFiles*: seq[string]
+
 func `$`*(appSettings: BuildSettings): string =
   result = "AppSettings:\n"
   for name, value in appSettings.fieldPairs:
@@ -101,6 +104,9 @@ Options:
   -s, --show-media      print the list of media files included in the course.
   -v, --verbose         print extra information when building the course.
   -q, --quiet           suppress output
+  -f, --files:FILES     comma-separated list of specific files to process.
+                        If provided, only these files will be processed.
+                        Files must be relative to the content directory.
 
 Shortcodes:
   {{{{ include fileName(.gd|.shader) [anchorName] }}}}
@@ -216,6 +222,14 @@ proc getAppSettings*(): BuildSettings =
         result.isShowingMedia = true
       of "force", "f":
         result.isForced = true
+      of "files":
+        # Split the comma-separated list and strip whitespace
+        result.specificFiles = value.split(',').mapIt(it.strip())
+        # Validate that all files exist
+        for file in result.specificFiles:
+          let fullPath = result.projectDir / result.contentDir / file
+          if not fileExists(fullPath):
+            quit fmt"File not found: {fullPath}"
       else:
         quit fmt"Unrecognized command line option: `{key}`\n\nHelp:\n{HELP_MESSAGE.fmt}"
 
