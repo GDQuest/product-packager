@@ -90,7 +90,7 @@ Options:
   -h, --help            print this help message.
       --clean           remove output directory.
                         Default: false.
-  -i, --ignore-dir:DIR  add DIR to a list to ignore when caching Markdown,
+  --ignore-dir:DIR      add DIR to a list to ignore when caching Markdown,
                         GDScript and Shader files. This option can be
                         repeated multiple times. The app ignores dot folders.
                         This option adds directories on top of that.
@@ -101,10 +101,10 @@ Options:
                             added to the ignored list.
   --dry-run             print the list of files that would be processed without
                         actually processing them. This argument has no short form.
-  -s, --show-media      print the list of media files included in the course.
-  -v, --verbose         print extra information when building the course.
+  --show-media          print the list of media files included in the course.
   -q, --quiet           suppress output
-  -f, --files:FILES     comma-separated list of specific files to process.
+  -f, --force           force rebuild of all files ignoring existing dist/ contents.
+  -s, --files:FILES     comma-separated list of specific files to process.
                         If provided, only these files will be processed.
                         Files must be relative to the content directory.
 
@@ -190,47 +190,53 @@ proc getAppSettings*(): BuildSettings =
   result.inputDir = getCurrentDir().absolutePath
   result.projectDir = result.inputDir
 
-  for kind, key, value in getopt(
-    shortNoVal = {'h', 'v', 'q', 'd', 's', 'f'},
-    longNoVal = @["clean", "help", "verbose", "quiet", "dry-run", "show-media", "force"],
-  ):
-    case kind
+  var parser = initOptParser()
+  # This is used to collect individual files to process after the --files option.
+  # It allows the user to provide a list of files to process without having to
+  # comma-separate them.
+  var isCollectingFiles = false
+
+  while true:
+    parser.next()
+    case parser.kind
     of cmdEnd:
       break
     of cmdArgument:
-      if dirExists(key):
-        result.inputDir = key.absolutePath
+      if isCollectingFiles:
+        result.specificFiles.add(parser.key)
+      elif dirExists(parser.key):
+        result.inputDir = parser.key.absolutePath
       else:
-        quit fmt"Invalid input directory: `{key}`"
+        quit fmt"Invalid input directory: `{parser.key}`"
     of cmdLongOption, cmdShortOption:
-      case key
+      # Stop collecting files when we hit a new option
+      isCollectingFiles = false
+      case parser.key
       of "help", "h":
         quit HELP_MESSAGE.fmt
       of "clean":
         result.isCleaning = true
-      of "course-dir", "c":
-        result.contentDir = value
+      of "course-dir":
+        result.contentDir = parser.val
       of "dist-dir", "d":
-        result.distDir = value
-      of "ignore-dir", "i":
-        result.ignoreDirs.add value
+        result.distDir = parser.val
+      of "ignore-dir":
+        result.ignoreDirs.add(parser.val)
       of "quiet", "q":
         result.isQuiet = true
       of "dry-run":
         result.isDryRun = true
-      of "show-media", "s":
+      of "show-media":
         result.isShowingMedia = true
       of "force", "f":
         result.isForced = true
-      of "files":
-        # Split the comma-separated list and strip whitespace
-        result.specificFiles = value.split(',').mapIt(it.strip())
-        # Validate that all files exist
-        for file in result.specificFiles:
-          let fullPath = result.projectDir / result.contentDir / file
-          if not fileExists(fullPath):
-            quit fmt"File not found: {fullPath}"
+      of "files", "s":
+        isCollectingFiles = true
+        # The --files option should have a value attached to it so we store this
+        # first file, then we collect in a loop.
+        if parser.val.len > 0:
+          result.specificFiles.add(parser.val)
       else:
-        quit fmt"Unrecognized command line option: `{key}`\n\nHelp:\n{HELP_MESSAGE.fmt}"
+        quit fmt"Unrecognized command line option: `{parser.key}`\n\nHelp:\n{HELP_MESSAGE.fmt}"
 
   result = result.resolveAppSettings()
