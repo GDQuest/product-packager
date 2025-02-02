@@ -46,7 +46,7 @@ proc process(appSettings: BuildSettings) =
           filteredFiles.add(file)
       filteredFiles
     else:
-      cache.fileCache.contentFiles
+      cache.fileCache.getContentFiles()
 
   let pathPartContent = appSettings.contentDir & DirSep
   let pathPartReplace =

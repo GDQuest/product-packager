@@ -10,13 +10,21 @@ const
   SHADER_EXT* = ".gdshader"
 
 type Cache* = ref object
-  codeFiles*: seq[string]
-  contentFiles*: seq[string]
+  ## Read-only cache that stores all the paths to the Markdown, GDScript, and
+  ## maps the code file names to their paths for easy lookup.
+  ## Must be initialized with `prepareCache()` before use.
+  isInitialized: bool
+  codeFiles: seq[string]
+  contentFiles: seq[string]
   codeFilenameToPath: Table[string, seq[string]]
 
 var fileCache*: Cache = nil
-  ## |
-  ## Global cache that has to be initialized with `prepareCache()`.
+  ## Global instance of the Cache object that has to be initialized with
+  ## `prepareCache()`. This is a read-only cache that stores all the paths to
+  ## the Markdown, GDScript, that's initialized once at the start of the build
+  ## process.
+  ## Keeping it read-only ensures consistency and also enables easy
+  ## multithreading in the future without requiring locks.
 
 proc prepareCache*(appSettings: BuildSettings): Cache =
   ## Returns a `Cache` object with:
@@ -74,8 +82,14 @@ proc prepareCache*(appSettings: BuildSettings): Cache =
     for k, v in codeFiles.groupBy((s) => extractFilename(s)):
       {k: v}
   )
+  result.isInitialized = true
+
+proc getContentFiles*(cache: Cache): lent seq[string] =
+  assert cache.isInitialized, "Cache must be initialized before use"
+  return cache.contentFiles
 
 proc findCodeFile*(cache: Cache, name: string): string =
+  assert cache.isInitialized, "Cache must be initialized before use"
   if not (name in cache.codeFilenameToPath or name in cache.codeFiles):
     let
       filteredCandidates =
