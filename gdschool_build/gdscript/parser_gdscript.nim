@@ -540,11 +540,11 @@ proc scanNextToken(s: var Scanner): Token =
         if c2 == '\n':
           # This is an annotation on a single line, we skip this for now.
           s.advanceToPeek()
-          echo s.getCurrentLine()
         elif c2 == 'v':
           # Check if this is a variable definition, if so, create a var token,
           # and include the inline annotation in the definition
           s.advanceToPeek()
+          offset = 0
           if s.matchString("var"):
             var token = Token(tokenType: TokenType.Variable)
             token.range.start = startPos
@@ -1148,3 +1148,24 @@ var test = 5
           tokens[0].getCode(code) == "class_name Mob3D extends Node3D"
           tokens[1].tokenType == TokenType.Variable
           tokens[1].getName(code) == "test"
+
+    test "Extract property with annotation on previous line":
+      let code =
+        """
+@export_category("Ground movement")
+@export_range(1.0, 10.0, 0.1) var max_speed_jog := 4.0
+"""
+
+      let (_, processedSource) = preprocessAnchors(code)
+      let tokens = parseGDScript(processedSource)
+
+      var maxSpeedJogToken: Token
+      for token in tokens:
+        if token.getName(processedSource) == "max_speed_jog":
+          maxSpeedJogToken = token
+          break
+
+      let maxSpeedJogCode = maxSpeedJogToken.getCode(processedSource)
+      check:
+        maxSpeedJogCode == "@export_range(1.0, 10.0, 0.1) var max_speed_jog := 4.0"
+        not maxSpeedJogCode.contains("@export_category")
