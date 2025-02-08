@@ -1,69 +1,43 @@
-# GDQuest Product Packager
+# GDSchool build
 
 ![Plugin banner image](./img/product-packager.png)
 
-Product Packager is a set of CLI tools to help GDQuest in creating their tutorial series, courses and other products.
+This repository, formerly Product Packager, is a work-in-progress static site builder for the [GDSchool](http://school.gdquest.com/) Learning Management System (LMS) platform.
 
-## Features
+The program is written in the [Nim programming language](http://nim-lang.org) and it:
 
-This repository contains utilities for our internal build system to create courses.
+- Preprocesses MDX files
+- Parses GDScript code symbols and code regions to include in lessons
+- Extracts data from Godot and image files
 
-It does things such as:
+It's being extended to parse a simplified flavor of MDX that will:
 
-- Auto-formats [MDX](https://mdxjs.com) prose files for our web platform [GDSchool](https://school.gdquest.com/).
-- Preprocesses MDX files:
-    - Includes content from code files. Replaces `<Include file="Filename.gd" anchor="anchor_name" />` with the corresponding source code.
-    - Appends Godot icon images before detected class names.
-- Compress and resize png and jpg images using [imagemagick](https://www.imagemagick.org/).
-- Compress and resize videos with [FFMpeg](https://ffmpeg.org/).
-- Strip documents to translate from code, to count words to translate.
+- Create an Abstract Syntax Tree (AST) for MDX files
+- Provide an API to transform the AST
+- Render it as HTML and web components
 
-## MDX Utils gotchas
+<details>
+  <summary>Why make your own LMS platform?</summary>
 
-The MDX formatter depends on some Godot source files to build regular expressiosn.
+  Almost all LMS platforms out there, proprietary or open source, are designed to offer a generic experience and focus on video, which doesn't match what we make. We want to be able to innovate and have full control over the learning experience and platform. We've already used off-the-shelf platforms but always found ourselves limited, either by the complexity of their codebase or the lack of customization options.
 
-These are found at `mdx-utils/src/md/godot/`, and they need to be synced with the upstream `godot` repo.
+</details>
+<details>
+  <summary>Why make your own static site builder?</summary>
 
-We have a shell script `mdx-utils/update_godot.sh` that:
+  After working on many web projects and trying to build our web with several web frameworks, we find that for the most part, they are too complex and slow, and you pay a high technical debt for the initial convenience and boost in development speed.
 
-1. Sets up a `git remote` called `godot` that points to the Godot repository.
-1. Updates the `mdx-utils/src/md/godot/` folder.
+  By coding our own tools, we can control the entire process and optimize it for our specific needs. We've already lost weeks, if not months of development time working around the quirks of popular frameworks.
 
-**Note:** that after you run the script you have to manually commit the update.
+  That's the kind of time it takes to write our own tools from scratch.
 
-### Nim gotchas
+  It's an investment that pays off in the long run. Also, the fully fledged website build system only requires a couple thousand lines of code and builds a website with thousands of pages from scratch within seconds on a single thread. No need for complex dependency graphs.
 
-`mdx-utils/src/md/assets.nim` reads the Godot files at compile time.
-
-- `walkDir()` seems to require paths relative to the path where we compile from. If using `nimble build` this is `mdx-utils/`.
-- `staticRead()` requires paths relative to the `assets.nim` source file.
-
-## How to use
-
-Product packager is a modular set of tools to help process files and package products. You can find them in their respective directories.
-
-You can use these tools individually. For example, here are some example commands I would use to compress pictures and videos in a directory using my favorite shell, [fish](https://fishshell.com/):
-
-```sh
-optimize_pictures.sh --output output_directory --resize 1280:-1\> -- pictures/*.{jpg,png}
-optimize_videos.sh --output output_directory videos/*.mp4
-```
-
-Run any program with the `--help` option to learn to use it. Also, if you find a bug, you can run tools with the `-d` or `--dry-run` option to output debug information. Please copy and paste that output to any bug you report in the [issues tab](issues).
-
-## Contributing
-
-If you encounter a bug or you have an idea to improve the tool, please [open an issue](https://github.com/GDQuest/product-packager/issues).
-
-If you want to contribute to the project, for instance, by fixing a bug or adding a feature, check out our [Contributor's guidelines](https://www.gdquest.com/docs/guidelines/contributing-to/gdquest-projects/).
-
-Also, please use [ShellCheck](https://www.shellcheck.net/) to lint your code and ensure it's POSIX-compliant.
-
-Pull requests and code reviews are much welcome. You can share your feedback and POSIX shell programming tips in the issues tab, or by sending me a message (see below).
+</details>
 
 ## Support us
 
-Our work on Free Software is sponsored by our [Godot game creation courses](https://gdquest.mavenseed.com/). Consider getting one to support us!
+Our work on Free Software is sponsored by our [Godot game creation courses](https://gdquest.com/). Consider getting one to support us!
 
 _If you like our work, please star the repository! This helps more people find it._
 
