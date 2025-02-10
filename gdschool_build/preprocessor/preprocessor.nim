@@ -164,8 +164,8 @@ proc preprocessIncludeComponent(
       for part in keyValuePairs:
         let kv = part.strip().split(":")
         if kv.len == 2:
-          let key = kv[0].strip().strip(chars = {'"'})
-          let value = kv[1].strip().strip(chars = {'"'})
+          let key = kv[0].strip().strip(chars = {'"', ' '})
+          let value = kv[1].strip().strip(chars = {'"', ' '})
           if key == "source":
             source = value
           elif key == "replacement":
