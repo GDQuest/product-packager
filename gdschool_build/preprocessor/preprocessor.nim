@@ -40,7 +40,14 @@ let
     re"""(?s)<VideoFile\s*(?P<before>.*?)?src=["'](?P<src>[^\"']+)["'](?P<after>.*?)?/>"""
   regexMarkdownImage* = re"!\[(?P<alt>.*?)\]\((?P<path>.+?)\)"
   regexMDXName = re"^<\s*([A-Z][^\s>]+)"
-  regexMDXAttr = re"""\s+([\w-]+)(?:=["']([^"']*)["'])?"""
+  # Captures attributes in MDX components. Has two groups: attribute name and value.
+  # The second group uses the non-capturing group mark ?: to avoid capturing quotes or JSX braces.
+  #
+  # TEMPORARY HACK: The last pattern is specifically for arrays of objects, for search and replace in include components:
+  # replace={[{"source": " and not is_crouching", "replacement": ""}]}
+  #
+  # As we're completely replacing this module soon with a proper parser, this will be removed in the process.
+  regexMDXAttr = re"""\s+([\w-]+)=(?:"([^"]*)"|'([^']*)'|{(\[[^\]]*\])})"""
   regexInclude = re(r"""<\s*Include.+?/>""")
   regexObjectPattern = re"\{.+?\}"
 # This regex needs to be initialized after the assets.CACHE_GODOT_BUILTIN_CLASSES constant is defined.
@@ -62,7 +69,14 @@ proc parseMDXComponent(componentText: string): ParsedMDXComponent =
   result.name = nameMatch.get.captures[0]
   for match in componentText.findIter(regexMDXAttr, nameMatch.get().matchBounds.b):
     let name = match.captures[0]
-    let value = match.captures[1]
+    var value = ""
+    # HACK: we have three possible captures for values wrapped in "", "", {[]}. We need to check which one is present.
+    if 1 in match.captures:
+      value = match.captures[1]
+    elif 2 in match.captures:
+      value = match.captures[2]
+    elif 3 in match.captures:
+      value = match.captures[3]
     result.props[name] = value
 
 proc preprocessVideoFile(match: RegexMatch, context: PreprocessorContext): string =
@@ -165,7 +179,7 @@ proc preprocessIncludeComponent(
         let kv = part.strip().split(":")
         if kv.len == 2:
           let key = kv[0].strip().strip(chars = {'"', ' '})
-          let value = kv[1].strip().strip(chars = {'"', ' '})
+          let value = kv[1].strip().strip(chars = {'"'})
           if key == "source":
             source = value
           elif key == "replacement":
@@ -178,6 +192,7 @@ proc preprocessIncludeComponent(
     let replaces = searchesAndReplaces
 
     # Apply all replacements
+    result = code
     for searchAndReplace in replaces:
       result = result.replace(searchAndReplace.source, searchAndReplace.replacement)
 
