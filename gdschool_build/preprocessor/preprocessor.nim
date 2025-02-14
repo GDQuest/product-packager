@@ -161,10 +161,6 @@ proc preprocessIncludeComponent(
       source: string
       replacement: string
 
-    # Parse the replaceJsxObject prop. It's a JSX expression with either a single object or an array of objects.
-    # TODO: add error handling
-    # TODO: this currently cannot work because the MDX component parsing cannot capture JSX expressions as props
-    # TODO: later: replace with MDX component parser
     var searchesAndReplaces: seq[SearchAndReplace] = @[]
     # Remove the array mark if relevant, then parse objects - this should work
     # for both array and single object formats
