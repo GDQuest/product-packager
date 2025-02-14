@@ -684,47 +684,6 @@ proc parseGDScriptFile(path: string) =
     processedSource: processedSource,
   )
 
-proc getTokenFromCache(symbolName: string, filePath: string): Token =
-  # Gets a token from the cache given a symbol name and the path to the GDScript file
-  if not gdscriptFiles.hasKey(filePath):
-    debugEcho "Token not found, " & filePath & " not in cache. Parsing file..."
-    parseGDScriptFile(filePath)
-
-  let file = gdscriptFiles[filePath]
-  if not file.symbols.hasKey(symbolName):
-    addError(
-      "Symbol not found: '" & symbolName & "' in file: '" & filePath &
-        "'\nFilling code with empty string.",
-      filePath,
-    )
-
-  return file.symbols[symbolName]
-
-proc getSymbolText(symbolName: string, path: string): string =
-  # Gets the text of a symbol given its name and the path to the file
-  let token = getTokenFromCache(symbolName, path)
-  let file = gdscriptFiles[path]
-  return token.getCode(file.processedSource)
-
-proc getSymbolDefinition(symbolName: string, path: string): string =
-  # Gets the definition of a symbol given its name and the path to the file
-  let token = getTokenFromCache(symbolName, path)
-  let file = gdscriptFiles[path]
-  return
-    token.getDefinition(file.processedSource).strip(leading = false, trailing = true)
-
-proc getSymbolBody(symbolName: string, path: string): string =
-  # Gets the body of a symbol given its name and the path to the file: it excludes the definition
-  let token = getTokenFromCache(symbolName, path)
-  if token.tokenType notin [TokenType.Class, TokenType.Function]:
-    addError(
-      "Symbol '" & symbolName & "' is not a class or function in file: '" & path &
-        "'. Cannot get body: only functions and classes have a body.",
-      path,
-    )
-  let file = gdscriptFiles[path]
-  return token.getBody(file.processedSource)
-
 proc parseSymbolQuery(query: string, filePath: string): SymbolQuery {.inline.} =
   ## Turns a symbol query string like ClassName.body or ClassName.function.definition
   ## into a SymbolQuery object for easier processing.
@@ -759,35 +718,83 @@ proc getCodeForSymbol*(symbolQuery: string, filePath: string): string =
   ## - The path to a symbol, like ClassName.functionName
   ## - The request of a definition, like functionName.definition
   ## - The request of a body, like functionName.body
+
+  proc getTokenFromCache(symbolName: string, filePath: string): Token =
+    ## Gets a token from the cache given a symbol name and the path to the
+    ## GDScript file. Assumes the file is already parsed.
+    let file = gdscriptFiles[filePath]
+    if not file.symbols.hasKey(symbolName):
+      addError(
+        "Symbol not found: '" & symbolName & "' in file: '" & filePath &
+          "'. Were you looking to include an anchor instead of a symbol?\nFilling code with empty string.",
+        filePath,
+      )
+
+    return file.symbols[symbolName]
+
   let query = parseSymbolQuery(symbolQuery, filePath)
+
+  if not gdscriptFiles.hasKey(filePath):
+    debugEcho filePath & " not in cache. Parsing file..."
+    parseGDScriptFile(filePath)
+
+  let file = gdscriptFiles[filePath]
+
+  # If the query is a class we get the class token and loop through its
+  # children, returning as soon as we find the symbol.
   if query.isClass:
     let classToken = getTokenFromCache(query.name, filePath)
-    let file = gdscriptFiles[filePath]
+    if classToken.tokenType != TokenType.Class:
+      addError(
+        "Symbol '" & query.name & "' is not a class in file: '" & filePath & "'",
+        filePath,
+      )
+      return ""
 
     for child in classToken.children:
-      if child.getName(file.source) == query.childName:
+      if child.getName(file.processedSource) == query.childName:
         if query.isDefinition:
-          result = child.getDefinition(file.processedSource)
+          return child.getDefinition(file.processedSource)
         elif query.isBody:
-          result = child.getBody(file.processedSource)
+          return child.getBody(file.processedSource)
         else:
-          result = child.getCode(file.processedSource)
-          addError(
-            "Symbol not found: '" & query.childName & "' in class '" & query.name & "'",
-            filePath,
-          )
-  elif query.isDefinition:
-    result = getSymbolDefinition(query.name, filePath)
+          return child.getCode(file.processedSource)
+
+    addError(
+      "Symbol not found: '" & query.childName & "' in class '" & query.name & "'",
+      filePath,
+    )
+    return ""
+
+  # For other symbols we get the token, ensure that it exists and is valid.
+  let token = getTokenFromCache(query.name, filePath)
+  if token.tokenType == TokenType.Invalid:
+    addError(
+      "Symbol '" & query.name & "' not found in file: '" & filePath & "'", filePath
+    )
+    return ""
+
+  if query.isDefinition:
+    return
+      token.getDefinition(file.processedSource).strip(leading = false, trailing = true)
   elif query.isBody:
-    result = getSymbolBody(query.name, filePath)
+    if token.tokenType notin [TokenType.Class, TokenType.Function]:
+      addError(
+        "Symbol '" & query.name & "' is not a class or function in file: '" & filePath &
+          "'. Cannot get body: only functions and classes have a body.",
+        filePath,
+      )
+      return ""
+    return token.getBody(file.processedSource)
   else:
-    result = getSymbolText(query.name, filePath)
+    return token.getCode(file.processedSource)
 
 proc getCodeForAnchor*(anchorName: string, filePath: string): string =
   ## Gets the code between anchor comments given the anchor name and the path to the file
   if not gdscriptFiles.hasKey(filePath):
     debugEcho filePath & " not in cache. Parsing file..."
     parseGDScriptFile(filePath)
+    let file = gdscriptFiles[filePath]
 
   let file = gdscriptFiles[filePath]
   if not file.anchors.hasKey(anchorName):
@@ -1110,7 +1117,7 @@ const PHYSICS_LAYER_MOBS = 2
 var _traveled_distance := 0.0
 
 func test():
-  pass
+	pass
 """
       let (anchors, processedSource) = preprocessAnchors(code)
       let tokens = parseGDScript(processedSource)
@@ -1136,7 +1143,7 @@ func test():
         """
 class_name Mob3D extends Node3D
 
-var test = 5
+	var test = 5
 """
       let tokens = parseGDScript(code)
       check:
@@ -1169,3 +1176,21 @@ var test = 5
       check:
         maxSpeedJogCode == "@export_range(1.0, 10.0, 0.1) var max_speed_jog := 4.0"
         not maxSpeedJogCode.contains("@export_category")
+
+    test "Parse multiple anchors":
+      let code =
+        """
+func set_is_active(value: bool) -> void:
+	#ANCHOR: is_active_toggle_active
+	is_active = value
+	_static_body_collision_shape.disabled = is_active
+	#END: is_active_toggle_active
+
+	#ANCHOR: is_active_animation
+	var top_value := 1.0 if is_active else 0.0
+	#END: is_active_animation"""
+      let (anchors, processedSource) = preprocessAnchors(code)
+      check:
+        anchors.len == 2
+        anchors.hasKey("is_active_toggle_active")
+        anchors.hasKey("is_active_animation")
