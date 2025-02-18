@@ -1,3 +1,4 @@
+import std/strformat
 ## Parses MDX files and produces a tree of nodes.
 type
   Range* = object
@@ -8,7 +9,6 @@ type
 
   ParseError* = ref object of ValueError
     range*: Range
-    message*: string
 
   AttributeKind = enum
     StringLiteral
@@ -55,7 +55,7 @@ type
 
   ScannerNode = ref object
     nodes: seq[Node]
-    currentIndex: int
+    currentIndex: int = 0
     source: string
     peekIndex: int
 
@@ -77,8 +77,8 @@ proc charMakeWhitespaceVisible*(c: char): string =
   else:
     result = $c
 
-proc getString*(range: Range, source: string): string {.inline.} =
-  return source[range.start ..< range.end]
+proc getString(s: ScannerNode, range: Range): string {.inline.} =
+  return s.source[range.start ..< range.end]
 
 proc currentChar(s: ScannerNode): char {.inline.} =
   s.source[s.currentIndex]
@@ -117,12 +117,14 @@ proc match(s: ScannerNode, expected: char): bool {.inline.} =
   s.currentIndex += 1
   return true
 
+proc isDigit(c: char): bool {.inline.} =
+  return c >= '0' and c <= '9'
+
 proc isAlphanumericOrUnderscore(c: char): bool {.inline.} =
   ## Returns `true` if the character is a letter (lower or uppercase), digit, or
   ## underscore.
   let isLetter = (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_'
-  let isDigit = c >= '0' and c <= '9'
-  return isLetter or isDigit
+  return isLetter or c.isDigit()
 
 proc skipWhitespace(s: ScannerNode) {.inline.} =
   ## Advances the scanner until it finds a non-whitespace character.
@@ -206,13 +208,17 @@ type
     Identifier # Alphanumeric or underscore
     EqualSign # =
     StringLiteral # "..." or '...'
-    # TODO: implement tokens below:
-    # JSXExpression can contain nested literals and comma-separated values
+    # jsx -> "{" NUMBER | STRING | array | object"}";
+    # array -> "[" arrayValues? "]";
+    # arrayValues -> ( NUMBER | STRING | array | object ) ( "," ( NUMBER | STRING | array | object) )*;
+    # object -> "{" objectValues? "}";
+    # objectValues -> ( STRING: ( NUMBER | STRING | array | object) ) ( "," ( STRING ":" ( NUMBER | STRING | array | object) ) )*;
+    # TODO: implement tokens below.
     JSXExpression # {...}
-    ArrayLiteral # []
-    NumberLiteral # 123
-    Comma # ,
-    Comment # {/* ... */}
+    # ArrayLiteral # []
+    # NumberLiteral # 123
+    # Comma # ,
+    # Comment # {/* ... */}
 
   TokenMdxComponent = object
     range: Range
@@ -222,6 +228,116 @@ type
     else:
       discard
 
+  TokenJSX = enum
+    OPEN, # {
+    CLOSE, # }
+    OPEN_ARRAY, # [
+    CLOSE_ARRAY, # ]
+    OPEN_OBJECT, # {
+    CLOSE_OBJECT, # }
+    COLON,
+    COMMA,
+    NUMBER,
+    STRING,
+
+  JSXToken = object
+    range: Range
+    kind: TokenJSX
+
+proc tokenizeJSXExpression(s: ScannerNode): tuple[range: Range, tokens: seq[JSXToken]] =
+  assert s.currentChar in "[{", "The scanner should be at the start of a JSX expression for this procedure to work. Found " & s.currentChar & " instead."
+
+  result.range.start = s.currentIndex
+  var depth = 0
+
+  while not s.isAtEnd() and depth >= 0:
+    s.skipWhitespace()
+    case s.currentChar
+    of '{':
+      depth += 1
+      result.tokens.add(JSXToken(
+        range: Range(start: s.currentIndex, `end`: s.currentIndex + 1),
+        kind: if depth == 1: TokenJSX.OPEN else: TokenJSX.OPEN_OBJECT
+      ))
+      s.currentIndex += 1
+    of '}':
+      depth -= 1
+      result.tokens.add(JSXToken(
+        range: Range(start: s.currentIndex, `end`: s.currentIndex + 1),
+        kind: if depth == 0: TokenJSX.CLOSE else: TokenJSX.CLOSE_OBJECT
+      ))
+      s.currentIndex += 1
+    of '[':
+      result.tokens.add(JSXToken(
+        range: Range(start: s.currentIndex, `end`: s.currentIndex + 1),
+        kind: TokenJSX.OPEN_ARRAY
+      ))
+      s.currentIndex += 1
+    of ']':
+      result.tokens.add(JSXToken(
+        range: Range(start: s.currentIndex, `end`: s.currentIndex + 1),
+        kind: TokenJSX.CLOSE_ARRAY
+      ))
+      s.currentIndex += 1
+    of '"', '\'':
+      let start = s.currentIndex
+      let quoteChar = s.currentChar
+      while not (s.peek(1) in "\"'" or s.isAtEnd()):
+        s.currentIndex += 1
+
+      if s.isAtEnd():
+        raise ParseError(
+          range: Range(start: start, `end`: s.currentIndex),
+          msg: "Found string literal opening character in an JSX tag but no closing character. " &
+          "Expected " & quoteChar & " character to close the string literal."
+        )
+
+      s.currentIndex += 2
+      result.tokens.add(JSXToken(
+        range: Range(start: start, `end`: s.currentIndex),
+        kind: TokenJSX.STRING
+      ))
+    of ':':
+      result.tokens.add(JSXToken(
+        range: Range(start: s.currentIndex, `end`: s.currentIndex + 1),
+        kind: TokenJSX.COLON
+      ))
+      s.currentIndex += 1
+    of ',':
+      result.tokens.add(JSXToken(
+        range: Range(start: s.currentIndex, `end`: s.currentIndex + 1),
+        kind: TokenJSX.COMMA
+      ))
+      s.currentIndex += 1
+    elif s.currentChar.isDigit():
+      let start = s.currentIndex
+      while s.currentChar.isDigit():
+        s.currentIndex += 1
+
+      if s.currentChar == '.' and s.peek(1).isDigit():
+        s.currentIndex += 1
+
+      while s.currentChar.isDigit():
+        s.currentIndex += 1
+
+      result.tokens.add(JSXToken(
+        range: Range(start: start, `end`: s.currentIndex),
+        kind: TokenJSX.NUMBER
+      ))
+    elif depth == 0:
+      break
+    else:
+      let range = Range(start: s.currentIndex, `end`: s.source.len)
+      raise ParseError(range: range, msg: fmt"Found invalid JSX expression at {s.currentIndex}: `" & s.getString(range) & "`")
+
+  if s.isAtEnd() and depth != 0:
+    raise ParseError(
+      range: Range(start: result.range.start, `end`: s.currentIndex),
+      msg: "Found JSX expression opening character, but no closing character. " &
+      "Expected } character to close the JSX expression."
+    )
+  result.range.end = s.currentIndex
+
 proc tokenizeMdxTag(s: ScannerNode): tuple[range: Range, tokens: seq[TokenMdxComponent]] =
   ## Scans and tokenizes the contents of a single MDX tag into TokenKindMdxComponent tokens.
   ## This procedure assumes the scanner's current character is < and stops at
@@ -230,10 +346,11 @@ proc tokenizeMdxTag(s: ScannerNode): tuple[range: Range, tokens: seq[TokenMdxCom
   ## It makes it easier to parse the component afterwards: we break down the
   ## component into identifiers, string literals, JSX expressions, etc.
   assert s.currentChar == '<', "The scanner should be at the start of an MDX tag for this procedure to work. Found " & s.currentChar & " instead."
+
+  result.range.start = s.currentIndex
   while not s.isAtEnd():
     s.skipWhitespace()
     let c = s.currentChar
-
     case c
     of '<':
       if s.peek(1) == '/':
@@ -261,6 +378,7 @@ proc tokenizeMdxTag(s: ScannerNode): tuple[range: Range, tokens: seq[TokenMdxCom
           range: Range(start: s.currentIndex, `end`: s.currentIndex + 1)
         ))
       s.currentIndex += 1
+      result.range.end = s.currentIndex
       return
 
     of '=':
@@ -280,7 +398,7 @@ proc tokenizeMdxTag(s: ScannerNode): tuple[range: Range, tokens: seq[TokenMdxCom
       if s.currentIndex >= s.source.len:
         raise ParseError(
           range: Range(start: start, `end`: s.currentIndex),
-          message: "Found string literal opening character in an MDX tag but no closing character. " &
+          msg: "Found string literal opening character in an MDX tag but no closing character. " &
           "Expected " & quoteChar & " character to close the string literal."
         )
       s.currentIndex += 1
@@ -302,7 +420,7 @@ proc tokenizeMdxTag(s: ScannerNode): tuple[range: Range, tokens: seq[TokenMdxCom
       if depth != 0:
         raise ParseError(
           range: Range(start: start, `end`: s.currentIndex),
-          message: "Found opening '{' character in an MDX tag but no matching closing character. " &
+          msg: "Found opening '{' character in an MDX tag but no matching closing character. " &
           "Expected a '}' character to close the JSX expression."
         )
 
@@ -319,6 +437,7 @@ proc tokenizeMdxTag(s: ScannerNode): tuple[range: Range, tokens: seq[TokenMdxCom
         ))
       else:
         s.currentIndex += 1
+    result.range.end = s.currentIndex
 
 proc parseMdxComponent(s: ScannerNode): Node =
   ## Parses an MDX component from the scanner's current position. Assumes that the scanner is at the start of an MDX component ('<' character).
@@ -339,7 +458,7 @@ proc parseMdxComponent(s: ScannerNode): Node =
   if tokens.len < 3:
     raise ParseError(
       range: tagRange,
-      message: "Found a < character in the source document but no valid MDX component tag. " &
+      msg: "Found a < character in the source document but no valid MDX component tag. " &
       "In MDX, a < marks the start of a component tag, which must contain an identifier and be closed with a > character or />.\n" &
       r"To write a literal < character in the document, escape it as '\<' or '&lt;'."
     )
@@ -348,8 +467,8 @@ proc parseMdxComponent(s: ScannerNode): Node =
   if tokens[0].kind != OpeningTagOpen or tokens[1].kind != Identifier:
     raise ParseError(
       range: tagRange,
-      message: "Expected an opening < character followed by an identifier but found " &
-      getString(tokens[0].range, s.source) & " and " & getString(tokens[1].range, s.source) & " instead."
+      msg: "Expected an opening < character followed by an identifier but found " &
+      s.getString(tokens[0].range) & " and " & s.getString(tokens[1].range) & " instead."
     )
 
   # Component name must start with uppercase letter
@@ -358,7 +477,7 @@ proc parseMdxComponent(s: ScannerNode): Node =
   if firstChar < 'A' or firstChar > 'Z':
     raise ParseError(
       range: nameToken.range,
-      message: "Expected component name to start with an uppercase letter but found " & getString(nameToken.range, s.source) & " instead. A valid component name must start with an uppercase letter."
+      msg: "Expected component name to start with an uppercase letter but found " & s.getString(nameToken.range) & " instead. A valid component name must start with an uppercase letter."
     )
 
   result.name = nameToken.range
@@ -399,14 +518,14 @@ proc parseMdxComponent(s: ScannerNode): Node =
             else:
               raise ParseError(
                 range: tokens[i + 2].range,
-                message: "Expected string literal or JSX expression as attribute value"
+                msg: "Expected string literal or JSX expression as attribute value"
               )
           ))
         i += 2 # Skip over the = and value tokens
       else:
         raise ParseError(
           range: tokens[i].range,
-          message: "Expected attribute name to be followed by = and a value"
+          msg: "Expected attribute name to be followed by = and a value"
         )
     i += 1
 
@@ -419,7 +538,7 @@ proc parseMdxComponent(s: ScannerNode): Node =
     result.children = s.parseNodes()
     result.rangeBody = Range(start: bodyStart, `end`: s.currentIndex)
 
-    let componentName = getString(result.name, s.source)
+    let componentName = s.getString(result.name)
     while not s.isAtEnd():
       let closingTag = "</" & componentName & ">"
       if s.isPeekSequence(closingTag):
@@ -532,14 +651,14 @@ when isMainModule:
 
     check:
       node.kind == MdxComponent
-      getString(node.name, source) == "SomeComponent"
+      scanner.getString(node.name) == "SomeComponent"
       node.isSelfClosing
 
       node.attributes.len == 2
-      getString(node.attributes[0].name, source) == "prop1"
-      getString(node.attributes[0].value.stringValue, source) == "\"value1\""
-      getString(node.attributes[1].name, source) == "prop2"
-      getString(node.attributes[1].value.expressionRange, source) == "{value2}"
+      scanner.getString(node.attributes[0].name) == "prop1"
+      scanner.getString(node.attributes[0].value.stringValue) == "\"value1\""
+      scanner.getString(node.attributes[1].name) == "prop2"
+      scanner.getString(node.attributes[1].value.expressionRange) == "{value2}"
 
 
   test "parse nested components and markdown":
@@ -561,17 +680,60 @@ when isMainModule:
     check:
       nodes.len == 1
       nodes[0].kind == MdxComponent
-      getString(nodes[0].name, source) == "OuterComponent"
+      scanner.getString(nodes[0].name) == "OuterComponent"
       nodes[0].attributes.len == 0
       nodes[0].children.len > 0
       nodes[0].children[0].kind == MarkdownContent
       nodes[0].children[1].kind == MdxComponent
-      getString(nodes[0].children[1].name, source) == "InnerComponent"
+      scanner.getString(nodes[0].children[1].name) == "InnerComponent"
       nodes[0].children[1].attributes.len == 1
-      getString(nodes[0].children[1].attributes[0].name, source) == "prop"
+      scanner.getString(nodes[0].children[1].attributes[0].name) == "prop"
       nodes[0].children[1].attributes[0].value.kind == StringLiteral
-      getString(nodes[0].children[1].attributes[0].value.stringValue, source) == "\"value\""
+      scanner.getString(nodes[0].children[1].attributes[0].value.stringValue) == "\"value\""
       nodes[0].children[1].children.len > 0
       nodes[0].children[1].children[0].kind == MarkdownContent
       nodes[0].children[2].kind == MarkdownContent
-      nodes[0].children[2].range.getString(source) == "More text after the inner component."
+      scanner.getString(nodes[0].children[2].range) == "More text after the inner component."
+
+  test "tokenize JSX expression":
+    let source = """{{123.4: "str", "some": ["other", 2]}, [2], [3, "a"]}"""
+    let scanner = ScannerNode(source: source)
+    let (range, tokens) = scanner.tokenizeJSXExpression()
+
+    check:
+      range == Range(start: 0, `end`: source.len)
+      tokens.len == 25
+      tokens[0].kind == TokenJSX.OPEN
+      tokens[1].kind == TokenJSX.OPEN_OBJECT
+      tokens[2].kind == TokenJSX.NUMBER
+      scanner.getString(tokens[2].range) == "123.4"
+      tokens[3].kind == TokenJSX.COLON
+      tokens[4].kind == TokenJSX.STRING
+      scanner.getString(tokens[4].range) == "\"str\""
+      tokens[5].kind == TokenJSX.COMMA
+      tokens[6].kind == TokenJSX.STRING
+      scanner.getString(tokens[6].range) == "\"some\""
+      tokens[7].kind == TokenJSX.COLON
+      tokens[8].kind == TokenJSX.OPEN_ARRAY
+      tokens[9].kind == TokenJSX.STRING
+      scanner.getString(tokens[9].range) == "\"other\""
+      tokens[10].kind == TokenJSX.COMMA
+      tokens[11].kind == TokenJSX.NUMBER
+      scanner.getString(tokens[11].range) == "2"
+      tokens[12].kind == TokenJSX.CLOSE_ARRAY
+      tokens[13].kind == TokenJSX.CLOSE_OBJECT
+      tokens[14].kind == TokenJSX.COMMA
+      tokens[15].kind == TokenJSX.OPEN_ARRAY
+      tokens[16].kind == TokenJSX.NUMBER
+      scanner.getString(tokens[11].range) == "2"
+      tokens[17].kind == TokenJSX.CLOSE_ARRAY
+      tokens[18].kind == TokenJSX.COMMA
+      tokens[19].kind == TokenJSX.OPEN_ARRAY
+      tokens[20].kind == TokenJSX.NUMBER
+      scanner.getString(tokens[20].range) == "3"
+      tokens[21].kind == TokenJSX.COMMA
+      tokens[22].kind == TokenJSX.STRING
+      scanner.getString(tokens[22].range) == "\"a\""
+      tokens[23].kind == TokenJSX.CLOSE_ARRAY
+      tokens[24].kind == TokenJSX.CLOSE
+
