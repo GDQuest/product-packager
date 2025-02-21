@@ -22,7 +22,7 @@
 ## To combine passes into one, I would tokenize keywords, identifiers, anchor comments,
 ## brackets, and something generic like statement lines in one pass, then analyse
 ## and group the result.
-import std/[tables, strutils, terminal]
+import std/[tables, strutils, strformat]
 import ../errors
 when compileOption("profiler"):
   import std/nimprof
@@ -708,7 +708,7 @@ proc parseSymbolQuery(query: string, filePath: string): SymbolQuery {.inline.} =
       result.isClass = true
       result.isBody = true
     else:
-      addError("Invalid symbol query: '" & query & "'", filePath)
+      addError(fmt"Invalid symbol query: '{query}'", filePath)
 
 proc getCodeForSymbol*(symbolQuery: string, filePath: string): string =
   ## Gets the code of a symbol given a query and the path to the file
@@ -725,8 +725,7 @@ proc getCodeForSymbol*(symbolQuery: string, filePath: string): string =
     let file = gdscriptFiles[filePath]
     if not file.symbols.hasKey(symbolName):
       addError(
-        "Symbol not found: '" & symbolName & "' in file: '" & filePath &
-          "'. Were you looking to include an anchor instead of a symbol?\nFilling code with empty string.",
+        fmt"Symbol not found: '{symbolName}' in file: '{filePath}'. Were you looking to include an anchor instead of a symbol?\nFilling code with empty string.",
         filePath,
       )
 
@@ -746,8 +745,7 @@ proc getCodeForSymbol*(symbolQuery: string, filePath: string): string =
     let classToken = getTokenFromCache(query.name, filePath)
     if classToken.tokenType != TokenType.Class:
       addError(
-        "Symbol '" & query.name & "' is not a class in file: '" & filePath & "'",
-        filePath,
+        fmt"Symbol '{query.name}' is not a class in file: '{filePath}'", filePath
       )
       return ""
 
@@ -761,17 +759,14 @@ proc getCodeForSymbol*(symbolQuery: string, filePath: string): string =
           return child.getCode(file.processedSource)
 
     addError(
-      "Symbol not found: '" & query.childName & "' in class '" & query.name & "'",
-      filePath,
+      fmt"Symbol not found: '{query.childName}' in class '{query.name}'", filePath
     )
     return ""
 
   # For other symbols we get the token, ensure that it exists and is valid.
   let token = getTokenFromCache(query.name, filePath)
   if token.tokenType == TokenType.Invalid:
-    addError(
-      "Symbol '" & query.name & "' not found in file: '" & filePath & "'", filePath
-    )
+    addError(fmt"Symbol '{query.name}' not found in file: '{filePath}'", filePath)
     return ""
 
   if query.isDefinition:
@@ -780,8 +775,7 @@ proc getCodeForSymbol*(symbolQuery: string, filePath: string): string =
   elif query.isBody:
     if token.tokenType notin [TokenType.Class, TokenType.Function]:
       addError(
-        "Symbol '" & query.name & "' is not a class or function in file: '" & filePath &
-          "'. Cannot get body: only functions and classes have a body.",
+        fmt"Symbol '{query.name}' is not a class or function in file: '{filePath}'. Cannot get body: only functions and classes have a body.",
         filePath,
       )
       return ""
@@ -794,11 +788,10 @@ proc getCodeForAnchor*(anchorName: string, filePath: string): string =
   if not gdscriptFiles.hasKey(filePath):
     debugEcho filePath & " not in cache. Parsing file..."
     parseGDScriptFile(filePath)
-    let file = gdscriptFiles[filePath]
 
   let file = gdscriptFiles[filePath]
   if not file.anchors.hasKey(anchorName):
-    styledEcho(fgRed, "Anchor '", anchorName, "' not found in file: '", filePath, "'")
+    addError(fmt"Anchor '{anchorName}' not found in file: '{filePath}'", filePath)
     return ""
 
   let anchor = file.anchors[anchorName]
@@ -1080,7 +1073,6 @@ func _ready() -> void:
 var health := 100
 """
       let tokens = parseGDScript(code)
-      echo tokens[0].getBody(code)
       check:
         tokens.len == 2
         tokens[0].tokenType == TokenType.Function
