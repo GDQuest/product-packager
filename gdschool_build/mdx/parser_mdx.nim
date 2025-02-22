@@ -1,4 +1,4 @@
-import std/strformat
+import std/[json, strformat]
 
 ## Parses MDX files and produces a tree of nodes.
 type
@@ -13,37 +13,36 @@ type
     akBoolean
     akNumber
     akString
-    akJSXExpression
+    akJsxExpression
 
   Attribute = object
-    name: Range
     range: Range
+    name: Range
     case kind: AttributeKind
     of akBoolean:
       boolValue: bool
+    of akJsxExpression:
+      jsxValue: JsonNode
     else:
       value: Range
 
   NodeKind = enum
-    nkMDXComponent
+    nkMdxComponent
     # Temporary: we'll add more node types later
     nkMarkdownContent
 
   Node = object
+    range: Range
+      ## The start and end indices of the node in the source document. This can be used for
+      ## error reporting.
+    children: seq[Node]
     case kind: NodeKind
-    of nkMDXComponent:
+    of nkMdxComponent:
       name: Range
       attributes: seq[Attribute]
       isSelfClosing: bool
-      rangeOpeningTag: Range
-      rangeBody: Range
-      rangeClosingTag: Range
     else:
       discard
-    range: Range
-      ## The start and end indices of the node in the source document.
-      ## This can be used for error reporting.
-    children: seq[Node]
 
   Scanner = object
     source: string
@@ -51,21 +50,28 @@ type
     peekIndex: int
     nodes: seq[Node]
 
-func currentChar(s: Scanner): char {.inline.} = s.source[s.index]
+func currentChar(s: Scanner): char {.inline.} =
+  s.source[s.index]
 
-func getChar(s: Scanner, at: int): char {.inline.} = s.source[at]
+func getChar(s: Scanner, at: int): char {.inline.} =
+  s.source[at]
 
-func getString(s: Scanner, range: Range): string {.inline.} = s.source[range.start ..< range.end]
+func getString(s: Scanner, range: Range): string {.inline.} =
+  s.source[range.start ..< range.end]
 
-func isAtEnd(s: Scanner): bool {.inline.} = s.index >= s.source.len
+func isAtEnd(s: Scanner): bool {.inline.} =
   ## Returns `true` if the scanner has reached the end of the source string.
+  s.index >= s.source.len
 
-func isWhitespace(c: char): bool {.inline.} = c in " \t\n\r"
+func isWhitespace(c: char): bool {.inline.} =
   ## Returns `true` if the character is a space, tab, newline, or carriage return.
+  c in " \t\n\r"
 
-func isUppercaseAscii(c: char): bool {.inline.} = c >= 'A' and c <= 'Z'
+func isUppercaseAscii(c: char): bool {.inline.} =
+  c >= 'A' and c <= 'Z'
 
-func isDigit(c: char): bool {.inline.} = c >= '0' and c <= '9'
+func isDigit(c: char): bool {.inline.} =
+  c >= '0' and c <= '9'
 
 func isAlphanumericOrUnderscore(c: char): bool {.inline.} =
   ## Returns `true` if the character is a letter (lower or uppercase), digit, or underscore.
@@ -84,9 +90,13 @@ proc peek(s: var Scanner, offset: int = 1): char {.inline.} =
   ## Updates the peek index to the current position plus the offset. Call
   ## advanceToPeek() to move the scanner to the peek index.
   s.peekIndex = s.index + offset
-  return if s.peekIndex >= s.source.len: '\0' else: s.source[s.peekIndex]
+  return
+    if s.peekIndex >= s.source.len:
+      '\0'
+    else:
+      s.source[s.peekIndex]
 
-proc advanceToPeek(s: var Scanner): int {.inline.} = 
+proc advanceToPeek(s: var Scanner): int {.inline.} =
   ## Advances the scanner to the peek index.
   s.index = s.peekIndex
   return s.index
@@ -118,22 +128,23 @@ proc scanIdentifier(s: var Scanner): Range =
     discard s.advance()
   return Range(start: start, `end`: s.index)
 
-func isMDXComponentStart(s: var Scanner): bool {.inline.} = s.currentChar == '<' and s.peek().isUppercaseAscii()
+func isMdxComponentStart(s: var Scanner): bool {.inline.} =
   ## Returns `true` if the scanner is at the start of an MDX component.
+  s.currentChar == '<' and s.peek().isUppercaseAscii()
 
-proc isMDXClosingTagStart(s: var Scanner): bool {.inline.} = s.currentChar == '<' and s.peek() == '/'
+proc isMdxClosingTagStart(s: var Scanner): bool {.inline.} =
   ## Returns `true` if the scanner is at the start of an MDX component closing tag.
+  s.currentChar == '<' and s.peek() == '/'
 
-proc isMDXTagStart(s: var Scanner): bool {.inline.} = s.currentChar == '<' and (s.peek().isUppercaseAscii() or s.peek() == '/')
+proc isMdxTagStart(s: var Scanner): bool {.inline.} =
   ## Returns `true` if the scanner is at the start of an MDX component closing tag.
+  s.currentChar == '<' and (s.peek().isUppercaseAscii() or s.peek() == '/')
 
 # ---------------- #
 #  Error handling  #
 # ---------------- #
-type
-  Position = object
-    ## A position in a source document. Used for error reporting.
-    line, column: int
+type Position = object ## A position in a source document. Used for error reporting.
+  line, column: int
 
 func getLineStartIndices(s: Scanner): seq[int] =
   ## Finds the start indices of each line in the source string. Run this on a
@@ -181,7 +192,7 @@ proc parseMarkdownContent(s: var Scanner): Node =
   ## Parses markdown content until a condition is met
   # For now, just store the raw markdown content
   var start = s.index
-  while not s.isAtEnd() and not s.isMDXTagStart():
+  while not s.isAtEnd() and not s.isMdxTagStart():
     discard s.advance()
 
   # Trim whitespace at the start and end
@@ -192,16 +203,13 @@ proc parseMarkdownContent(s: var Scanner): Node =
   while endIndex > start and s.getChar(endIndex - 1).isWhitespace():
     endIndex -= 1
 
-  return Node(
-    kind: nkMarkdownContent,
-    range: Range(start: start, `end`: endIndex),
-  )
+  return Node(kind: nkMarkdownContent, range: Range(start: start, `end`: endIndex))
 
 # ---------------- #
 # MDX Components   #
 # ---------------- #
 type
-  TokenMDXComponentKind = enum
+  TokenMdxComponentKind = enum
     tmcOpeningTagOpen # <
     tmcOpeningTagClose # >
     tmcOpeningTagSelfClosing # />
@@ -209,173 +217,72 @@ type
     tmcIdentifier # Alphanumeric or underscore
     tmcEqualSign # =
     tmcString # "..." or '...'
-    tmcNumber, # 123 or 123.45
-    tmcColon, # :
-    tmcComma, # ,
-    tmcJSXExpression, # {...}
+    tmcNumber # 123 or 123.45
+    tmcColon # :
+    tmcComma # ,
+    tmcJsxExpression # {...}
     # tmcJSXComment, # {/* ... */}
 
-    # jsx -> "{" values? "}";
-    # array -> "[" values? "]";
-    # object -> "{" objectValues? "}";
-    # objectValues -> ( STRING ":" values ) ( "," ( STRING ":" values ) )*;
-    # values -> value ( "," value )*
-    # value -> ( NUMBER | STRING | array | object )
-    tmcJSXOpen, # {
-    tmcJSXClose, # }
-    tmcJSXOpenArray, # [
-    tmcJSXCloseArray, # ]
-    tmcJSXOpenObject, # {
-    tmcJSXCloseObject, # }
-
-  TokenMDXComponent = object
+  TokenMdxComponent = object
     range: Range
-    case kind: TokenMDXComponentKind
-    of tmcJSXExpression:
-      children: seq[TokenMDXComponent]
+    case kind: TokenMdxComponentKind
     else:
       discard
 
-proc tokenizeJSX(s: var Scanner): tuple[range: Range, tokens: seq[TokenMDXComponent]] =
-  assert s.currentChar in "[{", fmt"The scanner should be at the start of a JSX expression for this procedure to work. Found {s.currentChar} instead."
-
-  result.range.start = s.index
-  var depth = 0
-
-  while not s.isAtEnd() and depth >= 0:
-    s.skipWhitespace()
-    case s.currentChar
-    of '{':
-      depth += 1
-      result.tokens.add(TokenMDXComponent(
-        range: Range(start: s.index, `end`: s.advance()),
-        kind: if depth == 1: tmcJSXOpen else: tmcJSXOpenObject
-      ))
-    of '}':
-      depth -= 1
-      result.tokens.add(TokenMDXComponent(
-        range: Range(start: s.index, `end`: s.advance()),
-        kind: if depth == 0: tmcJSXClose else: tmcJSXCloseObject
-      ))
-    of '[':
-      result.tokens.add(TokenMDXComponent(
-        range: Range(start: s.index, `end`: s.advance()),
-        kind: tmcJSXOpenArray
-      ))
-    of ']':
-      result.tokens.add(TokenMDXComponent(
-        range: Range(start: s.index, `end`: s.advance()),
-        kind: tmcJSXCloseArray
-      ))
-    of '"', '\'':
-      let start = s.index
-      let quoteChar = s.currentChar
-      while not (s.peek() in "\"'" or s.isAtEnd()):
-        discard s.advance()
-
-      if s.isAtEnd():
-        raise ParseError(
-          range: Range(start: start, `end`: s.index),
-          msg: "Found string literal opening character in an JSX tag but no closing character. " &
-            fmt"Expected `{quoteChar}` character to close the string literal."
-        )
-
-      discard s.advance(2)
-      result.tokens.add(TokenMDXComponent(
-        range: Range(start: start, `end`: s.index),
-        kind: tmcString
-      ))
-    of ':':
-      result.tokens.add(TokenMDXComponent(
-        range: Range(start: s.index, `end`: s.advance()),
-        kind: tmcColon
-      ))
-    of ',':
-      result.tokens.add(TokenMDXComponent(
-        range: Range(start: s.index, `end`: s.advance()),
-        kind: tmcComma
-      ))
-    elif s.currentChar.isDigit():
-      let start = s.index
-      while s.currentChar.isDigit():
-        discard s.advance()
-
-      if s.currentChar == '.' and s.peek().isDigit():
-        discard s.advance()
-
-      while s.currentChar.isDigit():
-        discard s.advance()
-
-      result.tokens.add(TokenMDXComponent(
-        range: Range(start: start, `end`: s.index),
-        kind: tmcNumber
-      ))
-    elif depth == 0:
-      break
-    else:
-      let range = Range(start: s.index, `end`: s.source.len)
-      raise ParseError(
-        range: range,
-        msg: fmt"Found invalid JSX expression at `{s.index}`: `{s.getString(range)}`"
-      )
-
-  if s.isAtEnd() and depth != 0:
-    raise ParseError(
-      range: Range(start: result.range.start, `end`: s.index),
-      msg: "Found `{` JSX expression opening character, but no closing character. Expected `}` character to close the JSX expression."
-    )
-  result.range.end = s.index
-
-
-proc tokenizeMDXComponent(s: var Scanner): tuple[range: Range, tokens: seq[TokenMdxComponent]] =
+proc tokenizeMdxComponent(
+    s: var Scanner
+): tuple[range: Range, tokens: seq[TokenMdxComponent]] =
   ## Scans and tokenizes the contents of a single MDX tag into TokenKindMdxComponent tokens.
-  ## This procedure assumes the scanner's current character is < and stops at
-  ## the first encountered closing tag.
+  ## This procedure assumes the scanner's current character is < and stops at the first encountered
+  ## closing tag.
   ##
   ## It makes it easier to parse the component afterwards: we break down the
   ## component into identifiers, string literals, JSX expressions, etc.
-  assert s.currentChar == '<', "The scanner should be at the start of an MDX tag for this procedure to work. Found " & s.currentChar & " instead."
+  assert s.currentChar == '<',
+    fmt"The scanner should be at the start of an MDX tag for this procedure to work. Found `{s.currentChar}` instead."
 
   result.range.start = s.index
   while not s.isAtEnd():
     s.skipWhitespace()
-    let c = s.currentChar
-    case c
+    case s.currentChar
     of '<':
       if s.peek() == '/':
-        result.tokens.add(TokenMdxComponent(
-          kind: tmcClosingTagOpen,
-          range: Range(start: s.index, `end`: s.advance(2))
-        ))
+        result.tokens.add(
+          TokenMdxComponent(
+            kind: tmcClosingTagOpen, range: Range(start: s.index, `end`: s.advance(2))
+          )
+        )
       else:
-        result.tokens.add(TokenMdxComponent(
-          kind: tmcOpeningTagOpen,
-          range: Range(start: s.index, `end`: s.advance())
-        ))
-
+        result.tokens.add(
+          TokenMdxComponent(
+            kind: tmcOpeningTagOpen, range: Range(start: s.index, `end`: s.advance())
+          )
+        )
     of '>':
       if s.peek(-1) == '/':
-        result.tokens.add(TokenMdxComponent(
+        let token = TokenMdxComponent(
           kind: tmcOpeningTagSelfClosing,
-          range: Range(start: s.index - 1, `end`: s.advance())
-        ))
+          range: Range(start: s.index - 1, `end`: s.advance()),
+        )
+        result.tokens.add(token)
+        result.range.end = token.range.end
       else:
-        result.tokens.add(TokenMdxComponent(
-          kind: tmcOpeningTagClose,
-          range: Range(start: s.index, `end`: s.advance())
-        ))
+        result.tokens.add(
+          TokenMdxComponent(
+            kind: tmcOpeningTagClose, range: Range(start: s.index, `end`: s.advance())
+          )
+        )
       result.range.end = s.index
       return
-
     of '=':
-      result.tokens.add(TokenMdxComponent(
-        kind: tmcEqualSign,
-        range: Range(start: s.index, `end`: s.advance())
-      ))
-
+      result.tokens.add(
+        TokenMdxComponent(
+          kind: tmcEqualSign, range: Range(start: s.index, `end`: s.advance())
+        )
+      )
     of '"', '\'':
       # String literal
-      let quoteChar = c
+      let quoteChar = s.currentChar
       let start = s.index
       discard s.advance()
       while not s.isAtEnd() and s.currentChar != quoteChar:
@@ -383,86 +290,82 @@ proc tokenizeMDXComponent(s: var Scanner): tuple[range: Range, tokens: seq[Token
       if s.index >= s.source.len:
         raise ParseError(
           range: Range(start: start, `end`: s.index),
-          msg: "Found string literal opening character in an MDX tag but no closing character. " &
-            fmt"Expected `{quoteChar}` character to close the string literal."
+          msg:
+            "Found string literal opening character in an MDX tag but no closing character. " &
+            fmt"Expected `{quoteChar}` character to close the string literal.",
         )
-      result.tokens.add(TokenMdxComponent(
-        kind: tmcString,
-        range: Range(start: start, `end`: s.advance())
-      ))
-
+      result.tokens.add(
+        TokenMdxComponent(
+          kind: tmcString, range: Range(start: start, `end`: s.advance())
+        )
+      )
     of '{':
-      # JSX expression
       let start = s.index
-      var depth = 1
+      var depth = 0
+
       discard s.advance()
-      while not s.isAtEnd() and depth > 0:
-        if s.currentChar == '{': depth += 1
-        elif s.currentChar == '}': depth -= 1
+      while not s.isAtEnd() and depth >= 0:
+        if s.currentChar == '{':
+          depth += 1
+        elif s.currentChar == '}':
+          depth -= 1
         discard s.advance()
 
-      if depth != 0:
+      if depth != -1:
         raise ParseError(
           range: Range(start: start, `end`: s.index),
-          msg: "Found opening `{` character in an MDX tag but no matching closing character. " &
-            "Expected a `}` character to close the JSX expression."
+          msg:
+            "Found opening `{` character in an MDX tag but no matching closing character. " &
+            "Expected a `}` character to close the JSX expression.",
         )
 
-      result.tokens.add(TokenMdxComponent(
-        kind: tmcJSXExpression,
-        range: Range(start: start, `end`: s.index)
-      ))
+      result.tokens.add(
+        TokenMdxComponent(
+          kind: tmcJsxExpression, range: Range(start: start, `end`: s.index)
+        )
+      )
     else:
       # Identifier
-      if isAlphanumericOrUnderscore(c):
-        result.tokens.add(TokenMdxComponent( kind: tmcIdentifier, range: s.scanIdentifier()))
+      if isAlphanumericOrUnderscore(s.currentChar):
+        result.tokens.add(
+          TokenMdxComponent(kind: tmcIdentifier, range: s.scanIdentifier())
+        )
       else:
         discard s.advance()
-    result.range.end = s.index
 
 # Forward declaractions to avoid errors with cyclical calls
 proc parseNodes(s: var Scanner): seq[Node]
-proc parseComponent(s: var Scanner): Node
 
-proc parseNodes(s: var Scanner): seq[Node] =
-  ## Parses a sequence of nodes from the scanner's current position.
-  while not s.isAtEnd():
-    if s.isMDXComponentStart():
-      result.add(s.parseComponent())
-    elif s.isMDXClosingTagStart():
-      break
-    else:
-      result.add(s.parseMarkdownContent())
-
-proc parseComponent(s: var Scanner): Node =
+proc parseMdxComponent(s: var Scanner): Node =
   ## Parses an MDX component from the scanner's current position. Assumes that the scanner is at the start of an MDX component ('<' character).
   ##
   ## Rules to parse an MDX component:
   ##
   ## - The component name must start with an uppercase letter.
   ## - The component tag must be closed with a '>' character or '/>'. We scan until we find the closing tag.
-  ## - The component tag can contain attributes. An attribute can be just an
-  ## identifier (boolean value) or a key-value pair.
+  ## - The component tag can contain attributes. An attribute can be just an identifier (boolean value) or a key-value pair.
   ##
   ## This proc. parses the component and attributes but not JSX expressions ({...}).
   ## JSX expressions are stored as-is and not evaluated or validated here.
   let start = s.index
-  let (tagRange, tokens) = s.tokenizeMDXComponent()
+  let (range, tokens) = s.tokenizeMdxComponent()
   if tokens.len < 3:
     raise ParseError(
-      range: tagRange,
-      msg: "Found a `<` character in the source document but no valid MDX component tag. " &
+      range: range,
+      msg:
+        "Found a `<` character in the source document but no valid MDX component tag. " &
         "In MDX, `<` marks the start of a component tag, which must contain an identifier and " &
         "be closed with a `>` character or `/>`.\nTo write a literal `<` character in the " &
-        r"document, escape it as `\<` or `&lt;`."
+        r"document, escape it as `\<` or `&lt;`.",
     )
 
   # First token must be opening < and second must be an identifier
   if tokens[0].kind != tmcOpeningTagOpen or tokens[1].kind != tmcIdentifier:
     raise ParseError(
-      range: tagRange,
-      msg: "Expected an opening `<` character followed by an identifier, but found " &
-        fmt"`{s.getString(tokens[0].range)}` and `{s.getString(tokens[1].range)}` instead."
+      range: range,
+      msg:
+        "Expected an opening `<` character followed by an identifier, but found " &
+        fmt"`{s.getString(tokens[0].range)}` and `{s.getString(tokens[1].range)}` instead.",
     )
 
   # Component name must start with uppercase letter
@@ -471,9 +374,10 @@ proc parseComponent(s: var Scanner): Node =
   if firstChar < 'A' or firstChar > 'Z':
     raise ParseError(
       range: nameToken.range,
-      msg: "Expected component name to start with an uppercase letter but found " &
+      msg:
+        "Expected component name to start with an uppercase letter but found " &
         fmt"{s.getString(nameToken.range)} instead. A valid component name must start with " &
-        "an uppercase letter."
+        "an uppercase letter.",
     )
   result.name = nameToken.range
 
@@ -486,48 +390,51 @@ proc parseComponent(s: var Scanner): Node =
     # Rules:
     #
     # - An attribute can be just an identifier (boolean value) or a key-value pair.
-    # - A key-value pair is an identifier followed by an equal sign and a value
-    # (JSX expression or string literal).
+    # - A key-value pair is an identifier followed by an equal sign and a value (JSX expression or string literal).
     if tokens[i].kind == tmcIdentifier:
       # If there are two identifiers in a row or a lone identifier at the end of the tag, it's a boolean attribute.
-      if tokens[i + 1].kind in {tmcIdentifier, tmcOpeningTagClose, tmcOpeningTagSelfClosing}:
-        result.attributes.add(Attribute(
-          kind: akBoolean,
-          range: tokens[i].range,
-          name: tokens[i].range,
-          boolValue: true,
-        ))
+      if tokens[i + 1].kind in
+          {tmcIdentifier, tmcOpeningTagClose, tmcOpeningTagSelfClosing}:
+        result.attributes.add(
+          Attribute(
+            kind: akBoolean,
+            range: tokens[i].range,
+            name: tokens[i].range,
+            boolValue: true,
+          )
+        )
       # Otherwise we look for the form 'identifier = value'
-      # TODO: find a nicer way to express this like s.peekSequence([Identifier, EqualSign, Value])
-      elif (
-        i + 2 < tokens.len and tokens[i + 1].kind == tmcEqualSign and
-        tokens[i + 2].kind in {tmcString, tmcJSXExpression}
-      ):
-        case tokens[i + 2].kind
-        of tmcString:
-          result.attributes.add(Attribute(
-            kind: akString,
-            range: Range(start: tokens[i].range.start, `end`: tokens[i + 2].range.end),
-            name: tokens[i].range,
-            value: tokens[i + 2].range
-          ))
-        of tmcJSXExpression: 
-          result.attributes.add(Attribute(
-            kind: akJSXExpression,
-            range: Range(start: tokens[i].range.start, `end`: tokens[i + 2].range.end),
-            name: tokens[i].range,
-            value: tokens[i + 2].range
-          ))
+      elif i + 2 < tokens.len and tokens[i + 1].kind == tmcEqualSign:
+        if tokens[i + 2].kind == tmcString:
+          result.attributes.add(
+            Attribute(
+              kind: akString,
+              range: Range(start: tokens[i].range.start, `end`: tokens[i + 2].range.end),
+              name: tokens[i].range,
+              value: tokens[i + 2].range,
+            )
+          )
+        elif tokens[i + 2].kind == tmcJsxExpression:
+          let range = Range(start: tokens[i].range.start, `end`: tokens[i + 2].range.end)
+          let jsxRange = Range(start: tokens[i + 2].range.start + 1, `end`: tokens[i + 2].range.end - 1)
+          result.attributes.add(
+            Attribute(
+              kind: akJsxExpression,
+              range: range,
+              name: tokens[i].range,
+              jsxValue: parseJson(s.getString(jsxRange)),
+            )
+          )
         else:
           raise ParseError(
             range: tokens[i + 2].range,
-            msg: "Expected `string` or JSX expression as `attribute value`"
+            msg: "Expected `string` or JSX expression as `attribute value`",
           )
         i += 2 # Skip over the = and value tokens
       else:
         raise ParseError(
           range: tokens[i].range,
-          msg: "Expected `attribute name` to be followed by `=` and a `value`"
+          msg: "Expected `attribute name` to be followed by `=` and a `value`",
         )
     i += 1
 
@@ -538,15 +445,22 @@ proc parseComponent(s: var Scanner): Node =
   if not result.isSelfClosing:
     let bodyStart = s.index
     result.children = s.parseNodes()
-    result.rangeBody = Range(start: bodyStart, `end`: s.index)
-
     let componentName = s.getString(result.name)
     while not s.isAtEnd():
       let closingTag = "</" & componentName & ">"
       if s.matchString(closingTag):
         break
-
   result.range = Range(start: start, `end`: s.index)
+
+proc parseNodes(s: var Scanner): seq[Node] =
+  ## Parses a sequence of nodes from the scanner's current position.
+  while not s.isAtEnd():
+    if s.isMdxComponentStart():
+      result.add(s.parseMdxComponent())
+    elif s.isMdxClosingTagStart():
+      break
+    else:
+      result.add(s.parseMarkdownContent())
 
 # ----------------- #
 #  Automated tests  #
@@ -554,28 +468,29 @@ proc parseComponent(s: var Scanner): Node =
 when isMainModule:
   import std/[strutils, unittest]
 
-  proc echoTokens(s: Scanner, tokens: seq[TokenMdxComponent]) =
-    ## Prints tokens returned by tokenizeMDXComponent in a readable format
+  proc echoTokens(s: Scanner, tokens: seq[TokenMdxComponent], indent: int = 0) =
+    ## Prints tokens returned by tokenizeMdxComponent in a readable format
     for token in tokens:
-      echo fmt"{token.kind:<20} | `{s.getString(token.range)}`"
+      echo ' '.repeat(indent) & fmt"{token.kind:<20} | `{s.getString(token.range)}`"
 
   proc echoNodes(s: Scanner, nodes: seq[Node], indent: int = 0) =
     ## Prints nodes in a readable format
     for node in nodes:
-      case node.kind:
-      of nkMDXComponent:
-        echo ' '.repeat(indent) & fmt"{node.kind:<20} | `{s.getString(node.rangeOpeningTag)}`"
-        echoNodes(s, node.children, indent + 2)
+      echo ' '.repeat(indent) & fmt"{node.kind:<20} | `{s.getString(node.range)}`"
+      case node.kind
+      of nkMdxComponent:
+        s.echoNodes(node.children, indent + 2)
       else:
-        echo ' '.repeat(indent) & fmt"{node.kind:<20} | `{s.getString(node.range)}`"
+        discard
 
   test "tokenize MDX component with string and JSX expression attributes":
-    let source = """<SomeComponent prop1="value1" prop2={value2}>
+    let source =
+      """<SomeComponent prop1="value1" prop2={"value2"}>
     Some text
 </SomeComponent>"""
 
-    var scanner = Scanner( source: source, index: 0)
-    let (range, tokens) = scanner.tokenizeMDXComponent()
+    var scanner = Scanner(source: source)
+    let (range, tokens) = scanner.tokenizeMdxComponent()
     check:
       tokens.len == 9
       tokens[0].kind == tmcOpeningTagOpen
@@ -585,29 +500,29 @@ when isMainModule:
       tokens[4].kind == tmcString # "value1"
       tokens[5].kind == tmcIdentifier # prop2
       tokens[6].kind == tmcEqualSign
-      tokens[7].kind == tmcJSXExpression # {value2}
+      tokens[7].kind == tmcJsxExpression # {"value2"}
       tokens[8].kind == tmcOpeningTagClose
 
   test "parse self-closing mdx node":
-    let source = "<SomeComponent prop1=\"value1\" prop2={value2} />"
-    var scanner = Scanner(source: source, index: 0)
-    let node = parseComponent(scanner)
+    let source = """<SomeComponent prop1="value1" prop2={"value2"}   />"""
+    var scanner = Scanner(source: source)
+    let node = parseMdxComponent(scanner)
     scanner.echoNodes(@[node])
 
     check:
-      node.kind == nkMDXComponent
+      node.kind == nkMdxComponent
       scanner.getString(node.name) == "SomeComponent"
       node.isSelfClosing
-
       node.attributes.len == 2
       scanner.getString(node.attributes[0].name) == "prop1"
       scanner.getString(node.attributes[0].value) == "\"value1\""
       scanner.getString(node.attributes[1].name) == "prop2"
-      scanner.getString(node.attributes[1].value) == "{value2}"
-
+      node.attributes[1].kind == akJsxExpression
+      node.attributes[1].jsxValue == parseJson("\"value2\"")
 
   test "parse nested components and markdown":
-    let source = """
+    let source =
+      """
 <OuterComponent>
   Some text with *markdown* formatting and an ![inline image](images/image.png).
   <InnerComponent prop="value">
@@ -616,7 +531,7 @@ when isMainModule:
   More text after the inner component.
 </OuterComponent>"""
 
-    var scanner = Scanner(source: source, index: 0)
+    var scanner = Scanner(source: source)
     let nodes = parseNodes(scanner)
 
     echo "\nTest: parse nested components and markdown\n"
@@ -624,12 +539,12 @@ when isMainModule:
 
     check:
       nodes.len == 1
-      nodes[0].kind == nkMDXComponent
+      nodes[0].kind == nkMdxComponent
       scanner.getString(nodes[0].name) == "OuterComponent"
       nodes[0].attributes.len == 0
       nodes[0].children.len > 0
       nodes[0].children[0].kind == nkMarkdownContent
-      nodes[0].children[1].kind == nkMDXComponent
+      nodes[0].children[1].kind == nkMdxComponent
       scanner.getString(nodes[0].children[1].name) == "InnerComponent"
       nodes[0].children[1].attributes.len == 1
       scanner.getString(nodes[0].children[1].attributes[0].name) == "prop"
@@ -638,47 +553,5 @@ when isMainModule:
       nodes[0].children[1].children.len > 0
       nodes[0].children[1].children[0].kind == nkMarkdownContent
       nodes[0].children[2].kind == nkMarkdownContent
-      scanner.getString(nodes[0].children[2].range) == "More text after the inner component."
-
-  test "tokenize JSX expression":
-    let source = """{{123.4: "str", "some": ["other", 2]}, [2], [3, "a"]}"""
-    var scanner = Scanner(source: source)
-    let (range, tokens) = scanner.tokenizeJSX()
-
-    check:
-      range == Range(start: 0, `end`: source.len)
-      tokens.len == 25
-      tokens[0].kind == tmcJSXOpen
-      tokens[1].kind == tmcJSXOpenObject
-      tokens[2].kind == tmcNumber
-      scanner.getString(tokens[2].range) == "123.4"
-      tokens[3].kind == tmcColon
-      tokens[4].kind == tmcString
-      scanner.getString(tokens[4].range) == "\"str\""
-      tokens[5].kind == tmcComma
-      tokens[6].kind == tmcString
-      scanner.getString(tokens[6].range) == "\"some\""
-      tokens[7].kind == tmcColon
-      tokens[8].kind == tmcJSXOpenArray
-      tokens[9].kind == tmcString
-      scanner.getString(tokens[9].range) == "\"other\""
-      tokens[10].kind == tmcComma
-      tokens[11].kind == tmcNumber
-      scanner.getString(tokens[11].range) == "2"
-      tokens[12].kind == tmcJSXCloseArray
-      tokens[13].kind == tmcJSXCloseObject
-      tokens[14].kind == tmcComma
-      tokens[15].kind == tmcJSXOpenArray
-      tokens[16].kind == tmcNumber
-      scanner.getString(tokens[11].range) == "2"
-      tokens[17].kind == tmcJSXCloseArray
-      tokens[18].kind == tmcComma
-      tokens[19].kind == tmcJSXOpenArray
-      tokens[20].kind == tmcNumber
-      scanner.getString(tokens[20].range) == "3"
-      tokens[21].kind == tmcComma
-      tokens[22].kind == tmcString
-      scanner.getString(tokens[22].range) == "\"a\""
-      tokens[23].kind == tmcJSXCloseArray
-      tokens[24].kind == tmcJSXClose
-
+      scanner.getString(nodes[0].children[2].range) ==
+        "More text after the inner component."
