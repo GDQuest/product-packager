@@ -999,7 +999,10 @@ const getBody = (token: Token, preprocessedSource: string): string => {
   );
 };
 
-const getCodeForSymbol = (symbolQuery: string, filePath: string): string => {
+export const getCodeForSymbol = (
+  symbolQuery: string,
+  filePath: string,
+): string => {
   // Gets the code of a symbol given a query and the path to the file
   // The query can be:
   //
@@ -1091,7 +1094,10 @@ const getCodeForSymbol = (symbolQuery: string, filePath: string): string => {
   }
 };
 
-const getCodeForAnchor = (anchorName: string, filePath: string): string => {
+export const getCodeForAnchor = (
+  anchorName: string,
+  filePath: string,
+): string => {
   // Gets the code between anchor comments given the anchor name and the path to the file
   if (!gdscriptFiles.has(filePath)) {
     console.debug(`${filePath} not in cache. Parsing file...`);
@@ -1113,8 +1119,6 @@ const getCodeForAnchor = (anchorName: string, filePath: string): string => {
     .filter((line) => !line.includes("ANCHOR:") && !line.includes("END:"))
     .join("\n");
 };
-
-export { getCodeForAnchor, getCodeForSymbol };
 
 // Tests for the GDScript parser
 Deno.test("Parse signals", () => {
