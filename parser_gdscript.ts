@@ -22,7 +22,7 @@
 // To combine passes into one, I would tokenize keywords, identifiers, anchor comments,
 // brackets, and something generic like statement lines in one pass, then analyse
 // and group the result.
-import { assert, assertEquals } from "https://deno.land/std/testing/asserts.ts";
+import { assert, assertEquals } from "jsr:@std/assert";
 
 // TODO: replace with error logging module
 const addError = (message: string, filepath: string = "") => {
