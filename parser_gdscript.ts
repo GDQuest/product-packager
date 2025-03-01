@@ -1000,6 +1000,31 @@ const getBody = (token: Token, preprocessedSource: string): string => {
   );
 };
 
+
+/**
+ * Gets the code of a symbol given a query and the path to the file
+ * ```ts
+ * import { assert, assertEquals } from "jsr:/@std/assert@^1.0.9";
+ * 
+ * const definition = `func _ready() -> void`
+ * const body = `\tprint('Hello, world!')\n\nprint('Goodbye, world!')`
+ * const code = `extends Node\n\n${definition}:\n${body}\n`;
+ * const tempFilePath = await Deno.makeTempFile();
+ * await Deno.writeTextFile(tempFilePath, code);
+ * 
+ * const result1 = getCodeForSymbol("_ready.definition", tempFilePath);
+ * const result2 = getCodeForSymbol("_ready", tempFilePath);
+ * assertEquals(result1, definition);
+ * assertEquals(result2, code);
+ * ```
+ * @param symbolQuery the symbol you want to get the code from. You can use `.` to access nested symbols.
+ *                    The query can be:
+ *                    - A symbol name like a function or class name
+ *                    - The path to a symbol, like ClassName.functionName
+ *                    - The request of a definition, like ClassName.functionName.definition
+ *                    - The request of a body, like ClassName.functionName.body
+ * @param filePath the path to the file
+ */
 export const getCodeForSymbol = (
   symbolQuery: string,
   filePath: string,
