@@ -24,7 +24,8 @@
 // and group the result.
 import { assert, assertEquals } from "https://jsr.io/@std/assert/1.0.9/mod.ts";
 
-// TODO: replace with error logging module
+// TODO: replace with error logging module -- there is one in the toolbox repo which will be used by this ultimately
+// https://github.com/GDQuest/process-course-utils/blob/main/src/getLogger.ts
 const addError = (message: string, filepath: string = "") => {
   throw new Error(`Error in file ${filepath}: ${message}`);
 };
