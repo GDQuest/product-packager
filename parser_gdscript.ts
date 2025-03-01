@@ -22,7 +22,7 @@
 // To combine passes into one, I would tokenize keywords, identifiers, anchor comments,
 // brackets, and something generic like statement lines in one pass, then analyse
 // and group the result.
-import { assert, assertEquals } from "jsr:@std/assert";
+import { assert, assertEquals } from "https://jsr.io/@std/assert/1.0.9/mod.ts";
 
 // TODO: replace with error logging module
 const addError = (message: string, filepath: string = "") => {
