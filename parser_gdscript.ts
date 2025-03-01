@@ -22,7 +22,7 @@
 // To combine passes into one, I would tokenize keywords, identifiers, anchor comments,
 // brackets, and something generic like statement lines in one pass, then analyse
 // and group the result.
-import { assert, assertEquals } from "https://jsr.io/@std/assert/1.0.9/mod.ts";
+import { assert, assertEquals } from "jsr:/@std/assert@^1.0.9";
 
 // TODO: replace with error logging module -- there is one in the toolbox repo which will be used by this ultimately
 // https://github.com/GDQuest/process-course-utils/blob/main/src/getLogger.ts
