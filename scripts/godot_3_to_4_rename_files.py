@@ -10,12 +10,10 @@ The script modifies:
 - File paths in project.godot
 """
 import argparse
-import os
 import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
 
 
 @dataclass
@@ -24,6 +22,7 @@ class Config:
     quiet: bool
     start_path: Path
     run_tests: bool = False
+    process_addons: bool = False
 
 
 def parse_args() -> Config:
@@ -39,6 +38,10 @@ def parse_args() -> Config:
     parser.add_argument(
         "--path", "-p", type=Path, default=".", help="Starting path for renaming"
     )
+    parser.add_argument(
+        "--process-addons", "-a", action="store_true",
+        help="Process files in the addons folder (by default, addons are skipped)"
+    )
     parser.add_argument("--test", "-t", action="store_true", help="Run tests")
 
     args = parser.parse_args()
@@ -51,6 +54,7 @@ def parse_args() -> Config:
         quiet=args.quiet,
         start_path=args.path,
         run_tests=args.test,
+        process_addons=args.process_addons,  # Add this line
     )
 
 
@@ -90,7 +94,10 @@ def update_file_content(
 
 
 def rename_files_and_folders(path: Path, config: Config) -> None:
-    EXCLUDES = ["addons", ".godot", ".git"]
+    EXCLUDES = [".godot", ".git"]
+    if not config.process_addons:
+        EXCLUDES.append("addons")
+
     if any(exclude in str(path) for exclude in EXCLUDES):
         return
 
