@@ -48,6 +48,18 @@ proc process(appSettings: BuildSettings) =
     else:
       cache.fileCache.getContentFiles()
 
+  # Find all JSON files that are direct children of the content directory
+  # We only want to find JSON files when not processing specific files
+  var jsonFiles: seq[string] = @[]
+  if appSettings.specificFiles.len == 0:
+    let contentDir = appSettings.projectDir / appSettings.contentDir
+    for kind, path in walkDir(contentDir):
+      if kind == pcFile and path.endsWith(".json"):
+        jsonFiles.add(path)
+
+    if not appSettings.isQuiet and jsonFiles.len > 0:
+      echo fmt"Found {jsonFiles.len} JSON files to copy"
+
   let pathPartContent = appSettings.contentDir & DirSep
   let pathPartReplace =
     if appSettings.outContentDir.len() != 0:
@@ -121,6 +133,18 @@ proc process(appSettings: BuildSettings) =
     for inputMediaFile, outputMediaFile in mediaFiles:
       createDir(outputMediaFile.parentDir())
       copyFile(inputMediaFile, outputMediaFile)
+
+    # Copy JSON files without processing them
+    for jsonFile in jsonFiles:
+      let jsonPathRelative = jsonFile.relativePath(appSettings.projectDir)
+      var jsonOutputPath = jsonPathRelative.replace(pathPartContent, pathPartReplace)
+      echo jsonOutputPath
+
+      if appSettings.isForced or hasFileChanged(jsonFile, jsonOutputPath):
+        if not appSettings.isQuiet:
+          echo fmt"Copying JSON file `{jsonPathRelative}` -> `{jsonOutputPath.relativePath(appSettings.projectDir)}`..."
+
+        copyFile(jsonFile, jsonOutputPath)
 
 when isMainModule:
   let appSettings = settings.getAppSettings()
